@@ -576,8 +576,9 @@
     const leftW = measureNaturalLeftWidth(leftGroup);
     const rightW = rightGroup ? rightGroup.offsetWidth || 0 : 0;
     const availMiddleW = rowW - leftW - rightW - 14;
-    const useBottomRow = rowW > 0 && availMiddleW < MIDDLE_MIN_WIDTH_PX;
-    const rowMode = useBottomRow ? 'bottom' : 'middle';
+    // 在 Claude Desktop 双层分离架构下，外部元数据行独立占行，始终保持单行展开排布
+    const useBottomRow = false;
+    const rowMode = 'middle';
 
     if (bottomRow.getAttribute('data-ag-row-mode') !== rowMode) {
       bottomRow.setAttribute('data-ag-row-mode', rowMode);
