@@ -204,7 +204,14 @@ function rebuildBundleIfNeeded() {
   const userCfg = SAFE_MODE ? {} : readJsonSafe(path.join(USER_DIR, 'config.json'), {});
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
-  const preset = userCfg.preset || 'high-contrast';
+  const presets = Object.assign(
+    {
+      light: userCfg.lightPreset || (typeof userCfg.preset === 'string' ? userCfg.preset : 'high-contrast'),
+      dark: userCfg.darkPreset || 'claude-dark'
+    },
+    userCfg.presets && typeof userCfg.presets === 'object' ? userCfg.presets : {}
+  );
+  const preset = presets.light;
   const contextLimit = Number(userCfg.contextLimit) > 0 ? Number(userCfg.contextLimit) : 256000;
 
   const rawModules = Object.assign({}, userCfg.features || {}, userCfg.modules || {});
@@ -234,6 +241,7 @@ function rebuildBundleIfNeeded() {
     enabled,
     channel,
     preset,
+    presets,
     contextLimit,
     modules,
     themeVars,
@@ -263,7 +271,7 @@ function rebuildBundleIfNeeded() {
     .update(customCss)
     .update(JSON.stringify(mergedDict))
     .update(customJs)
-    .update(JSON.stringify({ preset, modules, themeVars, selectors: activeConfig.selectors }))
+    .update(JSON.stringify({ preset, presets, modules, themeVars, selectors: activeConfig.selectors }))
     .digest('hex')
     .slice(0, 8);
 
@@ -275,6 +283,7 @@ function rebuildBundleIfNeeded() {
     platform: process.platform,
     enabled,
     preset,
+    presets,
     cssText: baseCss,
     customCss,
     themeVars,
@@ -286,6 +295,7 @@ function rebuildBundleIfNeeded() {
       enabled,
       channel,
       preset,
+      presets,
       contextLimit,
       modules,
       themeVars

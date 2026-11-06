@@ -30,7 +30,14 @@
   );
   MODULES.metricsCapsule = MODULES.metrics;
 
-  const DEFAULT_PRESET = boot.preset || 'high-contrast';
+  const PRESETS_CFG = Object.assign(
+    {
+      light: boot.lightPreset || (typeof boot.preset === 'string' ? boot.preset : 'high-contrast'),
+      dark: boot.darkPreset || 'claude-dark'
+    },
+    boot.presets && typeof boot.presets === 'object' ? boot.presets : {}
+  );
+  const DEFAULT_PRESET = PRESETS_CFG.light;
   const SELECTORS = Object.assign(
     {
       inputBoxId: 'antigravity.agentSidePanelInputBox',
@@ -132,6 +139,9 @@
     }
     applyThemeVars({});
     document.documentElement.removeAttribute('data-ag-preset');
+    document.documentElement.removeAttribute('data-ag-light-preset');
+    document.documentElement.removeAttribute('data-ag-dark-preset');
+    document.documentElement.removeAttribute('data-ag-color-scheme');
     document.documentElement.removeAttribute('data-ag-page-type');
     document.documentElement.removeAttribute('data-ag-wax-seal');
     restoreAllTranslations(document.body);
@@ -265,38 +275,125 @@
     } catch (e) {}
   }
 
-  function syncChuanbanPreset() {
+  function resolvePresetName(val, fallback) {
+    if (!val || typeof val !== 'string') return fallback;
+    const v = val.trim();
+    if (v === PRESETS.HIGH_CONTRAST || v === PRESETS.LEGACY_WARM_WHITE || v === '高对比版') {
+      return PRESETS.HIGH_CONTRAST;
+    }
+    if (v === PRESETS.CLAUDE_PUREWHITE || v === PRESETS.LEGACY_OFFICIAL || v === 'ClaudeDesktop 净白') {
+      return PRESETS.CLAUDE_PUREWHITE;
+    }
+    if (v === PRESETS.VINTAGE_DEEP || v === PRESETS.LEGACY_CHUANBAN || v === '复古深色') {
+      return PRESETS.VINTAGE_DEEP;
+    }
+    return v;
+  }
+
+  function detectEffectiveColorScheme() {
+    if (boot.themeMode === 'light' || boot.themeMode === 'dark') {
+      return boot.themeMode;
+    }
+    // 1. 优先读取 Antigravity 官方写入 documentElement 的显式行内 colorScheme
+    const inlineScheme = document.documentElement.style.colorScheme;
+    if (inlineScheme === 'light' || inlineScheme === 'dark') {
+      return inlineScheme;
+    }
+    // 2. 检查浏览器对 documentElement 计算出的有效 colorScheme
     try {
-      const stored = Storage.prototype.getItem.call(localStorage, 'theme-preset-light');
-      if (ALL_CUSTOM_PRESET_NAMES.has(stored)) {
-        try {
-          Storage.prototype.setItem.call(localStorage, 'theme-preset-light', 'Default Light');
-        } catch (e) {}
+      const computed = getComputedStyle(document.documentElement).colorScheme;
+      if (computed === 'light' || computed === 'dark') return computed;
+    } catch (e) {}
+    // 3. 检查 document.body 上的原生主题类名
+    if (document.body) {
+      if (document.body.classList.contains('theme-dark')) return 'dark';
+      if (document.body.classList.contains('theme-light')) return 'light';
+    }
+    // 4. 检查 localStorage 中的主题配置项
+    try {
+      const mode = localStorage.getItem('theme-mode');
+      if (mode === 'light' || mode === 'dark') return mode;
+    } catch (e) {}
+    // 5. 兜底跟随系统当前偏好
+    if (window.matchMedia) {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+      if (window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+    }
+    return 'light';
+  }
+
+  function syncDualThemePreset() {
+    try {
+      const scheme = detectEffectiveColorScheme();
+      if (document.documentElement.getAttribute('data-ag-color-scheme') !== scheme) {
+        document.documentElement.setAttribute('data-ag-color-scheme', scheme);
       }
 
-      const flavor =
-        Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') || DEFAULT_PRESET || PRESETS.HIGH_CONTRAST;
+      const activeLightPreset = resolvePresetName(PRESETS_CFG.light, PRESETS.HIGH_CONTRAST);
+      const activeDarkPreset = resolvePresetName(PRESETS_CFG.dark, 'claude-dark');
 
-      let targetPreset = PRESETS.HIGH_CONTRAST;
-      if (flavor === PRESETS.HIGH_CONTRAST || flavor === PRESETS.LEGACY_WARM_WHITE || flavor === '高对比版') {
-        targetPreset = PRESETS.HIGH_CONTRAST;
-      } else if (
-        flavor === PRESETS.CLAUDE_PUREWHITE ||
-        flavor === PRESETS.LEGACY_OFFICIAL ||
-        flavor === 'ClaudeDesktop 净白'
-      ) {
-        targetPreset = PRESETS.CLAUDE_PUREWHITE;
-      } else if (flavor === PRESETS.VINTAGE_DEEP || flavor === PRESETS.LEGACY_CHUANBAN || flavor === '复古深色') {
-        targetPreset = PRESETS.VINTAGE_DEEP;
-      }
+      document.documentElement.setAttribute('data-ag-light-preset', activeLightPreset);
+      document.documentElement.setAttribute('data-ag-dark-preset', activeDarkPreset);
 
+      const targetPreset = scheme === 'dark' ? activeDarkPreset : activeLightPreset;
       if (document.documentElement.getAttribute('data-ag-preset') !== targetPreset) {
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
     } catch (e) {}
   }
 
-  window.__ag_sync_preset_fn = syncChuanbanPreset;
+  window.__ag_sync_preset_fn = syncDualThemePreset;
+  window.__ag_sync_color_scheme_fn = syncDualThemePreset;
+  const syncChuanbanPreset = syncDualThemePreset;
+  const syncColorScheme = syncDualThemePreset;
+
+  // 动态监听系统深浅外观变动
+  if (!window.__ag_theme_media_listener_installed && window.matchMedia) {
+    window.__ag_theme_media_listener_installed = true;
+    try {
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
+      const onMediaChange = () => {
+        if (typeof window.__ag_sync_color_scheme_fn === 'function') {
+          window.__ag_sync_color_scheme_fn();
+        }
+      };
+      if (typeof media.addEventListener === 'function') {
+        media.addEventListener('change', onMediaChange);
+      } else if (typeof media.addListener === 'function') {
+        media.addListener(onMediaChange);
+      }
+    } catch (e) {}
+  }
+
+  // 动态监听 Antigravity 设置切换（style.colorScheme 或 body.class 变动实时捕获）
+  if (!window.__ag_theme_observer_installed) {
+    window.__ag_theme_observer_installed = true;
+    try {
+      const themeObserver = new MutationObserver((mutations) => {
+        for (let i = 0; i < mutations.length; i++) {
+          const m = mutations[i];
+          if (m.type === 'attributes') {
+            if (m.attributeName === 'style' || m.attributeName === 'class') {
+              if (typeof window.__ag_sync_color_scheme_fn === 'function') {
+                window.__ag_sync_color_scheme_fn();
+              }
+              break;
+            }
+          }
+        }
+      });
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['style', 'class']
+      });
+      if (document.body) {
+        themeObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'style']
+        });
+      }
+    } catch (e) {}
+  }
 
   if (!window.__ag_preset_hook_installed) {
     window.__ag_preset_hook_installed = true;
@@ -319,13 +416,14 @@
         if (key === 'theme-preset-light' || key === 'theme-mode' || key === 'theme-color-flavor') {
           setTimeout(() => {
             if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
+            if (typeof window.__ag_sync_color_scheme_fn === 'function') window.__ag_sync_color_scheme_fn();
           }, 50);
         }
       };
     } catch (e) {}
   }
 
-  syncChuanbanPreset();
+  syncDualThemePreset();
   window.__ag_patch_version = PATCH_VERSION;
 
   // ============================================================================
