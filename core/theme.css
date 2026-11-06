@@ -374,10 +374,38 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
 #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"] {
   height: 24px !important;
   font-size: 12px !important;
-  padding: 0 4px !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  cursor: pointer !important;
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
+}
+
+/* 6.3 去掉模型与模式右侧冗余的上拉小箭头，还原极简纯净排版 */
+[id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"] > svg:last-child,
+#antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"] > svg:last-child,
+[id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"] > svg:last-child,
+#antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"] > svg:last-child {
+  display: none !important;
+}
+
+/* 6.4 鼠标悬停 (Hover) 时优雅圆角矩形背景微浮雕反馈 */
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  color: #1F1E1D !important;
+}
+
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
 }
 
 /* 上方工具栏文字与小按钮（No Project 及其箭头） - 浅色通道 */
