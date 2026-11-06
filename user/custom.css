@@ -1,7 +1,36 @@
 /* ============================================================================
- * user/custom.css — 用户与执行端 Agent 专属样式改装层
- * 说明：
- * 1. 本文件在 core/theme.css 之后自动追加注入，升级 core/ 内核时永不覆盖本文件。
- * 2. 修改本文件保存后，常驻守护进程会在 2.5 秒内自动检测并热重载生效，无需重启服务。
- * 3. 若排障时怀疑自定义样式冲突，可运行 `node install.mjs verify --safe-mode` 临时隔离。
+ * user/custom.css — 用户专属样式改装层 (方案 A: Anthropic + 霞鹜文楷 LXGW)
  * ============================================================================ */
+
+/* 1. UI 控件与全局：Anthropic Sans -> LXGW -> PingFang SC */
+:root, body, body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"] {
+  --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'LXGW WenKai Screen', 'LXGW WenKai', 'PingFang SC', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+  --font-sans: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'LXGW WenKai Screen', 'LXGW WenKai', 'PingFang SC', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+  --default-font-family: var(--font-sans) !important;
+
+  /* 3. 代码与终端：Anthropic Mono -> LXGW -> ui-monospace -> SF Mono */
+  --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'LXGW WenKai Screen', 'LXGW WenKai', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
+  --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'LXGW WenKai Screen', 'LXGW WenKai', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
+  --default-mono-font-family: var(--font-mono) !important;
+}
+
+html, body, body[data-agy-font], button, select, nav, header, aside {
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 2. 对话正文：Anthropic Serif -> LXGW -> PingFang SC */
+.select-text, .prose, .markdown, article, .select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, span, div) {
+  font-family: 'Anthropic Serif', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'LXGW WenKai Screen', 'LXGW WenKai', 'PingFang SC', serif !important;
+  letter-spacing: -0.003em;
+}
+
+/* 3. 代码、终端、diff查看器、文件名、文件路径 */
+code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, pre *, [class*="group/file-title"], [class*="group/file-title"] *, [class*="file-title"], [class*="file-path"], [data-path], [data-file-path], .tabular-nums, .select-text :is(code, pre, kbd, samp, .font-mono) {
+  font-family: var(--font-mono) !important;
+}
+
+/* 4. 输入框：LXGW -> Anthropic Mono -> ui-monospace */
+div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, div), [data-composer], .ProseMirror, .ProseMirror :is(p, span) {
+  font-family: 'LXGW WenKai Screen', 'LXGW WenKai', 'Anthropic Mono', 'Anthropic Mono Web', ui-monospace, monospace !important;
+}

@@ -2,9 +2,13 @@
   "enabled": true,
   "channel": "auto",
   "preset": "high-contrast",
+  "presets": {
+    "light": "high-contrast",
+    "dark": "claude-dark"
+  },
   "contextLimit": 256000,
   "modules": {
-    "i18n": true,
+    "i18n": false,
     "metrics": true,
     "composerWaxSeal": true,
     "deadlockHealer": true,
