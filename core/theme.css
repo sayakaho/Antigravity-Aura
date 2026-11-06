@@ -276,6 +276,13 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
   width: 100% !important;
 }
 
+/* 3.1 占位文本 (Placeholder)：垂直绝对居中，消除原生 top-2 导致的 6px 下坠错位 */
+[id="antigravity.agentSidePanelInputBox"] .surface-composer-card p.pointer-events-none,
+#antigravity\.agentSidePanelInputBox .surface-composer-card p.pointer-events-none {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
 /* 4. 加号按钮：绝对定位，与打字行基准线及垂直中轴像素级对齐 */
 [id="antigravity.agentSidePanelInputBox"] button[aria-label="Add context"],
 #antigravity\.agentSidePanelInputBox button[aria-label="Add context"] {
