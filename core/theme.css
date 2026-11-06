@@ -247,16 +247,18 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
 }
 
-/* 3. 打字文本区域：单行垂直居中，左右留出加号与发送组的空间，多行时自适应向上撑开 */
+/* 3. 打字文本区域：左右留出加号与发送组的安全区，上下保留 8px 恒定呼吸基线，无论有无附件恒定中轴对齐 */
 [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child,
 #antigravity\.agentSidePanelInputBox .surface-composer-card > div:first-child {
   padding-left: 48px !important;
   padding-right: 110px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
   width: 100% !important;
   min-height: 44px !important;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: center !important;
+  justify-content: flex-start !important;
 }
 
 [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child [contenteditable="true"],
