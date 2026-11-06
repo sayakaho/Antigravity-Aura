@@ -316,7 +316,7 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
   gap: 4px !important;
 }
 
-/* 6. 外部元数据控制栏整体：脱壳绝对定位至矩形下方外部，靠左依次排开 */
+/* 6. 外部元数据控制栏整体：脱壳绝对定位至矩形下方外部，靠左依次紧凑排开 */
 [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer,
 #antigravity\.agentSidePanelInputBox .agy-composer-footer {
   position: absolute !important;
@@ -328,7 +328,7 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
   flex-direction: row !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  gap: 14px !important;
+  gap: 6px !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
