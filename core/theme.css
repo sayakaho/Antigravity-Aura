@@ -389,14 +389,76 @@ html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-comp
   color: #FFFFFF !important;
 }
 
-/* 上方工具栏文字与小按钮（No Project 及其箭头） - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:first-child button, html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:first-child span, html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:first-child svg {
-  color: #383431 !important;
+/* 7. 新建会话上方工具栏（项目选择、检出方式、分支配置等）下移至卡片下方左对齐 */
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]),
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) {
+  position: absolute !important;
+  top: calc(100% + 6.5px) !important;
+  left: 4px !important;
+  height: 24px !important;
+  z-index: 10 !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
-  background-color: rgba(217, 119, 87, 0.08) !important;
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div,
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div,
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div > div,
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div,
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div,
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div > div {
+  display: flex !important;
+  align-items: center !important;
+  height: 24px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) div[class*="gap-"],
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) div[class*="gap-"] {
+  gap: 6px !important;
+}
+
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button {
+  height: 24px !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
+}
+
+/* 工具栏按钮文字与小图标 - 浅色通道 */
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg {
+  color: #383431 !important;
+  fill: #383431 !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover {
+  background-color: rgba(0, 0, 0, 0.06) !important;
   color: #1F1E1D !important;
+}
+
+/* 工具栏按钮文字与小图标 - 深色通道 */
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg {
+  color: #C4BEB3 !important;
+  fill: #C4BEB3 !important;
+}
+
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
 }
 
 /* 搜索栏聚焦优化（消除双层同心圈）：激活时外圈橙色轮廓彻底隐去，原位内圈灰线直接平滑切换为品牌橙色粗线 (方案三) */
