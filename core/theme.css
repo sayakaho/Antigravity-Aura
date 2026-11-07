@@ -364,6 +364,12 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:foc
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
+/* 模型选择器作为锚点，供运行环境按钮自适应锚定在左侧 */
+[id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"],
+#antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"] {
+  anchor-name: --ag-model-anchor !important;
+}
+
 /* 6.3 去掉模型与模式右侧冗余的上拉小箭头，还原极简纯净排版 */
 [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"] > svg:last-child,
 #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"] > svg:last-child,
@@ -433,6 +439,30 @@ html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-comp
   box-shadow: none !important;
   cursor: pointer !important;
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
+}
+
+/* 7.1 去掉项目、检出方式等按钮尾部的冗余下拉小箭头 */
+[id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button > svg:last-child:not(:first-child),
+#antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button > svg:last-child:not(:first-child) {
+  display: none !important;
+}
+
+/* 7.2 运行环境按钮（小电脑）脱壳右对齐自适应锚定在模型左侧 6px 处 */
+[id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"],
+#antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"] {
+  position: fixed !important;
+  position-anchor: --ag-model-anchor !important;
+  right: calc(anchor(left) + 6px) !important;
+  top: anchor(top) !important;
+  height: 24px !important;
+  width: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  z-index: 20 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
 }
 
 /* 工具栏按钮文字与小图标 - 浅色通道 */
