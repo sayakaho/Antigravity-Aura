@@ -206,45 +206,23 @@ html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] bo
   transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* 2.1 浅色通道：日常具体会话常态（设计 A: 略粗颜色偏淡蜡封暗红） */
-html:not([data-ag-color-scheme="dark"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) .surface-composer-card {
+/* 2.1 浅色通道：日常具体会话与首页新建对话常态（蜡封暗红轻边框与微阴影） */
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .surface-composer-card {
   background-color: #FFFFFF !important;
-  border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
-  border-color: rgba(116, 34, 26, 0.36) !important;
-  box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
-}
-
-/* 2.2 浅色通道：具体会话鼠标移上 / 聚焦（设计 B: 加深变浓实色蜡封暗红 + 拟物微浮雕光晕） */
-html:not([data-ag-color-scheme="dark"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within .surface-composer-card {
-  border: 1.5px solid var(--ag-wax-seal-hover, #74221A) !important;
-  border-color: var(--ag-wax-seal-hover, #74221A) !important;
-  box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12), 0 6px 18px -3px rgba(60, 20, 15, 0.07) !important;
-}
-
-/* 2.3 浅色通道：首页新建对话常态（设计 C: 矩形完全透明融于背景） */
-html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]) .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]) .surface-composer-card,
-html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .surface-composer-card {
-  background-color: #FFFFFF !important;
-  border: 1.5px solid transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-/* 2.4 浅色通道：首页新建对话移上 / 聚焦（变成为设计 A: 蜡封暗红轻边框） */
-html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover .surface-composer-card,
-html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within .surface-composer-card,
-html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:hover .surface-composer-card,
-html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
+}
+
+/* 2.2 浅色通道：鼠标移上 / 聚焦激活（实色蜡封暗红 + 拟物微浮雕光晕） */
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:hover .surface-composer-card,
+html:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+  border: 1.5px solid var(--ag-wax-seal-hover, #74221A) !important;
+  border-color: var(--ag-wax-seal-hover, #74221A) !important;
+  box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12), 0 6px 18px -3px rgba(60, 20, 15, 0.07) !important;
 }
 
 /* 3. 打字文本区域：左右留出加号与发送组的安全区，上下保留 8px 恒定呼吸基线，无论有无附件恒定中轴对齐 */
@@ -661,20 +639,20 @@ html[data-ag-color-scheme="dark"] .surface-composer.bg-card-border {
   box-shadow: none !important;
 }
 
-/* 深色模式胶囊日常常态 */
-html[data-ag-color-scheme="dark"]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) .surface-composer-card,
-html[data-ag-color-scheme="dark"]:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) .surface-composer-card {
+/* 深色模式输入框常态 */
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
   background-color: #1F1E1D !important;
   border: 1.5px solid rgba(196, 68, 58, 0.45) !important;
   border-color: rgba(196, 68, 58, 0.45) !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
 }
 
-/* 深色模式胶囊移上 / 聚焦 */
-html[data-ag-color-scheme="dark"]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover .surface-composer-card,
-html[data-ag-color-scheme="dark"]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within .surface-composer-card,
-html[data-ag-color-scheme="dark"]:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover .surface-composer-card,
-html[data-ag-color-scheme="dark"]:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within .surface-composer-card {
+/* 深色模式输入框移上 / 聚焦 */
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"]:hover .surface-composer-card,
+html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
   border: 1.5px solid var(--ag-wax-seal-hover, #C4443A) !important;
   border-color: var(--ag-wax-seal-hover, #C4443A) !important;
   box-shadow: 0 0 12px rgba(196, 68, 58, 0.25), inset 0 0 4px rgba(196, 68, 58, 0.15) !important;
