@@ -250,7 +250,7 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
 /* 3. 打字文本区域：左右留出加号与发送组的安全区，上下保留 8px 恒定呼吸基线，无论有无附件恒定中轴对齐 */
 [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child,
 #antigravity\.agentSidePanelInputBox .surface-composer-card > div:first-child {
-  padding-left: 48px !important;
+  padding-left: 40px !important;
   padding-right: 110px !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
@@ -285,11 +285,11 @@ html[data-ag-page-type="home"]:not([data-ag-color-scheme="dark"]) [id="antigravi
   transform: translateY(-50%) !important;
 }
 
-/* 4. 加号按钮：绝对定位，与打字行基准线及垂直中轴像素级对齐 */
+/* 4. 加号按钮：绝对定位，与打字行基准线及垂直中轴像素级对齐，左侧收紧至自然紧凑距离 */
 [id="antigravity.agentSidePanelInputBox"] button[aria-label="Add context"],
 #antigravity\.agentSidePanelInputBox button[aria-label="Add context"] {
   position: absolute !important;
-  left: 14px !important;
+  left: 4px !important;
   bottom: calc(100% + 16px) !important;
   top: auto !important;
   transform: none !important;
