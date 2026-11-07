@@ -294,7 +294,7 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:foc
   gap: 4px !important;
 }
 
-/* 6. 外部元数据控制栏整体：脱壳绝对定位至矩形下方外部，靠左依次紧凑排开 */
+/* 6. 外部元数据控制栏整体：脱壳绝对定位至矩形下方外部，靠右依次紧凑排开 */
 [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer,
 #antigravity\.agentSidePanelInputBox .agy-composer-footer {
   position: absolute !important;
@@ -305,7 +305,7 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:foc
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
-  justify-content: flex-start !important;
+  justify-content: flex-end !important;
   gap: 6px !important;
   background: transparent !important;
   border: none !important;
@@ -322,27 +322,30 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:foc
   display: contents !important;
 }
 
-/* 6.2 外部元数据项按序靠左排列：① 模型 -> ② 模式 -> ③ 实时指标遥测 */
+/* 6.2 外部元数据项按序靠右排列：① 实时指标遥测 -> ② 模型 -> ③ 模式 */
+[id="antigravity.agentSidePanelInputBox"] #ag-live-metrics-pill,
+#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill {
+  order: 1 !important;
+  margin: 0 !important;
+  margin-left: auto !important;
+  border-left: none !important;
+  padding-left: 0 !important;
+}
+
+[id="antigravity.agentSidePanelInputBox"] .agy-composer-footer > div.flex-1 > div:has([data-testid="model-selector-trigger"]),
+#antigravity\.agentSidePanelInputBox .agy-composer-footer > div.flex-1 > div:has([data-testid="model-selector-trigger"]),
 [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer div:has(> [data-testid="model-selector-trigger"]),
 #antigravity\.agentSidePanelInputBox .agy-composer-footer div:has(> [data-testid="model-selector-trigger"]),
 [id="antigravity.agentSidePanelInputBox"] button[data-testid="model-selector-trigger"],
 #antigravity\.agentSidePanelInputBox button[data-testid="model-selector-trigger"] {
-  order: 1 !important;
+  order: 2 !important;
   margin: 0 !important;
 }
 
 [id="antigravity.agentSidePanelInputBox"] button[data-testid="permissions-selector-trigger"],
 #antigravity\.agentSidePanelInputBox button[data-testid="permissions-selector-trigger"] {
-  order: 2 !important;
-  margin: 0 !important;
-}
-
-[id="antigravity.agentSidePanelInputBox"] #ag-live-metrics-pill,
-#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill {
   order: 3 !important;
   margin: 0 !important;
-  border-left: none !important;
-  padding-left: 0 !important;
 }
 
 /* 外部元素样式微调：小巧精致、靠左无符号分隔纯间距 */
