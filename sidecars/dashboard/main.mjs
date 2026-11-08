@@ -47,6 +47,8 @@ try {
   console.error('[Sidecar Engine] Failed to load analytics engine:', e);
 }
 
+let lastGlobalActiveCascadeId = '';
+
 // ============================================================================
 // 1. 基础辅助函数
 // ============================================================================
@@ -834,6 +836,7 @@ function attachTarget(target) {
           const cid = String(evalRes?.result?.result?.value || evalRes?.result?.value || '').trim();
           if (/^[0-9a-f-]{36}$/i.test(cid)) {
             activeCascadeId = cid;
+            lastGlobalActiveCascadeId = cid;
           }
         }
 
@@ -1045,6 +1048,26 @@ app.api('/api/analytics/conversations', () => {
   try {
     const summaries = analyticsEngine.getSummaries();
     return { ok: true, conversations: summaries.slice(0, 50) };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}, 'GET');
+
+// GET /api/analytics/session
+app.api('/api/analytics/session', (data) => {
+  if (!analyticsEngine) {
+    return { ok: false, error: 'Analytics engine unavailable' };
+  }
+  const convId = data?.id || data?.conversationId || lastGlobalActiveCascadeId;
+  if (!convId) {
+    return { ok: false, error: 'No active session detected' };
+  }
+  try {
+    const sessionData = analyticsEngine.getSessionDetails(convId);
+    if (!sessionData) {
+      return { ok: false, error: 'No metrics found for this session' };
+    }
+    return { ok: true, data: sessionData };
   } catch (err) {
     return { ok: false, error: String(err?.message || err) };
   }

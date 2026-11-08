@@ -25,10 +25,13 @@
       <!-- Time Range Selector Bar -->
       <div class="analytics-filter-container">
         <div class="segmented-control timerange-segmented" id="analytics-timerange-segmented">
+          <button class="segment-btn" data-range="session">Session</button>
           <button class="segment-btn" data-range="today">Today</button>
           <button class="segment-btn" data-range="yesterday">Yesterday</button>
-          <button class="segment-btn" data-range="last-week">Last Week</button>
-          <button class="segment-btn active" data-range="last-month">Last Month</button>
+          <button class="segment-btn" data-range="this-week">This Week</button>
+          <button class="segment-btn" data-range="this-month">This Month</button>
+          <button class="segment-btn" data-range="last-7-days">Last 7 Days</button>
+          <button class="segment-btn active" data-range="last-30-days">Last 30 Days</button>
           <button class="segment-btn" data-range="custom">Custom</button>
         </div>
         <div class="custom-range-inputs" id="custom-range-inputs" style="display: none;">

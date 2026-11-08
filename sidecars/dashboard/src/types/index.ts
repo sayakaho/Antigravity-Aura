@@ -60,6 +60,22 @@ export interface ConversationSummary {
   status: string;
 }
 
+export interface SessionAnalyticsData {
+  cascadeId: string;
+  totalTokens: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    thinking: number;
+    total: number;
+  };
+  totalRequests: number;
+  cacheEfficiency: number;
+  avgTtft: number;
+  avgTokPerSec: number;
+  steps: ConversationStepMetric[];
+}
+
 export interface GlobalAnalyticsOverview {
   totalConversations: number;
   totalRequests: number;
@@ -76,6 +92,13 @@ export interface GlobalAnalyticsOverview {
   topProjects: Array<{ projectId: string; conversationCount: number; tokenCount: number }>;
   timeRangeSeries: Array<{
     date: string;
+    inputTok: number;
+    outTok: number;
+    cacheRead: number;
+    requests: number;
+  }>;
+  hourlySeries?: Array<{
+    hourKey: string; // YYYY-MM-DD HH:00
     inputTok: number;
     outTok: number;
     cacheRead: number;

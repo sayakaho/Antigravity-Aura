@@ -167,6 +167,7 @@ export class GlobalAnalyticsEngine {
 
     const projectStats: Record<string, { convCount: number; tokenCount: number }> = {};
     const dateSeries: Record<string, { input: number; output: number; cache: number; requests: number }> = {};
+    const hourSeries: Record<string, { hourKey: string; inputTok: number; outTok: number; cacheRead: number; requests: number }> = {};
 
     for (const s of summaries) {
       const convId = s.conversationId;
@@ -269,6 +270,16 @@ export class GlobalAnalyticsEngine {
       dateSeries[dateKey].output += entry.outTok;
       dateSeries[dateKey].cache += entry.cacheRead;
       dateSeries[dateKey].requests += convReq;
+
+      // Group by hourly time-series (for Today/Yesterday)
+      if (s.lastModifiedTime && s.lastModifiedTime.length >= 13) {
+        const hourKey = s.lastModifiedTime.slice(0, 13) + ':00';
+        if (!hourSeries[hourKey]) hourSeries[hourKey] = { hourKey, inputTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+        hourSeries[hourKey].inputTok += entry.inTok;
+        hourSeries[hourKey].outTok += entry.outTok;
+        hourSeries[hourKey].cacheRead += entry.cacheRead;
+        hourSeries[hourKey].requests += convReq;
+      }
     }
 
     if (cacheUpdated) {
@@ -289,6 +300,9 @@ export class GlobalAnalyticsEngine {
       .map(([date, d]) => ({ date, inputTok: d.input, outTok: d.output, cacheRead: d.cache, requests: d.requests }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
+    const hourlySeries = Object.values(hourSeries)
+      .sort((a, b) => a.hourKey.localeCompare(b.hourKey));
+
     return {
       totalConversations: summaries.length,
       totalRequests,
@@ -303,7 +317,93 @@ export class GlobalAnalyticsEngine {
       avgTtft,
       avgTokPerSec: avgRate,
       topProjects,
-      timeRangeSeries
+      timeRangeSeries,
+      hourlySeries
     };
+  }
+
+  public getSessionDetails(convId: string) {
+    if (!convId || !/^[0-9a-f-]{36}$/i.test(convId)) return null;
+    const dbPath = path.join(this.baseDir, 'conversations', `${convId}.db`);
+    if (!fs.existsSync(dbPath)) return null;
+
+    let db: any = null;
+    try {
+      db = openDb(dbPath);
+      if (!db) return null;
+      const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+      db.close();
+      db = null;
+
+      if (!rows || rows.length === 0) return null;
+
+      let totalIn = 0;
+      let totalOut = 0;
+      let totalCache = 0;
+      let totalThink = 0;
+      let ttftSum = 0;
+      let streamSum = 0;
+      let validCount = 0;
+
+      const steps = rows.map((r: any) => {
+        const top = parseProto(r.data);
+        const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
+        const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
+        const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
+        const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
+
+        const inTok = usage.get(2) || 0;
+        const outTok = usage.get(3) || 0;
+        const cacheRead = usage.get(5) || 0;
+        const thinkTok = usage.get(9) || 0;
+        const respTok = usage.get(10) || 0;
+        const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
+        const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
+
+        totalIn += inTok;
+        totalOut += outTok;
+        totalCache += cacheRead;
+        totalThink += thinkTok;
+        if (ttft > 0) { ttftSum += ttft; validCount++; }
+        if (stream > 0 && outTok > 0) { streamSum += outTok / stream; }
+
+        return {
+          idx: r.idx,
+          inTok,
+          outTok,
+          cacheRead,
+          ctx: inTok + cacheRead,
+          thinkTok,
+          respTok,
+          ttft,
+          stream,
+          totDur: ttft + stream
+        };
+      });
+
+      const totalRaw = totalIn + totalCache;
+      const efficiency = totalRaw > 0 ? Math.round((totalCache / totalRaw) * 1000) / 10 : 0;
+      const avgTtft = validCount > 0 ? Math.round((ttftSum / validCount) * 100) / 100 : 0;
+      const avgRate = validCount > 0 ? Math.round(streamSum / validCount) : 0;
+
+      return {
+        cascadeId: convId,
+        totalTokens: {
+          input: totalIn,
+          output: totalOut,
+          cacheRead: totalCache,
+          thinking: totalThink,
+          total: totalIn + totalOut + totalCache
+        },
+        totalRequests: steps.length,
+        cacheEfficiency: efficiency,
+        avgTtft,
+        avgTokPerSec: avgRate,
+        steps
+      };
+    } catch {
+      if (db) db.close();
+      return null;
+    }
   }
 }

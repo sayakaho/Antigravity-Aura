@@ -446,16 +446,19 @@ html, body {
 }
 
 .timerange-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
   background: var(--aura-control-bg);
   border: 1px solid var(--aura-border);
   border-radius: 9999px;
-  padding: 2.5px;
+  padding: 3px;
   gap: 2px;
 }
 
 .timerange-segmented .segment-btn {
-  padding: 4px 12px;
-  font-size: 11.5px;
+  padding: 3.5px 10px;
+  font-size: 11px;
 }
 
 .custom-range-inputs {
@@ -685,12 +688,19 @@ html, body {
   cursor: pointer;
 }
 
-.bar-hover-slot {
+.bar-bg-band {
+  fill: transparent;
   pointer-events: all;
+  transition: fill 0.15s ease, opacity 0.15s ease;
+}
+
+.chart-column-group:hover .bar-bg-band {
+  fill: var(--aura-active-pill);
+  opacity: 0.35;
 }
 
 .chart-column-group:hover .bar-segment {
-  filter: brightness(1.25);
+  filter: brightness(1.22);
   transition: filter 0.12s ease;
 }
 

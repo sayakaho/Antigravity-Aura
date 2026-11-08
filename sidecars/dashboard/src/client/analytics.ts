@@ -1,9 +1,13 @@
 /**
  * Aura Dashboard · Global Telemetry & Analytics Module (TypeScript)
- * English-only interface, dynamic SVG visualizations, floating tooltips, and time-range filtering.
+ * Features:
+ * - 8 Time Range Filters: Session, Today, Yesterday, This Week, This Month, Last 7 Days, Last 30 Days, Custom
+ * - Dynamic Granularity: Step (Session), Hourly (Today/Yesterday), Daily (Week/Month), Weekly (>90 Days)
+ * - Column Hover Full-height Highlight Band
+ * - Smart Non-jittering Tooltip with Boundary-aware Anchor Positioning
  */
 
-import type { GlobalAnalyticsOverview, ConversationSummary } from '../types';
+import type { GlobalAnalyticsOverview, ConversationSummary, SessionAnalyticsData } from '../types';
 
 export function formatCompactNumber(n: number): string {
   if (!n || n <= 0) return '0';
@@ -55,12 +59,31 @@ export function formatFullDate(dateStr: string): string {
   }
 }
 
-export type TimeRangeOption = 'today' | 'yesterday' | 'last-week' | 'last-month' | 'custom';
+export type TimeRangeOption =
+  | 'session'
+  | 'today'
+  | 'yesterday'
+  | 'this-week'
+  | 'this-month'
+  | 'last-7-days'
+  | 'last-30-days'
+  | 'custom';
+
+export interface ChartColumnData {
+  label: string;
+  tooltipHeader: string;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  requests: number;
+  subText?: string;
+}
 
 let rawOverview: GlobalAnalyticsOverview | null = null;
-let currentRange: TimeRangeOption = 'last-month';
+let currentRange: TimeRangeOption = 'last-30-days';
 let customStartDate = '';
 let customEndDate = '';
+let activeSessionData: SessionAnalyticsData | null = null;
 
 export async function fetchOverview(): Promise<GlobalAnalyticsOverview | null> {
   try {
@@ -86,60 +109,132 @@ export async function fetchConversations(): Promise<ConversationSummary[]> {
   }
 }
 
-function getFilterDateThresholds(range: TimeRangeOption): { start: string; end: string } {
-  const now = new Date();
-  const toYMD = (d: Date) => d.toISOString().slice(0, 10);
-  const todayStr = toYMD(now);
-
-  if (range === 'today') {
-    return { start: todayStr, end: todayStr };
-  } else if (range === 'yesterday') {
-    const yest = new Date(now.getTime() - 86400000);
-    const yestStr = toYMD(yest);
-    return { start: yestStr, end: yestStr };
-  } else if (range === 'last-week') {
-    const past7 = new Date(now.getTime() - 7 * 86400000);
-    return { start: toYMD(past7), end: todayStr };
-  } else if (range === 'last-month') {
-    const past30 = new Date(now.getTime() - 30 * 86400000);
-    return { start: toYMD(past30), end: todayStr };
-  } else {
-    // Custom
-    if (customStartDate && customEndDate) {
-      return { start: customStartDate, end: customEndDate };
-    }
-    return { start: '0000-00-00', end: '9999-99-99' };
+export async function fetchActiveSession(): Promise<SessionAnalyticsData | null> {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const convId = urlParams.get('conversationId') || '';
+    const endpoint = convId ? `/api/analytics/session?id=${encodeURIComponent(convId)}` : '/api/analytics/session';
+    const res = await window.sidecar.fetch(endpoint, { method: 'GET' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.ok ? json.data : null;
+  } catch (err) {
+    console.error('[Aura Analytics] Failed to fetch active session:', err);
+    return null;
   }
 }
 
-export function computeFilteredOverview(overview: GlobalAnalyticsOverview, range: TimeRangeOption) {
-  const { start, end } = getFilterDateThresholds(range);
-  const validSeries = (overview.timeRangeSeries || []).filter(item => {
-    // Exclude invalid dates like 0001-01-01
-    if (!item.date || item.date.startsWith('0001')) return false;
-    return item.date >= start && item.date <= end;
-  });
+function getTodayString(): string {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 
-  // If filtered series has records, recalculate totals
-  if (validSeries.length > 0 && range !== 'custom') {
-    let inTok = 0;
-    let outTok = 0;
-    let cacheTok = 0;
-    let reqs = 0;
+function getYesterdayString(): string {
+  const d = new Date(Date.now() - 86400000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 
-    for (const d of validSeries) {
-      inTok += d.inputTok;
-      outTok += d.outTok;
-      cacheTok += d.cacheRead;
-      reqs += d.requests || 1;
+function getStartOfWeekString(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  const monday = new Date(d.setDate(diff));
+  return monday.getFullYear() + '-' + String(monday.getMonth() + 1).padStart(2, '0') + '-' + String(monday.getDate()).padStart(2, '0');
+}
+
+function getStartOfMonthString(): string {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
+}
+
+function getPastDaysString(days: number): string {
+  const d = new Date(Date.now() - days * 86400000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range: TimeRangeOption): {
+  columns: ChartColumnData[];
+  totalTokens: { input: number; output: number; cacheRead: number; thinking: number; total: number };
+  totalRequests: number;
+  cacheEfficiency: number;
+  avgTtft: number;
+  avgTokPerSec: number;
+} {
+  const today = getTodayString();
+  const yesterday = getYesterdayString();
+
+  // 1. Session Mode
+  if (range === 'session' && activeSessionData && activeSessionData.steps.length > 0) {
+    const s = activeSessionData;
+    const stepsToRender = s.steps.length > 40 ? s.steps.slice(-40) : s.steps;
+    const columns: ChartColumnData[] = stepsToRender.map((st) => ({
+      label: `#${st.idx + 1}`,
+      tooltipHeader: `Session Turn #${st.idx + 1}`,
+      inputTok: st.inTok,
+      outTok: st.outTok,
+      cacheRead: st.cacheRead,
+      requests: 1,
+      subText: `TTFT: ${st.ttft.toFixed(2)}s · Speed: ${Math.round(st.stream > 0 ? st.outTok / st.stream : 0)} tok/s`
+    }));
+
+    return {
+      columns,
+      totalTokens: s.totalTokens,
+      totalRequests: s.totalRequests,
+      cacheEfficiency: s.cacheEfficiency,
+      avgTtft: s.avgTtft,
+      avgTokPerSec: s.avgTokPerSec
+    };
+  }
+
+  // 2. Hourly Granularity (Today / Yesterday)
+  if (range === 'today' || range === 'yesterday') {
+    const targetDate = range === 'today' ? today : yesterday;
+    const hourlyMap: Record<string, ChartColumnData> = {};
+
+    // Initialize all 24 hours of the day
+    for (let h = 0; h < 24; h++) {
+      const hh = String(h).padStart(2, '0');
+      const hourKey = `${targetDate} ${hh}:00`;
+      hourlyMap[hourKey] = {
+        label: `${hh}:00`,
+        tooltipHeader: `${targetDate} ${hh}:00 - ${hh}:59`,
+        inputTok: 0,
+        outTok: 0,
+        cacheRead: 0,
+        requests: 0
+      };
     }
 
+    // Populate from hourlySeries
+    for (const hItem of overview.hourlySeries || []) {
+      if (hItem.hourKey && hItem.hourKey.startsWith(targetDate)) {
+        const key = hItem.hourKey.slice(0, 16);
+        if (hourlyMap[key]) {
+          hourlyMap[key].inputTok += hItem.inputTok;
+          hourlyMap[key].outTok += hItem.outTok;
+          hourlyMap[key].cacheRead += hItem.cacheRead;
+          hourlyMap[key].requests += hItem.requests;
+        }
+      }
+    }
+
+    const columns = Object.values(hourlyMap);
+    let inTok = 0, outTok = 0, cacheTok = 0, reqs = 0;
+    for (const c of columns) {
+      inTok += c.inputTok;
+      outTok += c.outTok;
+      cacheTok += c.cacheRead;
+      reqs += c.requests;
+    }
+
+    // Fallback if no hourly activity exists for yesterday
     const totalTok = inTok + outTok + cacheTok;
     const rawTotal = inTok + cacheTok;
     const efficiency = rawTotal > 0 ? (cacheTok / rawTotal) * 100 : overview.cacheEfficiency;
 
     return {
-      series: validSeries,
+      columns,
       totalTokens: {
         input: inTok,
         output: outTok,
@@ -150,35 +245,134 @@ export function computeFilteredOverview(overview: GlobalAnalyticsOverview, range
       totalRequests: reqs,
       cacheEfficiency: efficiency,
       avgTtft: overview.avgTtft,
-      avgTokPerSec: overview.avgTokPerSec,
-      topProjects: overview.topProjects
+      avgTokPerSec: overview.avgTokPerSec
     };
   }
 
-  // Fallback to full overview
+  // 3. Daily Granularity (This Week, This Month, Last 7 Days, Last 30 Days)
+  let startDate = '0000-00-00';
+  let endDate = today;
+
+  if (range === 'this-week') {
+    startDate = getStartOfWeekString();
+  } else if (range === 'this-month') {
+    startDate = getStartOfMonthString();
+  } else if (range === 'last-7-days') {
+    startDate = getPastDaysString(7);
+  } else if (range === 'last-30-days') {
+    startDate = getPastDaysString(30);
+  } else if (range === 'custom') {
+    if (customStartDate && customEndDate) {
+      startDate = customStartDate;
+      endDate = customEndDate;
+    }
+  }
+
+  const validSeries = (overview.timeRangeSeries || []).filter(item => {
+    if (!item.date || item.date.startsWith('0001')) return false;
+    return item.date >= startDate && item.date <= endDate;
+  });
+
+  // Check if range spans over 90 days -> Aggregate Weekly
+  const startMs = new Date(startDate).getTime();
+  const endMs = new Date(endDate).getTime();
+  const daySpan = Math.round((endMs - startMs) / 86400000);
+
+  if (daySpan > 90 && validSeries.length > 28) {
+    // 4. Weekly Aggregation
+    const weeklyMap: Record<string, ChartColumnData> = {};
+    for (const item of validSeries) {
+      const d = new Date(item.date + 'T00:00:00');
+      const weekNum = Math.floor(d.getDate() / 7) + 1;
+      const weekKey = `${item.date.slice(0, 7)} W${weekNum}`;
+      if (!weeklyMap[weekKey]) {
+        weeklyMap[weekKey] = {
+          label: weekKey.slice(5),
+          tooltipHeader: `Week of ${item.date}`,
+          inputTok: 0,
+          outTok: 0,
+          cacheRead: 0,
+          requests: 0
+        };
+      }
+      weeklyMap[weekKey].inputTok += item.inputTok;
+      weeklyMap[weekKey].outTok += item.outTok;
+      weeklyMap[weekKey].cacheRead += item.cacheRead;
+      weeklyMap[weekKey].requests += item.requests || 1;
+    }
+
+    const columns = Object.values(weeklyMap);
+    let inTok = 0, outTok = 0, cacheTok = 0, reqs = 0;
+    for (const c of columns) {
+      inTok += c.inputTok;
+      outTok += c.outTok;
+      cacheTok += c.cacheRead;
+      reqs += c.requests;
+    }
+    const totalTok = inTok + outTok + cacheTok;
+    const rawTotal = inTok + cacheTok;
+    const efficiency = rawTotal > 0 ? (cacheTok / rawTotal) * 100 : overview.cacheEfficiency;
+
+    return {
+      columns,
+      totalTokens: { input: inTok, output: outTok, cacheRead: cacheTok, thinking: overview.totalTokens.thinking, total: totalTok },
+      totalRequests: reqs,
+      cacheEfficiency: efficiency,
+      avgTtft: overview.avgTtft,
+      avgTokPerSec: overview.avgTokPerSec
+    };
+  }
+
+  // Standard Daily Columns
+  const columns: ChartColumnData[] = validSeries.map(item => ({
+    label: formatDateLabel(item.date),
+    tooltipHeader: formatFullDate(item.date),
+    inputTok: item.inputTok,
+    outTok: item.outTok,
+    cacheRead: item.cacheRead,
+    requests: item.requests || 1
+  }));
+
+  let inTok = 0, outTok = 0, cacheTok = 0, reqs = 0;
+  for (const c of columns) {
+    inTok += c.inputTok;
+    outTok += c.outTok;
+    cacheTok += c.cacheRead;
+    reqs += c.requests;
+  }
+  const totalTok = inTok + outTok + cacheTok;
+  const rawTotal = inTok + cacheTok;
+  const efficiency = rawTotal > 0 ? (cacheTok / rawTotal) * 100 : overview.cacheEfficiency;
+
   return {
-    series: (overview.timeRangeSeries || []).filter(item => item.date && !item.date.startsWith('0001')),
-    totalTokens: overview.totalTokens,
-    totalRequests: overview.totalRequests || (overview.totalConversations * 10),
-    cacheEfficiency: overview.cacheEfficiency,
+    columns: columns.length > 0 ? columns : (overview.timeRangeSeries || []).slice(-14).map(d => ({
+      label: formatDateLabel(d.date),
+      tooltipHeader: formatFullDate(d.date),
+      inputTok: d.inputTok,
+      outTok: d.outTok,
+      cacheRead: d.cacheRead,
+      requests: d.requests || 1
+    })),
+    totalTokens: columns.length > 0 ? { input: inTok, output: outTok, cacheRead: cacheTok, thinking: overview.totalTokens.thinking, total: totalTok } : overview.totalTokens,
+    totalRequests: reqs || overview.totalRequests || (overview.totalConversations * 10),
+    cacheEfficiency: efficiency,
     avgTtft: overview.avgTtft,
-    avgTokPerSec: overview.avgTokPerSec,
-    topProjects: overview.topProjects
+    avgTokPerSec: overview.avgTokPerSec
   };
 }
 
-export function renderMetricCards(filteredData: ReturnType<typeof computeFilteredOverview>): void {
+export function renderMetricCards(metrics: ReturnType<typeof computeProcessedColumns>): void {
   const container = document.getElementById('analytics-cards-grid');
   if (!container) return;
 
-  const totalTok = filteredData.totalTokens.total;
-  const inTok = filteredData.totalTokens.input;
-  const outTok = filteredData.totalTokens.output;
-  const cacheTok = filteredData.totalTokens.cacheRead;
-  const totalReq = filteredData.totalRequests;
+  const totalTok = metrics.totalTokens.total;
+  const inTok = metrics.totalTokens.input;
+  const outTok = metrics.totalTokens.output;
+  const cacheTok = metrics.totalTokens.cacheRead;
+  const totalReq = metrics.totalRequests;
 
   container.innerHTML = `
-    <!-- Row 1: Primary Large Metrics -->
+    <!-- Row 1: Primary Metrics -->
     <div class="kpi-grid-primary">
       <div class="kpi-card kpi-card-featured">
         <div class="kpi-label">Total Tokens Processed</div>
@@ -193,7 +387,7 @@ export function renderMetricCards(filteredData: ReturnType<typeof computeFiltere
       <div class="kpi-card kpi-card-featured">
         <div class="kpi-label">Total Requests</div>
         <div class="kpi-value">${formatFullNumber(totalReq)}</div>
-        <div class="kpi-subtext">Completed model inferences across active dialog sessions</div>
+        <div class="kpi-subtext">Completed model inferences for the selected range</div>
       </div>
     </div>
 
@@ -201,46 +395,43 @@ export function renderMetricCards(filteredData: ReturnType<typeof computeFiltere
     <div class="kpi-grid-secondary">
       <div class="kpi-card">
         <div class="kpi-label">Cache Cost Efficiency</div>
-        <div class="kpi-value">${filteredData.cacheEfficiency.toFixed(1)}%</div>
+        <div class="kpi-value">${metrics.cacheEfficiency.toFixed(1)}%</div>
         <div class="kpi-subtext">Prompt caching saved ~${formatCompactNumber(cacheTok)} tokens from reprocessing</div>
       </div>
 
       <div class="kpi-card">
         <div class="kpi-label">Avg Streaming Speed</div>
-        <div class="kpi-value">${filteredData.avgTokPerSec} <span class="kpi-unit">tok/s</span></div>
-        <div class="kpi-subtext">Real-time generation throughput across connected models</div>
+        <div class="kpi-value">${metrics.avgTokPerSec} <span class="kpi-unit">tok/s</span></div>
+        <div class="kpi-subtext">Real-time generation throughput across models</div>
       </div>
 
       <div class="kpi-card">
         <div class="kpi-label">Avg Time to First Token</div>
-        <div class="kpi-value">${filteredData.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
-        <div class="kpi-subtext">Average latency from prompt dispatch to initial token chunk</div>
+        <div class="kpi-value">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
+        <div class="kpi-subtext">Average latency from prompt dispatch to first chunk</div>
       </div>
     </div>
   `;
 }
 
-export function renderActivityChart(series: GlobalAnalyticsOverview['timeRangeSeries']): void {
+export function renderActivityChart(columns: ChartColumnData[], rangeTitle: string): void {
   const chartWrapper = document.getElementById('analytics-activity-chart');
   if (!chartWrapper) return;
 
-  if (!series || series.length === 0) {
+  if (!columns || columns.length === 0) {
     chartWrapper.innerHTML = `
       <div class="chart-header">
-        <div class="chart-title">Token Activity Over Time</div>
+        <div class="chart-title">${rangeTitle}</div>
       </div>
-      <div class="chart-empty">No activity data recorded in the selected time range</div>
+      <div class="chart-empty">No activity data recorded in the selected range</div>
     `;
     return;
   }
 
-  // Use up to 30 data points for optimal spacing
-  const data = series.slice(-30);
+  // Find max value across all columns
+  const rawMax = Math.max(...columns.map(d => (d.inputTok + d.outTok + d.cacheRead)), 1000);
   
-  // Calculate maximum value for Y-axis scale (using total tokens per day)
-  const rawMax = Math.max(...data.map(d => (d.inputTok + d.outTok + d.cacheRead)), 10000);
-  
-  // Round up max value to crisp human ticks (e.g., 5M, 10M, 15M, 20M)
+  // Nice tick calculation (e.g. 5M, 10M, 15M, 20M)
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
   const normalized = rawMax / magnitude;
   let tickStep = magnitude;
@@ -260,8 +451,8 @@ export function renderActivityChart(series: GlobalAnalyticsOverview['timeRangeSe
 
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
-  const step = chartWidth / data.length;
-  const barWidth = Math.max(6, Math.min(22, Math.floor(step * 0.68)));
+  const step = chartWidth / columns.length;
+  const barWidth = Math.max(4, Math.min(22, Math.floor(step * 0.72)));
 
   // Y-axis grid lines and labels
   let gridSvg = '';
@@ -277,13 +468,12 @@ export function renderActivityChart(series: GlobalAnalyticsOverview['timeRangeSe
   let barsSvg = '';
   let xLabelsSvg = '';
 
-  const labelInterval = Math.max(1, Math.floor(data.length / 6));
+  const labelInterval = Math.max(1, Math.floor(columns.length / 6));
 
-  data.forEach((item, idx) => {
+  columns.forEach((item, idx) => {
     const x = paddingLeft + idx * step + (step - barWidth) / 2;
     const total = item.inputTok + item.outTok + item.cacheRead;
 
-    // Heights for stacked bar segments
     const totalBarHeight = Math.max(2, Math.round((total / yMax) * chartHeight));
     const outHeight = Math.max(1, Math.round((item.outTok / yMax) * chartHeight));
     const inHeight = Math.max(1, Math.round((item.inputTok / yMax) * chartHeight));
@@ -294,77 +484,87 @@ export function renderActivityChart(series: GlobalAnalyticsOverview['timeRangeSe
     const yIn = yCache - inHeight;
     const yOut = yIn - outHeight;
 
-    const formattedDate = formatDateLabel(item.date);
-    const fullDate = formatFullDate(item.date);
+    const slotX = paddingLeft + idx * step;
+    const centerX = x + barWidth / 2;
 
     barsSvg += `
       <g class="chart-column-group" 
-         data-date="${fullDate}" 
+         data-header="${item.tooltipHeader}" 
          data-in="${formatFullNumber(item.inputTok)}" 
          data-out="${formatFullNumber(item.outTok)}" 
          data-cache="${formatFullNumber(item.cacheRead)}"
          data-total="${formatFullNumber(total)}"
          data-reqs="${formatFullNumber(item.requests || 1)}"
-         data-x="${x + barWidth / 2}"
-         data-y="${yOut}">
-        <!-- Hover highlight slot -->
-        <rect class="bar-hover-slot" x="${x - (step - barWidth) / 2}" y="${paddingTop}" width="${step}" height="${chartHeight}" fill="transparent" />
+         data-subtext="${item.subText || ''}"
+         data-center-x="${centerX}"
+         data-top-y="${yOut}"
+         data-idx="${idx}">
         
-        <!-- Stacked Bar Segments (Rounded top) -->
-        <rect class="bar-segment bar-cache" x="${x}" y="${yCache}" width="${barWidth}" height="${cacheHeight}" fill="#34A853" opacity="0.85" rx="1" />
-        <rect class="bar-segment bar-in" x="${x}" y="${yIn}" width="${barWidth}" height="${inHeight}" fill="var(--aura-fg-muted)" opacity="0.75" rx="1" />
+        <!-- Hover Container Highlight Band (Full Height Background) -->
+        <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
+        
+        <!-- Stacked Column Segments -->
+        <rect class="bar-segment bar-cache" x="${x}" y="${yCache}" width="${barWidth}" height="${cacheHeight}" fill="#34A853" rx="1" />
+        <rect class="bar-segment bar-in" x="${x}" y="${yIn}" width="${barWidth}" height="${inHeight}" fill="var(--aura-fg-muted)" opacity="0.8" rx="1" />
         <rect class="bar-segment bar-out" x="${x}" y="${yOut}" width="${barWidth}" height="${outHeight}" fill="var(--aura-primary)" rx="2" />
       </g>
     `;
 
-    // Display X-axis labels at calculated intervals
-    if (idx % labelInterval === 0 || idx === data.length - 1) {
+    // Display X-axis label
+    if (idx % labelInterval === 0 || idx === columns.length - 1) {
       xLabelsSvg += `
-        <text x="${x + barWidth / 2}" y="${svgHeight - 10}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${formattedDate}</text>
+        <text x="${centerX}" y="${svgHeight - 10}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${item.label}</text>
       `;
     }
   });
 
   chartWrapper.innerHTML = `
     <div class="chart-header">
-      <div class="chart-title">Token Activity Over Time</div>
+      <div class="chart-title">Token Activity (${rangeTitle})</div>
       <div class="chart-legend">
         <span class="legend-item"><span class="legend-dot" style="background: var(--aura-primary)"></span>Output Tokens</span>
         <span class="legend-item"><span class="legend-dot" style="background: var(--aura-fg-muted)"></span>Input Tokens</span>
         <span class="legend-item"><span class="legend-dot" style="background: #34A853"></span>Cache Read</span>
       </div>
     </div>
-    <div class="chart-stage">
+    <div class="chart-stage" id="chart-stage-container">
       <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element">
         ${gridSvg}
         ${barsSvg}
         ${xLabelsSvg}
       </svg>
-      <!-- Floating Hover Tooltip -->
+      <!-- Smart Fixed Hover Tooltip -->
       <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
     </div>
   `;
 
-  attachChartHoverListeners(chartWrapper);
+  attachSmartTooltipListeners(chartWrapper, svgWidth, svgHeight);
 }
 
-function attachChartHoverListeners(chartWrapper: HTMLElement): void {
+function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number, svgHeight: number): void {
   const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
+  const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
   const groups = chartWrapper.querySelectorAll('.chart-column-group');
 
+  if (!tooltip || !stage) return;
+
   groups.forEach(group => {
-    group.addEventListener('mouseenter', (e) => {
-      if (!tooltip) return;
+    group.addEventListener('mouseenter', () => {
       const target = group as SVGElement;
-      const date = target.getAttribute('data-date') || '';
+      const header = target.getAttribute('data-header') || '';
       const inTok = target.getAttribute('data-in') || '0';
       const outTok = target.getAttribute('data-out') || '0';
       const cacheTok = target.getAttribute('data-cache') || '0';
       const totalTok = target.getAttribute('data-total') || '0';
       const reqs = target.getAttribute('data-reqs') || '1';
+      const subText = target.getAttribute('data-subtext') || '';
 
+      const svgCenterX = Number(target.getAttribute('data-center-x') || 0);
+      const svgTopY = Number(target.getAttribute('data-top-y') || 0);
+
+      // Render Tooltip content
       tooltip.innerHTML = `
-        <div class="tooltip-header">${date}</div>
+        <div class="tooltip-header">${header}</div>
         <div class="tooltip-row">
           <span class="tooltip-dot" style="background: var(--aura-primary)"></span>
           <span class="tooltip-label">Output</span>
@@ -382,33 +582,46 @@ function attachChartHoverListeners(chartWrapper: HTMLElement): void {
         </div>
         <div class="tooltip-divider"></div>
         <div class="tooltip-row total-row">
-          <span class="tooltip-label">Total Tokens</span>
+          <span class="tooltip-label">Total Volume</span>
           <span class="tooltip-val">${totalTok}</span>
         </div>
-        <div class="tooltip-subline">${reqs} generation requests</div>
+        <div class="tooltip-subline">${reqs} generation requests${subText ? ' · ' + subText : ''}</div>
       `;
+
+      // Smart positioning: map SVG coordinate to CSS container coordinate
+      const stageRect = stage.getBoundingClientRect();
+      const scaleX = stageRect.width / svgWidth;
+      const scaleY = stageRect.height / svgHeight;
+
+      const pixelX = svgCenterX * scaleX;
+      const pixelY = svgTopY * scaleY;
+
       tooltip.style.display = 'block';
-    });
+      const tipWidth = tooltip.offsetWidth || 185;
+      const tipHeight = tooltip.offsetHeight || 140;
 
-    group.addEventListener('mousemove', (e: any) => {
-      if (!tooltip) return;
-      const wrapperRect = chartWrapper.getBoundingClientRect();
-      const mouseX = e.clientX - wrapperRect.left;
-      const mouseY = e.clientY - wrapperRect.top;
-
-      const tooltipWidth = tooltip.offsetWidth || 180;
-      let left = mouseX + 14;
-      if (left + tooltipWidth > wrapperRect.width - 12) {
-        left = mouseX - tooltipWidth - 14;
+      // Calculate best anchor position without mouse-follow jitter
+      let left = pixelX - tipWidth / 2;
+      // Right edge boundary avoidance
+      if (pixelX + tipWidth / 2 > stageRect.width - 12) {
+        left = pixelX - tipWidth - 10;
+      } else if (pixelX - tipWidth / 2 < 12) {
+        left = pixelX + 10;
       }
-      const top = Math.max(10, mouseY - 60);
 
-      tooltip.style.left = `${left}px`;
-      tooltip.style.top = `${top}px`;
+      // Top placement: strictly anchored above the column top
+      let top = pixelY - tipHeight - 12;
+      if (top < 10) {
+        // If column is too close to top, anchor below column or inside top bar
+        top = Math.max(10, pixelY + 16);
+      }
+
+      tooltip.style.left = `${Math.round(left)}px`;
+      tooltip.style.top = `${Math.round(top)}px`;
     });
 
     group.addEventListener('mouseleave', () => {
-      if (tooltip) tooltip.style.display = 'none';
+      tooltip.style.display = 'none';
     });
   });
 }
@@ -480,7 +693,26 @@ export function renderSessionsTable(conversations: ConversationSummary[]): void 
   container.innerHTML = rows;
 }
 
-export function applyTimeRangeFilter(range: TimeRangeOption): void {
+function getRangeDisplayTitle(range: TimeRangeOption): string {
+  switch (range) {
+    case 'session': {
+      const stepTotal = activeSessionData?.steps?.length || 0;
+      return stepTotal > 40
+        ? `Current Active Session (Latest 40 of ${stepTotal} turns)`
+        : 'Current Active Session (Turn-by-turn)';
+    }
+    case 'today': return 'Today (Hourly)';
+    case 'yesterday': return 'Yesterday (Hourly)';
+    case 'this-week': return 'This Week (Daily)';
+    case 'this-month': return 'This Month (Daily)';
+    case 'last-7-days': return 'Last 7 Days (Daily)';
+    case 'last-30-days': return 'Last 30 Days (Daily)';
+    case 'custom': return 'Custom Range';
+    default: return 'Token Activity';
+  }
+}
+
+export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void> {
   currentRange = range;
   const segmented = document.getElementById('analytics-timerange-segmented');
   if (segmented) {
@@ -498,10 +730,16 @@ export function applyTimeRangeFilter(range: TimeRangeOption): void {
     customInputs.style.display = range === 'custom' ? 'flex' : 'none';
   }
 
+  if (range === 'session') {
+    if (!activeSessionData) {
+      activeSessionData = await fetchActiveSession();
+    }
+  }
+
   if (rawOverview) {
-    const filtered = computeFilteredOverview(rawOverview, range);
-    renderMetricCards(filtered);
-    renderActivityChart(filtered.series);
+    const processed = computeProcessedColumns(rawOverview, range);
+    renderMetricCards(processed);
+    renderActivityChart(processed.columns, getRangeDisplayTitle(range));
   }
 }
 
@@ -509,15 +747,22 @@ export async function refreshAnalytics(): Promise<void> {
   const refreshBtn = document.getElementById('btn-refresh-analytics');
   if (refreshBtn) refreshBtn.classList.add('loading');
 
-  const [overview, conversations] = await Promise.all([
+  const [overview, conversations, session] = await Promise.all([
     fetchOverview(),
-    fetchConversations()
+    fetchConversations(),
+    fetchActiveSession()
   ]);
 
   if (overview) {
     rawOverview = overview;
-    applyTimeRangeFilter(currentRange);
-    renderProjectDistribution(overview.topProjects);
+  }
+  if (session) {
+    activeSessionData = session;
+  }
+
+  if (rawOverview) {
+    await applyTimeRangeFilter(currentRange);
+    renderProjectDistribution(rawOverview.topProjects);
   }
 
   if (conversations) {
