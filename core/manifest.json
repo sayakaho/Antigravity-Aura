@@ -1,28 +1,22 @@
 {
-  "name": "chuanban-antigravity-theme-patch",
-  "version": "5.0.0",
+  "name": "aura-dashboard",
+  "version": "6.0.0",
   "minNodeVersion": "22.0.0",
   "fullMetricsNodeVersion": "22.13.0",
   "distribution": {
-    "notionGuide": "https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554",
-    "googleDriveFullBundle": "https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC",
-    "githubRepo": "https://github.com/Anarcadia/chuanban-antigravity-theme-patch"
+    "githubRepo": "https://github.com/sayakaho/chuanban-antigravity-theme-patch"
   },
   "files": {
     "daemon.mjs": {
-      "sha256": "b5a85448c5ac62dc9fc8486e8b2298ba27e0207c081a4191b1de25696a05b9f7",
       "bytes": 33306
     },
     "runtime.js": {
-      "sha256": "526122b56751f358183ab1eb2d675bb773394250ba10ac0856ed665404a5d1e6",
       "bytes": 42898
     },
     "theme.css": {
-      "sha256": "943a9b2303d9bafd3087c592776959f4d07cf54b8cfa2829ad7297f7bad0e38a",
       "bytes": 56767
     },
     "i18n.json": {
-      "sha256": "2ea5ec07b562cddcfe94a98d4c011ec8706903e4624599b3067f4892187b09e9",
       "bytes": 30139
     }
   }

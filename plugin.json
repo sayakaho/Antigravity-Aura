@@ -1,16 +1,18 @@
 {
-  "name": "chuanban-theme",
-  "displayName": "川瓣主题 (Chuanban Theme)",
-  "version": "5.1.0",
-  "description": "川瓣暖白主题、排版增强、实时指标遥测与侧边栏控制台",
+  "name": "aura-dashboard",
+  "displayName": "Aura Dashboard",
+  "version": "6.0.0",
+  "description": "Antigravity deep performance analytics, Claude-inspired typography, and interface design suite",
   "logo": "assets/logo.svg",
   "author": {
-    "name": "Chuanban Team"
+    "name": "Aura Team"
   },
   "keywords": [
+    "analytics",
+    "telemetry",
+    "dashboard",
     "theme",
-    "metrics",
-    "beautify",
+    "aura",
     "ui-extension"
   ]
 }

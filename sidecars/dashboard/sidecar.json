@@ -2,16 +2,16 @@
   "command": "node",
   "args": ["main.mjs"],
   "restart_policy": "always",
-  "display_name": "川瓣主题与指标控制台",
-  "description": "川瓣主题控制台、实时指标遥测与 CDP 状态监控",
+  "display_name": "Aura Dashboard",
+  "description": "Antigravity global performance analytics, real-time telemetry and system preferences",
   "has_web_ui": true,
   "ui_config": {
-    "display_name": "川瓣主题与指标",
+    "display_name": "Aura Dashboard",
     "views": [
       {
         "path": "/",
         "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
-        "title": "川瓣主题控制台"
+        "title": "Aura Dashboard"
       }
     ]
   }

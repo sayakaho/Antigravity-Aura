@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Aura Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/preload.js"></script>
+</head>
+<body>
+  <div class="settings-container">
+    <!-- Header Area -->
+    <div class="page-header">
+      <div class="header-top">
+        <h1 class="page-title">Aura Dashboard</h1>
+        <div class="view-segmented">
+          <button class="view-tab-btn active" id="tab-nav-analytics">Analytics</button>
+          <button class="view-tab-btn" id="tab-nav-settings">Preferences</button>
+        </div>
+      </div>
+      <p class="page-desc">Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.</p>
+    </div>
+
+    <!-- VIEW 1: Analytics & Telemetry Overview -->
+    <div id="view-analytics">
+      <!-- Action Bar -->
+      <div class="analytics-toolbar">
+        <div class="toolbar-title">Global Conversation Intelligence</div>
+        <button class="btn-action btn-sm" id="btn-refresh-analytics">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <!-- KPI Summary Grid -->
+      <div class="kpi-grid" id="analytics-cards-grid">
+        <div class="kpi-card-loading">Loading telemetry data...</div>
+      </div>
+
+      <!-- Activity Timeline Chart -->
+      <div class="settings-section">
+        <div class="chart-card" id="analytics-activity-chart">
+          <div class="chart-loading">Rendering timeline...</div>
+        </div>
+      </div>
+
+      <!-- Projects Breakdown -->
+      <div class="settings-section">
+        <h2 class="section-title">Workspace & Project Distribution</h2>
+        <p class="section-desc">Token consumption and session volume across active repositories.</p>
+        <div class="settings-card padding-card" id="analytics-projects-list">
+          <div class="chart-loading">Loading workspaces...</div>
+        </div>
+      </div>
+
+      <!-- Recent Conversations -->
+      <div class="settings-section">
+        <h2 class="section-title">Recent Conversation Sessions</h2>
+        <p class="section-desc">Latest interactive sessions with execution step counts and workspace paths.</p>
+        <div class="settings-card">
+          <table class="sessions-table">
+            <thead>
+              <tr>
+                <th style="width: 48%;">Session Title</th>
+                <th style="width: 22%;">Workspace</th>
+                <th style="width: 15%;">Steps</th>
+                <th style="width: 15%;">Activity</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-sessions-tbody">
+              <tr><td colspan="4" class="empty-cell">Scanning session databases...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: Settings & Preferences -->
+    <div id="view-settings" style="display: none;">
+      <!-- Appearance -->
+      <div class="settings-section">
+        <h2 class="section-title">Appearance & Themes</h2>
+        <p class="section-desc">Customize color presets and composer micro-relief borders for Light and Dark modes.</p>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Light Mode Preset</div>
+              <div class="settings-sublabel">Active color scheme when the system is in light appearance.</div>
+            </div>
+            <div class="settings-control">
+              <div class="segmented-control" id="preset-light-segmented">
+                <button class="segment-btn active" data-val="high-contrast">Claude Light</button>
+                <button class="segment-btn" data-val="claude-desktop-purewhite">Pure Light</button>
+                <button class="segment-btn" data-val="default">Native Default</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Dark Mode Preset</div>
+              <div class="settings-sublabel">Active color scheme when the system is in dark appearance.</div>
+            </div>
+            <div class="settings-control">
+              <div class="segmented-control" id="preset-dark-segmented">
+                <button class="segment-btn active" data-val="claude-dark">Claude Dark</button>
+                <button class="segment-btn" data-val="vintage-dark">Vintage Deep</button>
+                <button class="segment-btn" data-val="default">Native Default</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Vintage Wax Seal Composer</div>
+              <div class="settings-sublabel">Subtle outer glow border on home, glowing vintage dark red on focus.</div>
+            </div>
+            <div class="settings-control">
+              <label class="switch-toggle">
+                <input type="checkbox" id="toggle-wax-seal" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Language -->
+      <div class="settings-section">
+        <h2 class="section-title">Language & Localization</h2>
+        <p class="section-desc">Switch display language for Antigravity host interface.</p>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">UI Language</div>
+              <div class="settings-sublabel">Choose official English or community Chinese localization.</div>
+            </div>
+            <div class="settings-control">
+              <select class="select-control" id="select-language">
+                <option value="default">English (Default)</option>
+                <option value="zh-CN">Chinese (Simplified)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typography -->
+      <div class="settings-section">
+        <h2 class="section-title">Typography System</h2>
+        <p class="section-desc">Enumerate system fonts directly with primary Latin font and CJK fallback separation.</p>
+        <div class="settings-card">
+          <!-- Sans Primary -->
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Primary Sans Font (Latin / Western)</div>
+              <div class="settings-sublabel">Used for Latin characters, numbers, and primary UI elements.</div>
+            </div>
+            <div class="settings-control">
+              <select class="select-control" id="select-font-sans-primary">
+                <option value="default">Default</option>
+                <option value="custom">Custom font name...</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-row" id="row-custom-sans-primary" style="display: none;">
+            <div class="settings-meta">
+              <div class="settings-label">Custom Primary Font Family</div>
+              <div class="settings-sublabel">Enter an installed Latin sans-serif font family.</div>
+            </div>
+            <div class="settings-control">
+              <input type="text" class="text-control" id="input-custom-sans-primary" placeholder="e.g. Inter, Helvetica">
+            </div>
+          </div>
+
+          <!-- Sans Fallback -->
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Fallback Sans Font (Chinese / CJK)</div>
+              <div class="settings-sublabel">Fallback for CJK characters (PingFang SC, Sarasa UI SC, LXGW WenKai).</div>
+            </div>
+            <div class="settings-control">
+              <select class="select-control" id="select-font-sans-fallback">
+                <option value="default">Default</option>
+                <option value="custom">Custom font name...</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-row" id="row-custom-sans-fallback" style="display: none;">
+            <div class="settings-meta">
+              <div class="settings-label">Custom Fallback Font Family</div>
+              <div class="settings-sublabel">Enter an installed CJK sans-serif font family.</div>
+            </div>
+            <div class="settings-control">
+              <input type="text" class="text-control" id="input-custom-sans-fallback" placeholder="e.g. LXGW WenKai, PingFang SC">
+            </div>
+          </div>
+
+          <!-- Mono Font -->
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Code & Monospace Font (Mono)</div>
+              <div class="settings-sublabel">Used for codeblocks, terminal output, and monospace alignment.</div>
+            </div>
+            <div class="settings-control">
+              <select class="select-control" id="select-font-mono">
+                <option value="default">Default</option>
+                <option value="custom">Custom font name...</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-row" id="row-custom-mono" style="display: none;">
+            <div class="settings-meta">
+              <div class="settings-label">Custom Monospace Font Family</div>
+              <div class="settings-sublabel">Enter an installed monospace font family.</div>
+            </div>
+            <div class="settings-control">
+              <input type="text" class="text-control" id="input-custom-mono" placeholder="e.g. Menlo, JetBrains Mono">
+            </div>
+          </div>
+
+          <!-- Chat Font Size -->
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Chat Message Font Size</div>
+              <div class="settings-sublabel">Base reading font size for conversational text and Markdown.</div>
+            </div>
+            <div class="settings-control">
+              <div class="segmented-control" id="font-size-segmented">
+                <button class="segment-btn" data-val="14">14px</button>
+                <button class="segment-btn" data-val="15">15px</button>
+                <button class="segment-btn" data-val="16">16px</button>
+                <button class="segment-btn" data-val="17">17px</button>
+                <button class="segment-btn" data-val="18">18px</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layout & Alignment -->
+      <div class="settings-section">
+        <h2 class="section-title">Component Layout & Alignment</h2>
+        <p class="section-desc">Rearrange composer outer metadata and new session toolbars.</p>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Bottom Toolbar Layout</div>
+              <div class="settings-sublabel">Move project bar left, align telemetry/model/mode horizontally.</div>
+            </div>
+            <div class="settings-control">
+              <div class="segmented-control" id="composer-align-segmented">
+                <button class="segment-btn active" data-val="collinear">Absolute Collinear</button>
+                <button class="segment-btn" data-val="native">Official Native</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Hide Dropdown Arrows</div>
+              <div class="settings-sublabel">Remove small arrows from toolbar buttons for a cleaner aesthetic.</div>
+            </div>
+            <div class="settings-control">
+              <label class="switch-toggle">
+                <input type="checkbox" id="toggle-hide-arrows" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Telemetry Settings -->
+      <div class="settings-section">
+        <h2 class="section-title">Real-time Telemetry Capsule</h2>
+        <p class="section-desc">Monitor model speed (tok/s), TTFT, and context usage directly on composer.</p>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Session Live Metrics Capsule</div>
+              <div class="settings-sublabel">Displays token rate pill on composer with hover detailed popup.</div>
+            </div>
+            <div class="settings-control">
+              <label class="switch-toggle">
+                <input type="checkbox" id="toggle-metrics" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Telemetry Sampling Rate</div>
+              <div class="settings-sublabel">SQLite conversation database polling interval.</div>
+            </div>
+            <div class="settings-control">
+              <div class="segmented-control" id="metrics-interval-segmented">
+                <button class="segment-btn" data-val="1500">1.5s</button>
+                <button class="segment-btn active" data-val="2000">2.0s</button>
+                <button class="segment-btn" data-val="3000">3.0s</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Engine Status -->
+      <div class="settings-section">
+        <h2 class="section-title">CDP Engine Status</h2>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Host Connection Status</div>
+              <div class="settings-sublabel" id="status-sublabel">Connected to Antigravity host</div>
+            </div>
+            <div class="settings-control">
+              <div class="status-pill">
+                <span class="status-dot" id="status-dot"></span>
+                <span id="status-text">Connected</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-meta">
+              <div class="settings-label">Style Hot Reload</div>
+              <div class="settings-sublabel">Recompile active configuration and push latest styles to all windows.</div>
+            </div>
+            <div class="settings-control">
+              <button class="btn-action" id="btn-force-reload">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                <span>Reapply Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Configuration applied in real-time</div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

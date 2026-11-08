@@ -25,7 +25,7 @@ const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 const CONVERSATIONS_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
 
 // ============================================================================
-// 0. 动态探测 node:sqlite 支持
+// 0. 动态探测 node:sqlite 与全量分析引擎支持
 // ============================================================================
 let DatabaseSync = null;
 try {
@@ -35,6 +35,16 @@ try {
   }
 } catch {
   DatabaseSync = null;
+}
+
+let analyticsEngine = null;
+try {
+  const aggrMod = await import('./dist/aggregator.js').catch(() => null);
+  if (aggrMod && aggrMod.GlobalAnalyticsEngine) {
+    analyticsEngine = new aggrMod.GlobalAnalyticsEngine(path.join(os.homedir(), '.gemini', 'antigravity'));
+  }
+} catch (e) {
+  console.error('[Sidecar Engine] Failed to load analytics engine:', e);
 }
 
 // ============================================================================
@@ -1009,8 +1019,36 @@ const app = new SidecarApp();
 
 app.page('/', () => readTextSafe(path.join(HERE, 'index.html'), ''));
 app.page('/app.js', () => readTextSafe(path.join(HERE, 'app.js'), ''));
+app.page('/dist/bundle.js', () => readTextSafe(path.join(HERE, 'dist', 'bundle.js'), ''));
+app.page('/dist/bundle.js.map', () => readTextSafe(path.join(HERE, 'dist', 'bundle.js.map'), ''));
 app.api('/styles.css', () => new Response(readTextSafe(path.join(HERE, 'styles.css'), ''), { contentType: 'text/css' }), 'GET');
 app.api('/logo.svg', () => new Response(readTextSafe(path.join(ASSETS_DIR, 'logo.svg'), ''), { contentType: 'image/svg+xml' }), 'GET');
+
+// GET /api/analytics/overview
+app.api('/api/analytics/overview', () => {
+  if (!analyticsEngine) {
+    return { ok: false, error: 'Analytics engine unavailable' };
+  }
+  try {
+    const data = analyticsEngine.getGlobalOverview();
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}, 'GET');
+
+// GET /api/analytics/conversations
+app.api('/api/analytics/conversations', () => {
+  if (!analyticsEngine) {
+    return { ok: false, error: 'Analytics engine unavailable' };
+  }
+  try {
+    const summaries = analyticsEngine.getSummaries();
+    return { ok: true, conversations: summaries.slice(0, 50) };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}, 'GET');
 
 // GET /api/config
 app.api('/api/config', () => {
