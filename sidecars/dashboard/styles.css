@@ -837,15 +837,24 @@ html, body {
 }
 
 .chart-shared-hover-band {
-  fill: var(--aura-fg);
-  opacity: 0.055;
+  fill: rgba(255, 255, 255, 0.075);
   pointer-events: none;
-  transition: x 0.04s cubic-bezier(0, 0, 0.2, 1), width 0.04s ease-out;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+html[data-theme="light"] .chart-shared-hover-band,
+body.light .chart-shared-hover-band {
+  fill: rgba(0, 0, 0, 0.038);
+}
+
+.bar-segment {
+  opacity: 0.92;
+  transition: opacity 0.08s ease;
 }
 
 .chart-column-group:hover .bar-segment {
-  filter: brightness(1.22);
-  transition: filter 0.08s ease;
+  opacity: 1;
 }
 
 /* Floating Hover Tooltip */

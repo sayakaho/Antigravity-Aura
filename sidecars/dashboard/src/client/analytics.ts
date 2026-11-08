@@ -552,7 +552,8 @@ function renderSessionOverviewArea(
       lineD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
     }
 
-    if (idx % labelInterval === 0) {
+    const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.45;
+    if (idx % labelInterval === 0 && !isTooCloseToRight) {
       xLabelsSvg += `
         <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${idx === 0 ? 'start' : 'middle'}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
       `;
@@ -815,8 +816,9 @@ function renderStandardTimelineChart(
       `;
     }
 
+    const isTooCloseToRight = (columns.length - 1 - idx) < labelInterval * 0.45;
     const showLabel = (isHourly || isSessionTimeline)
-      ? (idx % labelInterval === 0)
+      ? (idx % labelInterval === 0 && !isTooCloseToRight)
       : (idx % labelInterval === 0 || (idx === columns.length - 1 && (columns.length - 1) % labelInterval >= Math.floor(labelInterval / 2)));
 
     if (showLabel) {
@@ -948,6 +950,7 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
         hoverBand.setAttribute('x', String(slotX));
         hoverBand.setAttribute('width', String(slotW));
         hoverBand.style.display = 'block';
+        hoverBand.style.opacity = '1';
       }
 
       const ctxRowHtml = ctxTok ? `
@@ -985,6 +988,7 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
       `;
 
       tooltip.style.display = 'block';
+      tooltip.style.opacity = '1';
 
       const stageRect = stage.getBoundingClientRect();
       const bandEl = (target.querySelector('.bar-bg-band') || target) as SVGGraphicsElement;
@@ -1026,11 +1030,17 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
     });
   });
 
-  // Zero-flicker: hide hover band and tooltip only when cursor exits the entire stage
+  // Zero-flicker: fade out hover band and tooltip smoothly when cursor exits the entire stage
   stage.addEventListener('mouseleave', () => {
     activeIdx = null;
-    if (hoverBand) hoverBand.style.display = 'none';
-    tooltip.style.display = 'none';
+    if (hoverBand) hoverBand.style.opacity = '0';
+    tooltip.style.opacity = '0';
+    setTimeout(() => {
+      if (!activeIdx) {
+        if (hoverBand) hoverBand.style.display = 'none';
+        tooltip.style.display = 'none';
+      }
+    }, 120);
   });
 }
 
