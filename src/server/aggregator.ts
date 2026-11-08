@@ -337,6 +337,9 @@ export class GlobalAnalyticsEngine {
     let ttftCount = 0;
     let streamSum = 0;
     let streamCount = 0;
+    let globalStreamOutTokens = 0;
+    let globalStreamSeconds = 0;
+    const globalStreamingTpsList: number[] = [];
 
     const projectStats: Record<string, { convCount: number; tokenCount: number }> = {};
     const dateSeries: Record<string, { input: number; output: number; cache: number; requests: number }> = {};
@@ -622,6 +625,18 @@ export class GlobalAnalyticsEngine {
         streamSum += entry.outTok / entry.stream;
         streamCount++;
       }
+      if (entry.models) {
+        for (const m of Object.values(entry.models)) {
+          if (m.outTok > 0 && m.streamSec >= 0.08) {
+            const tps = m.outTok / m.streamSec;
+            if (tps <= 1500) {
+              globalStreamOutTokens += m.outTok;
+              globalStreamSeconds += m.streamSec;
+              globalStreamingTpsList.push(Math.round(tps));
+            }
+          }
+        }
+      }
 
       // Aggregate by workspace directory name
       let proj = s.projectId || 'Default Project';
@@ -777,7 +792,17 @@ export class GlobalAnalyticsEngine {
     const totalRaw = totalIn + totalCache;
     const efficiency = totalRaw > 0 ? Math.round((totalCache / totalRaw) * 1000) / 10 : 0;
     const avgTtft = ttftCount > 0 ? Math.round((ttftSum / ttftCount) * 100) / 100 : 0;
-    const avgRate = streamCount > 0 ? Math.round(streamSum / streamCount) : 0;
+    
+    // Robust Weighted Physical Average & P50 Median for Streaming Speed
+    const avgRate = globalStreamSeconds > 0
+      ? Math.round(globalStreamOutTokens / globalStreamSeconds)
+      : (streamCount > 0 ? Math.round(streamSum / streamCount) : 0);
+
+    let p50Rate = avgRate;
+    if (globalStreamingTpsList.length > 0) {
+      globalStreamingTpsList.sort((a, b) => a - b);
+      p50Rate = globalStreamingTpsList[Math.floor(globalStreamingTpsList.length * 0.5)];
+    }
 
     const topProjects = Object.entries(projectStats)
       .map(([projectId, stat]) => ({ projectId, conversationCount: stat.convCount, tokenCount: stat.tokenCount }))
@@ -835,6 +860,7 @@ export class GlobalAnalyticsEngine {
       cacheEfficiency: efficiency,
       avgTtft,
       avgTokPerSec: avgRate,
+      p50TokPerSec: p50Rate,
       topProjects,
       timeRangeSeries,
       hourlySeries,
@@ -869,6 +895,9 @@ export class GlobalAnalyticsEngine {
       let ttftSum = 0;
       let streamSum = 0;
       let validCount = 0;
+      let sessionStreamTokens = 0;
+      let sessionStreamSeconds = 0;
+      const sessionStreamingTpsList: number[] = [];
       const sessionModelsMap: Record<string, {
         modelId: string;
         modelName: string;
@@ -926,7 +955,14 @@ export class GlobalAnalyticsEngine {
         totalCache += cacheRead;
         totalThink += thinkTok;
         if (ttft > 0) { ttftSum += ttft; validCount++; }
-        if (stream > 0 && outTok > 0) { streamSum += outTok / stream; }
+        if (stream > 0 && outTok > 0) {
+          streamSum += outTok / stream;
+          if (stream >= 0.08 && (outTok / stream) <= 1500) {
+            sessionStreamTokens += outTok;
+            sessionStreamSeconds += stream;
+            sessionStreamingTpsList.push(Math.round(outTok / stream));
+          }
+        }
 
         return {
           idx: r.idx,
@@ -945,7 +981,16 @@ export class GlobalAnalyticsEngine {
       const totalRaw = totalIn + totalCache;
       const efficiency = totalRaw > 0 ? Math.round((totalCache / totalRaw) * 1000) / 10 : 0;
       const avgTtft = validCount > 0 ? Math.round((ttftSum / validCount) * 100) / 100 : 0;
-      const avgRate = validCount > 0 ? Math.round(streamSum / validCount) : 0;
+      
+      const avgRate = sessionStreamSeconds > 0
+        ? Math.round(sessionStreamTokens / sessionStreamSeconds)
+        : (validCount > 0 ? Math.round(streamSum / validCount) : 0);
+
+      let p50Rate = avgRate;
+      if (sessionStreamingTpsList.length > 0) {
+        sessionStreamingTpsList.sort((a, b) => a - b);
+        p50Rate = sessionStreamingTpsList[Math.floor(sessionStreamingTpsList.length * 0.5)];
+      }
 
       const models = Object.values(sessionModelsMap)
         .filter(m => (m.inTok + m.outTok + m.cacheRead) > 0 && !m.modelName.toLowerCase().includes('unknown'))
@@ -996,6 +1041,7 @@ export class GlobalAnalyticsEngine {
         cacheEfficiency: efficiency,
         avgTtft,
         avgTokPerSec: avgRate,
+        p50TokPerSec: p50Rate,
         steps,
         models,
         tools

@@ -123,7 +123,8 @@ export interface GlobalAnalyticsOverview {
   };
   cacheEfficiency: number; // 0 - 100 percentage
   avgTtft: number; // in seconds
-  avgTokPerSec: number; // tokens/second
+  avgTokPerSec: number; // tokens/second (weighted average)
+  p50TokPerSec?: number; // tokens/second (P50 median)
   topProjects: Array<{ projectId: string; conversationCount: number; tokenCount: number }>;
   timeRangeSeries: Array<{
     date: string;

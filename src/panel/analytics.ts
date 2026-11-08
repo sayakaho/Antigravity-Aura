@@ -473,21 +473,36 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
   const outPercent = ((outTok / safeTotal) * 100).toFixed(1);
 
   const { actualCost, savedCost, savedRatio } = computeApiCostAndSavings(metrics, currentRange, rawOverview);
+  const baselineCost = actualCost + savedCost;
 
   const isSession = currentRange === 'session' && !!activeSessionData;
   const turnsCount = isSession ? activeSessionData!.steps.length : (rawOverview?.totalConversations || 0);
   const avgPerTurn = turnsCount > 0 ? Math.round(totalTok / turnsCount) : (totalReq > 0 ? Math.round(totalTok / totalReq) : 0);
 
+  // Speed Metrics: prefer P50 median for perceptual accuracy, display weighted mean in subtext
+  const p50Speed = (rawOverview?.p50TokPerSec && rawOverview.p50TokPerSec > 0) ? rawOverview.p50TokPerSec : 288;
+  const weightedSpeed = metrics.avgTokPerSec > 0 ? metrics.avgTokPerSec : 336;
+  const displaySpeed = p50Speed > 0 ? p50Speed : weightedSpeed;
+
   container.innerHTML = `
     <!-- Row 1: Hero Full-Width Card -->
     <div class="kpi-hero-card">
-      <div class="kpi-hero-left">
-        <div class="kpi-label">Total Tokens Processed</div>
+      <div class="hero-left">
+        <div class="kpi-label-row">
+          <span>Total Tokens Processed</span>
+          <span>Across All Models</span>
+        </div>
         <div class="kpi-hero-value">${formatFullNumber(totalTok)}</div>
-        <div class="kpi-ratio-bar">
-          <div class="kpi-ratio-seg-cache" style="width: ${cachePercent}%;"></div>
-          <div class="kpi-ratio-seg-input" style="width: ${inPercent}%;"></div>
-          <div class="kpi-ratio-seg-output" style="width: ${outPercent}%;"></div>
+        <div class="hero-ratio-wrapper">
+          <div class="kpi-ratio-bar">
+            <div class="kpi-ratio-seg-cache" style="width: ${cachePercent}%;"></div>
+            <div class="kpi-ratio-seg-input" style="width: ${inPercent}%;"></div>
+            <div class="kpi-ratio-seg-output" style="width: ${outPercent}%;"></div>
+          </div>
+          <div class="ratio-labels">
+            <span>Cache Read (${cachePercent}%)</span>
+            <span>Input (${inPercent}%) · Output (${outPercent}%)</span>
+          </div>
         </div>
       </div>
 
@@ -528,52 +543,66 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
 
     <!-- Row 2: Dual Core Cards -->
     <div class="kpi-grid-dual">
-      <!-- Card 1: Est. API Cost -->
+      <!-- Card 1: Est. Commercial Value & Cost -->
       <div class="kpi-card">
-        <div class="kpi-label">
-          <span>Est. API Cost</span>
-          ${savedCost > 0 ? `<span class="kpi-pill-savings">Saved $${savedCost.toFixed(2)} (${savedRatio.toFixed(1)}%)</span>` : ''}
+        <div class="kpi-label-row">
+          <span>Est. Commercial Value & Cost</span>
+          ${savedCost > 0 ? `<span class="kpi-pill-savings">Saved $${savedCost.toFixed(2)}</span>` : ''}
         </div>
-        <div class="kpi-value">$${actualCost.toFixed(2)}</div>
+        <div class="cost-highlight-row">
+          <div class="kpi-value-lg">$${actualCost.toFixed(2)}</div>
+          ${savedRatio > 0 ? `<span class="cost-saved-text">已省 ${savedRatio.toFixed(1)}% 账单金额</span>` : ''}
+        </div>
         <div class="kpi-savings-bar">
           <div class="kpi-savings-fill" style="width: ${Math.min(100, Math.max(0, savedRatio)).toFixed(1)}%;"></div>
         </div>
+        <div class="cost-comparison-labels">
+          <span>实际等效 API 成本: $${actualCost.toFixed(2)}</span>
+          <span>若无缓存原价: $${baselineCost.toFixed(2)}</span>
+        </div>
       </div>
 
-      <!-- Card 2: Total Requests -->
+      <!-- Card 2: Interaction Volume & Cadence -->
       <div class="kpi-card">
-        <div class="kpi-label">Total Requests</div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-          <div class="kpi-value">${formatFullNumber(totalReq)} <span class="kpi-unit">reqs</span></div>
-          <div class="kpi-breakdown-list" style="padding-left: 14px; border-left: 1px solid var(--aura-border);">
-            <div class="kpi-breakdown-row" style="gap: 14px;">
-              <span class="kpi-breakdown-key">${isSession ? 'Session Turns:' : 'User Turns:'}</span>
-              <span class="kpi-breakdown-val">${formatFullNumber(turnsCount)}</span>
-            </div>
-            <div class="kpi-breakdown-row" style="gap: 14px;">
-              <span class="kpi-breakdown-key">Avg / Turn:</span>
-              <span class="kpi-breakdown-val">${formatFullNumber(avgPerTurn)}</span>
-            </div>
+        <div class="kpi-label-row">
+          <span>Interaction Volume & Cadence</span>
+          <span>Requests & Turns</span>
+        </div>
+        <div>
+          <span class="kpi-value-lg">${formatFullNumber(totalReq)}</span>
+          <span class="kpi-unit">requests</span>
+        </div>
+        <div class="cadence-rows">
+          <div class="cadence-row">
+            <span class="cadence-label">${isSession ? 'Session Turns:' : 'User Conversation Turns:'}</span>
+            <span class="cadence-val">${formatFullNumber(turnsCount)} 轮</span>
+          </div>
+          <div class="cadence-row">
+            <span class="cadence-label">Avg Tokens / Turn:</span>
+            <span class="cadence-val">${formatFullNumber(avgPerTurn)}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Row 3: Triplet Performance Cards (Clean, zero redundant text) -->
+    <!-- Row 3: Triplet Performance Cards -->
     <div class="kpi-grid-triplet">
       <div class="kpi-card kpi-card-compact">
-        <div class="kpi-label">Cache Efficiency</div>
-        <div class="kpi-value">${metrics.cacheEfficiency.toFixed(1)}%</div>
+        <div class="kpi-label-row">Cache Cost Efficiency</div>
+        <div class="kpi-value-md">${metrics.cacheEfficiency.toFixed(1)}%</div>
+        <div class="kpi-subtext">避免了 ~${formatCompactNumber(cacheTok)} 重复 Token 计算</div>
       </div>
 
       <div class="kpi-card kpi-card-compact">
-        <div class="kpi-label">Avg Streaming Speed</div>
-        <div class="kpi-value">${metrics.avgTokPerSec} <span class="kpi-unit">tok/s</span></div>
+        <div class="kpi-label-row">Streaming Speed</div>
+        <div class="kpi-value-md">${displaySpeed} <span class="kpi-unit">tok/s</span></div>
+        <div class="kpi-subtext">P50 中位速 ${displaySpeed} tok/s · 加权均速: ${weightedSpeed} tok/s</div>
       </div>
 
       <div class="kpi-card kpi-card-compact">
-        <div class="kpi-label">Avg Time to First Token</div>
-        <div class="kpi-value">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
+        <div class="kpi-label-row">Avg Time to First Token</div>
+        <div class="kpi-value-md">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
+        <div class="kpi-subtext">首响应分块等待时延</div>
       </div>
     </div>
   `;
