@@ -8,7 +8,7 @@ const I18N = {
     secAppearanceDesc: '为浅色与深色模式分别定制配色预设与微浮雕外框。',
     lightPresetLabel: '浅色模式预设',
     lightPresetSub: '系统处于浅色外观时生效的主题配色方案。',
-    optHighContrast: '高对比暖白',
+    optHighContrast: 'Claude 浅色',
     optClaudeWhite: '经典净白',
     optDefault: '官方原生',
     darkPresetLabel: '深色模式预设',
@@ -21,7 +21,7 @@ const I18N = {
     secLanguageDesc: '切换 Antigravity 宿主与本控制台的显示语言。',
     languageLabel: '界面语言 (Language)',
     languageSub: '支持官方纯英或川瓣高质量中文汉化。',
-    optLangDefault: '官方英文 (Default)',
+    optLangDefault: 'English (Default)',
     optLangChinese: '简体中文 (Chinese)',
     secTypoTitle: '字体排版系统',
     secTypoDesc: '自动读取系统字体，支持西文首选、中文字体回退拆分与字阶微调。',
@@ -74,7 +74,7 @@ const I18N = {
     secAppearanceDesc: 'Customize color presets and composer micro-relief borders for Light and Dark modes.',
     lightPresetLabel: 'Light Mode Preset',
     lightPresetSub: 'Active color scheme when the system is in light appearance.',
-    optHighContrast: 'Warm High-Contrast',
+    optHighContrast: 'Claude Light',
     optClaudeWhite: 'Pure Light',
     optDefault: 'Native Default',
     darkPresetLabel: 'Dark Mode Preset',
@@ -248,7 +248,8 @@ async function loadConfig() {
 
     // 0. Language
     const lang = config.language || 'default';
-    updateSegmentedUI('language-segmented', lang);
+    const langSelect = document.getElementById('select-language');
+    if (langSelect) langSelect.value = lang;
     applyI18n(lang);
 
     // 1. Presets
@@ -363,21 +364,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateStatus();
   setInterval(updateStatus, 3000);
 
-  // 2. Language Segmented
-  const langContainer = document.getElementById('language-segmented');
-  if (langContainer) {
-    langContainer.querySelectorAll('.segment-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const val = btn.getAttribute('data-val');
-        updateSegmentedUI('language-segmented', val);
-        applyI18n(val);
-        // Refresh default labels in selects
-        const typo = currentConfig?.typography || {};
-        populateFontSelect('select-font-sans-primary', I18N[currentLang].optSansPrimaryDefault, systemFontsList, typo.primarySans);
-        populateFontSelect('select-font-sans-fallback', I18N[currentLang].optSansFallbackDefault, systemFontsList, typo.fallbackSans);
-        populateFontSelect('select-font-mono', I18N[currentLang].optMonoDefault, systemFontsList, typo.mono);
-        saveConfig({ language: val });
-      });
+  // 2. Language Select Menu
+  const langSelect = document.getElementById('select-language');
+  if (langSelect) {
+    langSelect.addEventListener('change', () => {
+      const val = langSelect.value;
+      applyI18n(val);
+      // Refresh default labels in selects
+      const typo = currentConfig?.typography || {};
+      populateFontSelect('select-font-sans-primary', I18N[currentLang].optSansPrimaryDefault, systemFontsList, typo.primarySans);
+      populateFontSelect('select-font-sans-fallback', I18N[currentLang].optSansFallbackDefault, systemFontsList, typo.fallbackSans);
+      populateFontSelect('select-font-mono', I18N[currentLang].optMonoDefault, systemFontsList, typo.mono);
+      saveConfig({ language: val });
     });
   }
 

@@ -25,7 +25,7 @@
           </div>
           <div class="settings-control">
             <div class="segmented-control" id="preset-light-segmented">
-              <button class="segment-btn active" data-val="high-contrast" data-i18n="optHighContrast">高对比暖白</button>
+              <button class="segment-btn active" data-val="high-contrast" data-i18n="optHighContrast">Claude 浅色</button>
               <button class="segment-btn" data-val="claude-desktop-purewhite" data-i18n="optClaudeWhite">经典净白</button>
               <button class="segment-btn" data-val="default" data-i18n="optDefault">官方原生</button>
             </div>
@@ -70,10 +70,10 @@
             <div class="settings-sublabel" data-i18n="languageSub">支持官方纯英或川瓣高质量中文汉化。</div>
           </div>
           <div class="settings-control">
-            <div class="segmented-control" id="language-segmented">
-              <button class="segment-btn active" data-val="default" data-i18n="optLangDefault">官方英文 (Default)</button>
-              <button class="segment-btn" data-val="zh-CN" data-i18n="optLangChinese">简体中文 (Chinese)</button>
-            </div>
+            <select class="select-control" id="select-language">
+              <option value="default" data-i18n="optLangDefault">English (Default)</option>
+              <option value="zh-CN" data-i18n="optLangChinese">简体中文 (Chinese)</option>
+            </select>
           </div>
         </div>
       </div>
