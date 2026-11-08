@@ -8,11 +8,11 @@
     "dark": "claude-dark"
   },
   "typography": {
-    "primarySans": "PingFang SC",
-    "fallbackSans": "LXGW WenKai Medium",
+    "primarySans": "default",
+    "fallbackSans": "default",
     "customPrimarySans": "",
     "customFallbackSans": "",
-    "mono": "Menlo",
+    "mono": "Hiragino Kaku Gothic Std W8",
     "customMono": "",
     "fontSize": 15
   },

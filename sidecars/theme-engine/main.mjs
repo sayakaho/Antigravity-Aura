@@ -161,10 +161,17 @@ function resolveTypographyVars(typography = {}) {
     } else if (fallbackKey === 'custom') {
       fallbackSans = (typography.customFallbackSans || '').trim() || "'PingFang SC'";
     } else {
-      fallbackSans = `'${fallbackKey.replace(/'/g, '')}'`;
+      const cleanKey = fallbackKey.replace(/'/g, '');
+      const baseKey = cleanKey.replace(/\s+(Regular|Medium|Bold|Light|Thin|SemiBold|Heavy|Black|W[0-9]+)$/i, '').trim();
+      if (baseKey && baseKey !== cleanKey) {
+        fallbackSans = `'${cleanKey}', '${baseKey}'`;
+      } else {
+        fallbackSans = `'${cleanKey}'`;
+      }
     }
 
-    fullSans = `${primarySans}, ${fallbackSans}, system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
+    // 严密完备的标准中文无衬线回退链，防止非标准字重名称导致意外回退到日文粗黑体
+    fullSans = `${primarySans}, ${fallbackSans}, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
   }
 
   const monoKey = (typography.mono || 'default').trim();
@@ -196,10 +203,8 @@ function resolveTypographyVars(typography = {}) {
 
   if (isCustomMono) {
     vars['--ag-cfg-font-mono'] = mono;
-    vars['--font-mono'] = mono;
   } else {
     vars['--ag-cfg-font-mono'] = '';
-    vars['--font-mono'] = '';
   }
 
   return vars;

@@ -86,39 +86,23 @@ html[data-ag-custom-font="true"] .select-text :is(p, li, blockquote, h1, h2, h3,
   letter-spacing: -0.003em;
 }
 
-/* 2. 自定义等宽代码字体：精确限定于代码块 (code-block/line-content)、行内代码 (code)、终端 (xterm) 与编辑器 (Monaco)，严防向外溢出至普通正文 */
-html[data-ag-custom-mono="true"] {
-  --editor-font-family: var(--ag-cfg-font-mono) !important;
-  --font-mono: var(--ag-cfg-font-mono) !important;
-  --default-mono-font-family: var(--font-mono) !important;
-}
-
-html[data-ag-custom-mono="true"] code,
-html[data-ag-custom-mono="true"] kbd,
-html[data-ag-custom-mono="true"] samp,
-html[data-ag-custom-mono="true"] .font-mono,
-html[data-ag-custom-mono="true"] [class*="language-"],
-html[data-ag-custom-mono="true"] .monaco-editor,
-html[data-ag-custom-mono="true"] .monaco-editor *,
-html[data-ag-custom-mono="true"] .xterm,
-html[data-ag-custom-mono="true"] .xterm *,
-html[data-ag-custom-mono="true"] .code-block,
-html[data-ag-custom-mono="true"] .code-block *,
-html[data-ag-custom-mono="true"] .code-line,
-html[data-ag-custom-mono="true"] .code-line *,
-html[data-ag-custom-mono="true"] .line-content,
-html[data-ag-custom-mono="true"] .line-content *,
-html[data-ag-custom-mono="true"] pre code,
-html[data-ag-custom-mono="true"] pre code *,
-html[data-ag-custom-mono="true"] [class*="group/file-title"],
-html[data-ag-custom-mono="true"] [class*="group/file-title"] *,
-html[data-ag-custom-mono="true"] [class*="file-title"],
-html[data-ag-custom-mono="true"] [class*="file-path"],
-html[data-ag-custom-mono="true"] [data-path],
-html[data-ag-custom-mono="true"] [data-file-path],
-html[data-ag-custom-mono="true"] .tabular-nums,
-html[data-ag-custom-mono="true"] .select-text :is(code, kbd, samp, .font-mono, .code-block, .code-line, .line-content) {
-  font-family: var(--ag-cfg-font-mono, var(--font-mono)) !important;
+/* 2. 自定义等宽代码字体：精确锁定于代码块行内容 (.line-content)、行内代码 (code)、终端与 Monaco 编辑器代码行，绝不侵入代码块顶部标题、侧栏、思考块、普通文本或遥测文字 */
+html[data-ag-custom-mono="true"] :is(
+  .code-block .line-content,
+  .code-block .line-content *,
+  .code-line .line-content,
+  .code-line .line-content *,
+  pre > code,
+  pre > code *,
+  .select-text code:not(pre code),
+  kbd,
+  samp,
+  .monaco-editor .view-lines,
+  .monaco-editor .view-lines *,
+  .xterm-rows,
+  .xterm-rows *
+) {
+  font-family: var(--ag-cfg-font-mono, ui-monospace, monospace) !important;
 }
 
 /* 5. 配色版本 3: 复古深色 (absoulutely-chuanban) - 浅色通道 */
@@ -955,7 +939,7 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   margin-right: 4px;
   padding: 0 4px 0 8px;
   border-left: 1px solid rgba(0, 0, 0, 0.22);
-  font-family: var(--font-mono) !important;
+  font-family: var(--ag-cfg-font-sans, var(--font-sans, system-ui)) !important;
   font-variant-numeric: tabular-nums;
   font-size: 11px !important;
   font-weight: 500 !important;
@@ -989,7 +973,7 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
 
 #ag-live-metrics-pill #ag-live-metrics-text,
 #ag-live-metrics-pill .ag-m-item {
-  font-family: var(--font-mono) !important;
+  font-family: var(--ag-cfg-font-sans, var(--font-sans, system-ui)) !important;
   font-size: 11px !important;
   font-weight: 500 !important;
   letter-spacing: -0.02em !important;
@@ -1029,7 +1013,7 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   background-color: var(--card, #F9F7F2) !important;
   border: 1px solid var(--card-border, rgba(0, 0, 0, 0.35)) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
-  font-family: var(--font-mono) !important;
+  font-family: var(--ag-cfg-font-sans, var(--font-sans, system-ui)) !important;
   font-variant-numeric: tabular-nums;
   font-size: 11px !important;
   line-height: 1.55 !important;
