@@ -8,11 +8,11 @@
     "dark": "claude-dark"
   },
   "typography": {
-    "primarySans": "default",
-    "fallbackSans": "default",
+    "primarySans": "Anthropic Serif Web",
+    "fallbackSans": "LXGW WenKai Medium",
     "customPrimarySans": "",
     "customFallbackSans": "",
-    "mono": "Hiragino Kaku Gothic Std W8",
+    "mono": "Anthropic Mono",
     "customMono": "",
     "fontSize": 15
   },

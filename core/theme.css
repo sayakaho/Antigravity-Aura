@@ -369,7 +369,21 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-te
 
 /* 外部元素样式微调：小巧精致、靠左无符号分隔纯间距 */
 html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"],
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"],
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"] {
+  height: 24px !important;
+  font-size: 12px !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+  font-weight: 550 !important;
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
+}
+
+/* 6.2.1 模型右侧推理等级 / 权限模式选择器：保持轻盈淡雅，与主模型形成视觉主次对比 */
 html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"] {
   height: 24px !important;
@@ -380,7 +394,14 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-
   border: none !important;
   box-shadow: none !important;
   cursor: pointer !important;
-  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
+  opacity: 0.65 !important;
+  font-weight: 450 !important;
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease, opacity 160ms ease !important;
+}
+
+html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover {
+  opacity: 1 !important;
 }
 
 /* 模型选择器作为锚点 */
@@ -557,8 +578,11 @@ html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] .b
   background-color: rgba(0, 0, 0, 0.28) !important;
 }
 
-/* 高对比输入框底部：模型名称、Turbo模式、图标字体深色近乎纯黑 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *), html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
+/* 高对比输入框底部：模型名称与主控件深色近乎纯黑（推理等级选择器排除在外，保持淡雅） - 浅色通道 */
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not([data-testid="permissions-selector-trigger"]):not([data-testid="permissions-selector-trigger"] *),
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="permissions-selector-trigger"]),
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not([data-testid="permissions-selector-trigger"] *),
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *):not([data-testid="permissions-selector-trigger"] *) {
   color: #0A0A0A !important;
   opacity: 1 !important;
 }
@@ -809,11 +833,11 @@ html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > di
   color: #ECE6D8 !important;
 }
 
-/* 深色模式输入框底部控件文字与图标 */
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"],
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *),
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
+/* 深色模式输入框底部控件文字与图标（推理等级选择器排除在外，保持淡雅） */
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not([data-testid="permissions-selector-trigger"]):not([data-testid="permissions-selector-trigger"] *),
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="permissions-selector-trigger"]),
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not([data-testid="permissions-selector-trigger"] *),
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *):not([data-testid="permissions-selector-trigger"] *) {
   color: #ECE6D8 !important;
   text-shadow: none !important;
 }
