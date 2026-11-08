@@ -1333,7 +1333,8 @@ export function renderToolDistribution(overview: GlobalAnalyticsOverview, range:
   const totalAll = tools.reduce((a, b) => a + b.count, 0);
 
   const itemsHtml = tools.map((t) => {
-    const pct = Math.max(3, Math.round((t.count / maxCount) * 100));
+    // Progress bar width represents the exact share of total tool executions
+    const pct = Math.max(0.5, t.percentage);
     return `
       <div class="tool-stat-row">
         <div class="tool-meta">
@@ -1348,7 +1349,7 @@ export function renderToolDistribution(overview: GlobalAnalyticsOverview, range:
           </div>
         </div>
         <div class="tool-bar-track">
-          <div class="tool-bar-fill" style="width: ${pct}%; background: ${t.color}"></div>
+          <div class="tool-bar-fill" style="width: ${pct.toFixed(1)}%; background: ${t.color}"></div>
         </div>
       </div>
     `;
@@ -1449,7 +1450,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     chartWrapper.innerHTML = `
       <div class="chart-header">
         <div class="chart-header-left">
-          <h3 class="chart-title">Model Speed Trends (${getRangeDisplayTitle(range)})</h3>
+          <h3 class="chart-title">Model Speed Trends</h3>
         </div>
       </div>
       <div class="chart-body" style="position: relative;">
@@ -1498,7 +1499,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
       chartWrapper.innerHTML = `
         <div class="chart-header">
           <div class="chart-header-left">
-            <h3 class="chart-title">Model Speed Trends (Hourly Avg TPS)</h3>
+            <h3 class="chart-title">Model Speed Trends</h3>
           </div>
         </div>
         <div class="chart-empty">No streaming latency data recorded for ${range === 'today' ? 'today' : 'yesterday'}</div>
@@ -1617,7 +1618,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     chartWrapper.innerHTML = `
       <div class="chart-header">
         <div class="chart-header-left">
-          <h3 class="chart-title">Model Speed Trends (${getRangeDisplayTitle(range)})</h3>
+          <h3 class="chart-title">Model Speed Trends</h3>
         </div>
       </div>
       <div class="chart-body" style="position: relative;">
@@ -1661,7 +1662,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     chartWrapper.innerHTML = `
       <div class="chart-header">
         <div class="chart-header-left">
-          <h3 class="chart-title">Model Speed Trends (Daily Avg TPS)</h3>
+          <h3 class="chart-title">Model Speed Trends</h3>
         </div>
       </div>
       <div class="chart-empty">No streaming latency data recorded in this period</div>
@@ -1790,7 +1791,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   chartWrapper.innerHTML = `
     <div class="chart-header">
       <div class="chart-header-left">
-        <h3 class="chart-title">Model Speed Trends (${getRangeDisplayTitle(range)})</h3>
+        <h3 class="chart-title">Model Speed Trends</h3>
       </div>
     </div>
     <div class="chart-body" style="position: relative;">
