@@ -245,8 +245,7 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:foc
   line-height: 24px !important;
   padding: 2px 0 !important;
   max-height: 140px !important;
-  display: flex !important;
-  align-items: center !important;
+  display: block !important;
 }
 
 [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child [contenteditable="true"] > p,
