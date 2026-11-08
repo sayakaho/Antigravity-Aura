@@ -490,9 +490,11 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
       <div class="hero-left">
         <div class="kpi-label-row">
           <span>Total Tokens Processed</span>
-          <span>Across All Models</span>
         </div>
-        <div class="kpi-hero-value">${formatFullNumber(totalTok)}</div>
+        <div class="kpi-hero-value">
+          <span>${formatFullNumber(totalTok)}</span>
+          <span class="kpi-approx-unit">~${formatCompactNumber(totalTok)}</span>
+        </div>
         <div class="hero-ratio-wrapper">
           <div class="kpi-ratio-bar">
             <div class="kpi-ratio-seg-cache" style="width: ${cachePercent}%;"></div>
@@ -547,7 +549,7 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
       <div class="kpi-card">
         <div class="kpi-label-row">
           <span>Est. Commercial Value & Cost</span>
-          ${savedCost > 0 ? `<span class="kpi-pill-savings">Saved $${savedCost.toFixed(2)}</span>` : ''}
+          ${savedCost > 0 ? `<span class="kpi-saved-text-top">Saved $${savedCost.toFixed(2)}</span>` : ''}
         </div>
         <div class="cost-highlight-row">
           <div class="kpi-value-lg">$${actualCost.toFixed(2)}</div>
@@ -566,7 +568,6 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
       <div class="kpi-card">
         <div class="kpi-label-row">
           <span>Interaction Volume & Cadence</span>
-          <span>Requests & Turns</span>
         </div>
         <div>
           <span class="kpi-value-lg">${formatFullNumber(totalReq)}</span>

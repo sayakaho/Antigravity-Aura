@@ -566,6 +566,17 @@ html, body {
   letter-spacing: -0.03em;
   color: var(--aura-fg);
   line-height: 1.15;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.kpi-approx-unit {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--aura-fg-muted);
+  letter-spacing: -0.01em;
+  font-family: var(--aura-font-mono, monospace);
 }
 
 /* Micro Segmented Ratio Bar */
@@ -711,6 +722,15 @@ html, body {
   font-weight: 400;
   color: var(--aura-fg-muted);
   margin-left: 4px;
+}
+
+/* Saved Text (Pure Text without Capsule Pill) */
+.kpi-saved-text-top {
+  font-size: 11px;
+  font-weight: 600;
+  color: #00A67E;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Savings Pill Badge & Cost Layout */
