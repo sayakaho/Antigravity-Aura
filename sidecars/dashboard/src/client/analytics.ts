@@ -75,6 +75,7 @@ export interface ChartColumnData {
   inputTok: number;
   outTok: number;
   cacheRead: number;
+  ctx?: number;
   requests: number;
   subText?: string;
 }
@@ -163,19 +164,22 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
   const today = getTodayString();
   const yesterday = getYesterdayString();
 
-  // 1. Session Mode
+  // 1. Session Mode - Render all turns continuously to visualize Context Window trajectory
   if (range === 'session' && activeSessionData && activeSessionData.steps.length > 0) {
     const s = activeSessionData;
-    const stepsToRender = s.steps.length > 40 ? s.steps.slice(-40) : s.steps;
-    const columns: ChartColumnData[] = stepsToRender.map((st) => ({
-      label: `#${st.idx + 1}`,
-      tooltipHeader: `Session Turn #${st.idx + 1}`,
-      inputTok: st.inTok,
-      outTok: st.outTok,
-      cacheRead: st.cacheRead,
-      requests: 1,
-      subText: `TTFT: ${st.ttft.toFixed(2)}s · Speed: ${Math.round(st.stream > 0 ? st.outTok / st.stream : 0)} tok/s`
-    }));
+    const columns: ChartColumnData[] = s.steps.map((st) => {
+      const ctx = st.ctx || (st.inTok + st.cacheRead);
+      return {
+        label: `#${st.idx + 1}`,
+        tooltipHeader: `Session Turn #${st.idx + 1}`,
+        inputTok: st.inTok,
+        outTok: st.outTok,
+        cacheRead: st.cacheRead,
+        ctx,
+        requests: 1,
+        subText: `Context: ${formatCompactNumber(ctx)} · Speed: ${Math.round(st.stream > 0 ? st.outTok / st.stream : 0)} tok/s`
+      };
+    });
 
     return {
       columns,
@@ -442,7 +446,10 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
   const yMax = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || (tickStep * 4);
   const yTicks = [0, yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax];
 
-  const svgWidth = 640;
+  // Dynamic SVG width calculation: allow horizontal scrolling for extensive session steps
+  const isScrollable = columns.length > 40;
+  const colStepWidth = isScrollable ? 10 : Math.max(6, Math.floor(570 / columns.length));
+  const svgWidth = isScrollable ? Math.max(640, columns.length * colStepWidth + 70) : 640;
   const svgHeight = 220;
   const paddingLeft = 52;
   const paddingRight = 18;
@@ -452,83 +459,125 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
   const step = chartWidth / columns.length;
-  const barWidth = Math.max(4, Math.min(22, Math.floor(step * 0.72)));
+  const barWidth = Math.max(3, Math.min(22, Math.floor(step * 0.72)));
 
   // Y-axis grid lines and labels
   let gridSvg = '';
   yTicks.forEach(tickVal => {
     const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
     gridSvg += `
-      <line x1="${paddingLeft}" y1="${y}" x2="${svgWidth - paddingRight}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="${tickVal === 0 ? 'none' : '3 3'}" opacity="${tickVal === 0 ? '0.8' : '0.4'}" />
+      <line x1="${paddingLeft}" y1="${y}" x2="${svgWidth - paddingRight}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.25'}" />
       <text x="${paddingLeft - 8}" y="${y + 3.5}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>
     `;
   });
 
   // Bars and X-axis labels
+  let defsSvg = '<defs>';
   let barsSvg = '';
   let xLabelsSvg = '';
 
-  const labelInterval = Math.max(1, Math.floor(columns.length / 6));
+  const labelInterval = Math.max(1, Math.floor(columns.length / 8));
 
   columns.forEach((item, idx) => {
     const x = paddingLeft + idx * step + (step - barWidth) / 2;
     const total = item.inputTok + item.outTok + item.cacheRead;
-
-    const totalBarHeight = Math.max(2, Math.round((total / yMax) * chartHeight));
-    const outHeight = Math.max(1, Math.round((item.outTok / yMax) * chartHeight));
-    const inHeight = Math.max(1, Math.round((item.inputTok / yMax) * chartHeight));
-    const cacheHeight = Math.max(1, totalBarHeight - outHeight - inHeight);
-
-    const yBottom = paddingTop + chartHeight;
-    const yCache = yBottom - cacheHeight;
-    const yIn = yCache - inHeight;
-    const yOut = yIn - outHeight;
-
     const slotX = paddingLeft + idx * step;
     const centerX = x + barWidth / 2;
 
-    barsSvg += `
-      <g class="chart-column-group" 
-         data-header="${item.tooltipHeader}" 
-         data-in="${formatFullNumber(item.inputTok)}" 
-         data-out="${formatFullNumber(item.outTok)}" 
-         data-cache="${formatFullNumber(item.cacheRead)}"
-         data-total="${formatFullNumber(total)}"
-         data-reqs="${formatFullNumber(item.requests || 1)}"
-         data-subtext="${item.subText || ''}"
-         data-center-x="${centerX}"
-         data-top-y="${yOut}"
-         data-idx="${idx}">
-        
-        <!-- Hover Container Highlight Band (Full Height Background) -->
-        <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
-        
-        <!-- Stacked Column Segments -->
-        <rect class="bar-segment bar-cache" x="${x}" y="${yCache}" width="${barWidth}" height="${cacheHeight}" fill="#34A853" rx="1" />
-        <rect class="bar-segment bar-in" x="${x}" y="${yIn}" width="${barWidth}" height="${inHeight}" fill="var(--aura-fg-muted)" opacity="0.8" rx="1" />
-        <rect class="bar-segment bar-out" x="${x}" y="${yOut}" width="${barWidth}" height="${outHeight}" fill="var(--aura-primary)" rx="2" />
-      </g>
-    `;
+    if (total > 0) {
+      const totalBarHeight = Math.max(3, Math.round((total / yMax) * chartHeight));
+      const outHeight = item.outTok > 0 ? Math.max(1, Math.round((item.outTok / yMax) * chartHeight)) : 0;
+      const inHeight = item.inputTok > 0 ? Math.max(1, Math.round((item.inputTok / yMax) * chartHeight)) : 0;
+      let cacheHeight = item.cacheRead > 0 ? Math.max(1, totalBarHeight - outHeight - inHeight) : 0;
+      if (cacheHeight < 0) cacheHeight = 0;
+
+      const yBottom = paddingTop + chartHeight;
+      const yCache = yBottom - cacheHeight;
+      const yIn = yCache - inHeight;
+      const yOut = yIn - outHeight;
+      const yTop = yOut;
+
+      // Rounded top cap path (flat bottom, smooth rounded top corners)
+      const r = Math.min(3.5, barWidth / 2, totalBarHeight);
+      defsSvg += `
+        <clipPath id="col-clip-${idx}">
+          <path d="M ${x} ${yBottom} L ${x} ${yTop + r} A ${r} ${r} 0 0 1 ${x + r} ${yTop} L ${x + barWidth - r} ${yTop} A ${r} ${r} 0 0 1 ${x + barWidth} ${yTop + r} L ${x + barWidth} ${yBottom} Z" />
+        </clipPath>
+      `;
+
+      barsSvg += `
+        <g class="chart-column-group" 
+           data-header="${item.tooltipHeader}" 
+           data-in="${formatFullNumber(item.inputTok)}" 
+           data-out="${formatFullNumber(item.outTok)}" 
+           data-cache="${formatFullNumber(item.cacheRead)}"
+           data-total="${formatFullNumber(total)}"
+           data-ctx="${item.ctx ? formatCompactNumber(item.ctx) + ' (' + formatFullNumber(item.ctx) + ')' : ''}"
+           data-reqs="${formatFullNumber(item.requests || 1)}"
+           data-subtext="${item.subText || ''}"
+           data-center-x="${centerX}"
+           data-slot-x="${slotX}"
+           data-slot-w="${step}"
+           data-top-y="${yOut}"
+           data-idx="${idx}">
+          
+          <!-- Hover Container Highlight Band (Full Height Background) -->
+          <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
+          
+          <!-- Stacked Column Segments with Top Rounded Cap -->
+          <g clip-path="url(#col-clip-${idx})">
+            ${cacheHeight > 0 ? `<rect class="bar-segment bar-cache" x="${x}" y="${yCache}" width="${barWidth}" height="${cacheHeight}" fill="#00A67E" />` : ''}
+            ${inHeight > 0 ? `<rect class="bar-segment bar-in" x="${x}" y="${yIn}" width="${barWidth}" height="${inHeight}" fill="#6366F1" opacity="0.85" />` : ''}
+            ${outHeight > 0 ? `<rect class="bar-segment bar-out" x="${x}" y="${yOut}" width="${barWidth}" height="${outHeight}" fill="var(--aura-primary)" />` : ''}
+          </g>
+        </g>
+      `;
+    } else {
+      // Empty column: clean baseline without artificial dummy bars
+      barsSvg += `
+        <g class="chart-column-group" 
+           data-header="${item.tooltipHeader}" 
+           data-in="0" 
+           data-out="0" 
+           data-cache="0"
+           data-total="0"
+           data-ctx="${item.ctx ? formatCompactNumber(item.ctx) + ' (' + formatFullNumber(item.ctx) + ')' : ''}"
+           data-reqs="0"
+           data-subtext="${item.subText || ''}"
+           data-center-x="${centerX}"
+           data-slot-x="${slotX}"
+           data-slot-w="${step}"
+           data-top-y="${paddingTop + chartHeight}"
+           data-idx="${idx}">
+          
+          <!-- Hover Container Highlight Band (Full Height Background) -->
+          <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
+        </g>
+      `;
+    }
 
     // Display X-axis label
     if (idx % labelInterval === 0 || idx === columns.length - 1) {
       xLabelsSvg += `
-        <text x="${centerX}" y="${svgHeight - 10}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${item.label}</text>
+        <text x="${centerX}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${item.label}</text>
       `;
     }
   });
+
+  defsSvg += '</defs>';
 
   chartWrapper.innerHTML = `
     <div class="chart-header">
       <div class="chart-title">Token Activity (${rangeTitle})</div>
       <div class="chart-legend">
         <span class="legend-item"><span class="legend-dot" style="background: var(--aura-primary)"></span>Output Tokens</span>
-        <span class="legend-item"><span class="legend-dot" style="background: var(--aura-fg-muted)"></span>Input Tokens</span>
-        <span class="legend-item"><span class="legend-dot" style="background: #34A853"></span>Cache Read</span>
+        <span class="legend-item"><span class="legend-dot" style="background: #6366F1"></span>Input Tokens</span>
+        <span class="legend-item"><span class="legend-dot" style="background: #00A67E"></span>Cache Read</span>
       </div>
     </div>
-    <div class="chart-stage" id="chart-stage-container">
-      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element">
+    <div class="chart-stage ${isScrollable ? 'chart-stage-scrollable' : ''}" id="chart-stage-container">
+      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
+        ${defsSvg}
         ${gridSvg}
         ${barsSvg}
         ${xLabelsSvg}
@@ -537,6 +586,13 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
       <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
     </div>
   `;
+
+  if (isScrollable) {
+    setTimeout(() => {
+      const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
+      if (stage) stage.scrollLeft = stage.scrollWidth;
+    }, 50);
+  }
 
   attachSmartTooltipListeners(chartWrapper, svgWidth, svgHeight);
 }
@@ -556,64 +612,93 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
       const outTok = target.getAttribute('data-out') || '0';
       const cacheTok = target.getAttribute('data-cache') || '0';
       const totalTok = target.getAttribute('data-total') || '0';
-      const reqs = target.getAttribute('data-reqs') || '1';
+      const ctxTok = target.getAttribute('data-ctx') || '';
+      const reqs = target.getAttribute('data-reqs') || '0';
       const subText = target.getAttribute('data-subtext') || '';
 
       const svgCenterX = Number(target.getAttribute('data-center-x') || 0);
       const svgTopY = Number(target.getAttribute('data-top-y') || 0);
 
+      const ctxRowHtml = ctxTok ? `
+        <div class="tooltip-row ctx-row">
+          <span class="tooltip-dot" style="background: #3B82F6"></span>
+          <span class="tooltip-label">Context Window</span>
+          <span class="tooltip-val">${ctxTok}</span>
+        </div>
+      ` : '';
+
       // Render Tooltip content
       tooltip.innerHTML = `
         <div class="tooltip-header">${header}</div>
+        ${ctxRowHtml}
         <div class="tooltip-row">
           <span class="tooltip-dot" style="background: var(--aura-primary)"></span>
-          <span class="tooltip-label">Output</span>
+          <span class="tooltip-label">Output Tokens</span>
           <span class="tooltip-val">${outTok}</span>
         </div>
         <div class="tooltip-row">
-          <span class="tooltip-dot" style="background: var(--aura-fg-muted)"></span>
-          <span class="tooltip-label">Input</span>
+          <span class="tooltip-dot" style="background: #6366F1"></span>
+          <span class="tooltip-label">Input Tokens</span>
           <span class="tooltip-val">${inTok}</span>
         </div>
         <div class="tooltip-row">
-          <span class="tooltip-dot" style="background: #34A853"></span>
+          <span class="tooltip-dot" style="background: #00A67E"></span>
           <span class="tooltip-label">Cache Read</span>
           <span class="tooltip-val">${cacheTok}</span>
         </div>
         <div class="tooltip-divider"></div>
         <div class="tooltip-row total-row">
-          <span class="tooltip-label">Total Volume</span>
+          <span class="tooltip-label">Total Tokens</span>
           <span class="tooltip-val">${totalTok}</span>
         </div>
         <div class="tooltip-subline">${reqs} generation requests${subText ? ' · ' + subText : ''}</div>
       `;
 
-      // Smart positioning: map SVG coordinate to CSS container coordinate
-      const stageRect = stage.getBoundingClientRect();
-      const scaleX = stageRect.width / svgWidth;
-      const scaleY = stageRect.height / svgHeight;
-
-      const pixelX = svgCenterX * scaleX;
-      const pixelY = svgTopY * scaleY;
-
       tooltip.style.display = 'block';
-      const tipWidth = tooltip.offsetWidth || 185;
-      const tipHeight = tooltip.offsetHeight || 140;
 
-      // Calculate best anchor position without mouse-follow jitter
-      let left = pixelX - tipWidth / 2;
-      // Right edge boundary avoidance
-      if (pixelX + tipWidth / 2 > stageRect.width - 12) {
-        left = pixelX - tipWidth - 10;
-      } else if (pixelX - tipWidth / 2 < 12) {
-        left = pixelX + 10;
+      // Physical measurement of column slot and stage container
+      const stageRect = stage.getBoundingClientRect();
+      const bandEl = (target.querySelector('.bar-bg-band') || target) as SVGGraphicsElement;
+      const bandRect = bandEl.getBoundingClientRect();
+
+      // Physical pixel boundaries of the column background band relative to stage scroll coordinates
+      const bandLeft = bandRect.left - stageRect.left + stage.scrollLeft;
+      const bandRight = bandRect.right - stageRect.left + stage.scrollLeft;
+
+      const tipWidth = tooltip.offsetWidth || 180;
+      const tipHeight = tooltip.offsetHeight || 135;
+
+      // Viewport window inside scrollable stage container
+      const viewLeft = stage.scrollLeft;
+      const viewRight = stage.scrollLeft + stageRect.width;
+
+      // Clear space strictly outside the column's full background band
+      const spaceRight = viewRight - (bandRight + 12);
+      const spaceLeft = (bandLeft - 12) - viewLeft;
+
+      let left = 0;
+      // Absolute rule: Tooltip must NEVER overlap with the column width [bandLeft, bandRight]!
+      // This ensures the mouse pointer on the column background will NEVER obscure the tooltip.
+      if (spaceRight >= tipWidth + 6 && (spaceRight >= spaceLeft || spaceLeft < tipWidth)) {
+        // Place strictly to the right of the column background
+        left = bandRight + 12;
+      } else if (spaceLeft >= tipWidth + 6) {
+        // Place strictly to the left of the column background
+        left = bandLeft - tipWidth - 12;
+      } else {
+        // Ultra-narrow viewport fallback: place on whichever side has more space, never in the band
+        if (spaceRight >= spaceLeft) {
+          left = Math.max(bandRight + 4, viewRight - tipWidth - 6);
+        } else {
+          left = Math.min(bandLeft - tipWidth - 4, viewLeft + 6);
+        }
       }
 
-      // Top placement: strictly anchored above the column top
-      let top = pixelY - tipHeight - 12;
-      if (top < 10) {
-        // If column is too close to top, anchor below column or inside top bar
-        top = Math.max(10, pixelY + 16);
+      // Vertical positioning: Keep stable and high in the clear top area, avoiding bottom edge
+      let top = 10;
+      const maxSafeTop = stageRect.height - tipHeight - 12;
+      if (maxSafeTop > 10) {
+        top = Math.min(top, maxSafeTop);
       }
 
       tooltip.style.left = `${Math.round(left)}px`;

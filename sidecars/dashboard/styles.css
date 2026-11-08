@@ -605,15 +605,15 @@ html, body {
 }
 
 .tag-cached {
-  background: rgba(52, 168, 83, 0.15);
-  color: #34A853;
-  border: 1px solid rgba(52, 168, 83, 0.3);
+  background: rgba(0, 166, 126, 0.15);
+  color: #00A67E;
+  border: 1px solid rgba(0, 166, 126, 0.3);
 }
 
 .tag-input {
-  background: var(--aura-control-bg);
-  color: var(--aura-fg-muted);
-  border: 1px solid var(--aura-border);
+  background: rgba(99, 102, 241, 0.15);
+  color: #818CF8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
 .tag-output {
@@ -634,7 +634,7 @@ html, body {
   border: 1px solid var(--aura-border);
   border-radius: 12px;
   padding: 16px;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 
@@ -677,6 +677,31 @@ html, body {
   width: 100%;
 }
 
+.chart-stage-scrollable {
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: thin;
+  scrollbar-color: var(--aura-border) transparent;
+  padding-bottom: 4px;
+}
+
+.chart-stage-scrollable::-webkit-scrollbar {
+  height: 5px;
+}
+
+.chart-stage-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chart-stage-scrollable::-webkit-scrollbar-thumb {
+  background: var(--aura-border);
+  border-radius: 9999px;
+}
+
+.chart-stage-scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--aura-fg-muted);
+}
+
 .analytics-svg {
   width: 100%;
   height: auto;
@@ -696,7 +721,7 @@ html, body {
 
 .chart-column-group:hover .bar-bg-band {
   fill: var(--aura-active-pill);
-  opacity: 0.35;
+  opacity: 0.28;
 }
 
 .chart-column-group:hover .bar-segment {
@@ -711,31 +736,31 @@ html, body {
   border: 1px solid var(--aura-toast-border);
   color: var(--aura-toast-fg);
   border-radius: 9px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   pointer-events: none;
-  z-index: 80;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(12px);
-  min-width: 170px;
-  transition: opacity 0.15s ease;
+  z-index: 100;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--aura-border);
+  backdrop-filter: blur(14px);
+  min-width: 175px;
+  transition: opacity 0.12s ease;
 }
 
 .tooltip-header {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--aura-fg);
   border-bottom: 1px solid var(--aura-border);
-  padding-bottom: 5px;
+  padding-bottom: 4px;
 }
 
 .tooltip-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  font-size: 11px;
-  margin-bottom: 3.5px;
+  gap: 8px;
+  font-size: 10.5px;
+  margin-bottom: 2.5px;
 }
 
 .tooltip-dot {
