@@ -1,21 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
-    <linearGradient id="chuanbanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#D97757"/>
-      <stop offset="100%" stop-color="#B85338"/>
+    <!-- Background Gradient (Obsidian to Charcoal) -->
+    <linearGradient id="auraBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1D1917"/>
+      <stop offset="100%" stop-color="#0E0D0C"/>
     </linearGradient>
+
+    <!-- Wind Petal Gradient: Sunlight Ivory -> Golden Amber -> Claude Terracotta -> Deep Flame -->
+    <linearGradient id="windPetalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF7ED"/>
+      <stop offset="25%" stop-color="#FCD38D"/>
+      <stop offset="65%" stop-color="#E26D46"/>
+      <stop offset="100%" stop-color="#9C3B1E"/>
+    </linearGradient>
+
+    <!-- Floral Heart / Luminous Vortex Center -->
+    <radialGradient id="floralAura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFF8F0"/>
+      <stop offset="50%" stop-color="#FBD38D" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#E26D46" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <!-- Background Rounded Rect -->
-  <rect width="64" height="64" rx="14" fill="url(#chuanbanGrad)"/>
-  
-  <!-- Stylized "川" and Petal Brush Marks -->
-  <!-- Left curve stroke -->
-  <path d="M19 18 C19 28, 17 38, 14 44" stroke="#FFF7F2" stroke-width="4.5" stroke-linecap="round" fill="none"/>
-  <!-- Middle straight stroke -->
-  <line x1="32" y1="16" x2="32" y2="46" stroke="#FFF7F2" stroke-width="4.5" stroke-linecap="round"/>
-  <!-- Right soft curve stroke with droplet -->
-  <path d="M45 18 C45 28, 47 38, 50 44" stroke="#FFF7F2" stroke-width="4.5" stroke-linecap="round" fill="none"/>
-  
-  <!-- Accent small circle (palette dab / seal) -->
-  <circle cx="43" cy="22" r="2.5" fill="#FFE5D8"/>
+
+  <!-- Squircle Base Canvas -->
+  <rect width="128" height="128" rx="28" fill="url(#auraBg)"/>
+  <rect x="0.75" y="0.75" width="126.5" height="126.5" rx="27.25" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
+
+  <!-- Five-Petal Aerodynamic Bloom (72° Radial Golden Symmetry) -->
+  <g transform="translate(64, 64)">
+    <!-- Subtle Ambient Breeze Ring -->
+    <circle cx="0" cy="0" r="46" fill="none" stroke="#E26D46" stroke-width="1" stroke-dasharray="4 6" opacity="0.25"/>
+
+    <!-- Petal 1 (North) -->
+    <path d="M 0 0 C -15 -18, -18 -36, -3 -48 C 12 -50, 22 -34, 16 -18 C 11 -8, 6 -3, 0 0 Z" fill="url(#windPetalGrad)" opacity="0.9"/>
+    <!-- Petal 2 (72°) -->
+    <path d="M 0 0 C -15 -18, -18 -36, -3 -48 C 12 -50, 22 -34, 16 -18 C 11 -8, 6 -3, 0 0 Z" fill="url(#windPetalGrad)" opacity="0.9" transform="rotate(72)"/>
+    <!-- Petal 3 (144°) -->
+    <path d="M 0 0 C -15 -18, -18 -36, -3 -48 C 12 -50, 22 -34, 16 -18 C 11 -8, 6 -3, 0 0 Z" fill="url(#windPetalGrad)" opacity="0.9" transform="rotate(144)"/>
+    <!-- Petal 4 (216°) -->
+    <path d="M 0 0 C -15 -18, -18 -36, -3 -48 C 12 -50, 22 -34, 16 -18 C 11 -8, 6 -3, 0 0 Z" fill="url(#windPetalGrad)" opacity="0.9" transform="rotate(216)"/>
+    <!-- Petal 5 (288°) -->
+    <path d="M 0 0 C -15 -18, -18 -36, -3 -48 C 12 -50, 22 -34, 16 -18 C 11 -8, 6 -3, 0 0 Z" fill="url(#windPetalGrad)" opacity="0.9" transform="rotate(288)"/>
+
+    <!-- Central Floral Heart / Luminous Singularity -->
+    <circle cx="0" cy="0" r="14" fill="url(#floralAura)"/>
+    <circle cx="0" cy="0" r="3.2" fill="#FFFFFF"/>
+  </g>
 </svg>

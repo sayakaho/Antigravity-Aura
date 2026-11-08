@@ -51,19 +51,19 @@
 将本仓库目录软链接到 Antigravity 全局插件目录：
 
 ```bash
-ln -s "/path/to/chuanban-antigravity-theme-patch" ~/.gemini/config/plugins/chuanban-theme
+ln -s "/path/to/chuanban-antigravity-theme-patch" ~/.gemini/config/plugins/aura-dashboard
 ```
 
-Antigravity 会自动识别插件并立即在后台拉起 `theme-engine` Sidecar 服务，随应用同生共死。
+Antigravity 会自动识别插件并立即在后台拉起 `dashboard` Sidecar 服务，随应用同生共死。
 
 通过 CLI 随时启停：
 ```bash
-agy plugin enable chuanban-theme
-agy plugin disable chuanban-theme
+agy plugin enable aura-dashboard
+agy plugin disable aura-dashboard
 ```
 
 ### 二、打开侧边栏控制面板
-在任意会话右上角 **⋮** 菜单中选择 **Extensions → 川瓣主题与指标** 打开，即可：
+在任意会话右上角 **⋮** 菜单中选择 **Extensions → Aura Dashboard** 打开，即可：
 - 实时查看当前 CDP 端口与挂载窗口数量；
 - 点击 **实时重载样式** 按钮瞬时热刷新修改后的 CSS；
 - 一键切换主题预设（高对比暖白 / Claude 暗色）。

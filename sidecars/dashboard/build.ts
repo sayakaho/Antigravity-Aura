@@ -4,7 +4,7 @@
  */
 
 import { build } from "bun";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 
 const rootDir = resolve(import.meta.dir);
@@ -12,6 +12,16 @@ const distDir = resolve(rootDir, "dist");
 
 if (!existsSync(distDir)) {
   mkdirSync(distDir, { recursive: true });
+}
+
+// Clean up legacy build artifacts if present
+for (const legacy of ["bundle.js", "bundle.js.map"]) {
+  const p = resolve(distDir, legacy);
+  if (existsSync(p)) {
+    try {
+      unlinkSync(p);
+    } catch {}
+  }
 }
 
 console.log("[Aura Dashboard] Building client bundle with Bun...");
@@ -47,4 +57,4 @@ if (!serverResult.success) {
   process.exit(1);
 }
 
-console.log("[Aura Dashboard] Build succeeded! Outputs: dist/bundle.js & dist/aggregator.js");
+console.log("[Aura Dashboard] Build succeeded! Outputs: app.js & dist/aggregator.js");

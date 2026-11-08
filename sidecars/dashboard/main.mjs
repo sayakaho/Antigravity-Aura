@@ -20,9 +20,31 @@ import { SidecarApp, Response } from 'sidecar_sdk';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(HERE, '../..');
 const CORE_DIR = path.join(ROOT_DIR, 'core');
-const USER_DIR = path.join(ROOT_DIR, 'user');
+const TEMPLATE_USER_DIR = path.join(ROOT_DIR, 'user');
+const USER_DIR = process.env.PLUGIN_DATA ||
+  process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR ||
+  TEMPLATE_USER_DIR;
 const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 const CONVERSATIONS_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
+
+function initDataDirectory() {
+  try {
+    if (!fs.existsSync(USER_DIR)) {
+      fs.mkdirSync(USER_DIR, { recursive: true });
+    }
+    const filesToSeed = ['config.json', 'custom.css', 'custom.js', 'i18n.override.json'];
+    for (const file of filesToSeed) {
+      const dest = path.join(USER_DIR, file);
+      const src = path.join(TEMPLATE_USER_DIR, file);
+      if (!fs.existsSync(dest) && fs.existsSync(src)) {
+        fs.copyFileSync(src, dest);
+      }
+    }
+  } catch (err) {
+    console.error('[Sidecar Engine] Failed to initialize data directory:', err);
+  }
+}
+initDataDirectory();
 
 // ============================================================================
 // 0. 动态探测 node:sqlite 与全量分析引擎支持
@@ -715,6 +737,9 @@ rebuildBundleIfNeeded();
 const attachedTargets = new Map();
 
 function resolvePortFilePath() {
+  if (process.env.AGY_BROWSER_ACTIVE_PORT_FILE && fs.existsSync(process.env.AGY_BROWSER_ACTIVE_PORT_FILE)) {
+    return process.env.AGY_BROWSER_ACTIVE_PORT_FILE;
+  }
   const home = os.homedir();
   if (process.platform === 'darwin') {
     return path.join(home, 'Library', 'Application Support', 'Antigravity', 'DevToolsActivePort');
@@ -728,16 +753,23 @@ function resolvePortFilePath() {
 }
 
 function readPort() {
+  if (process.env.AGY_BROWSER_WS_URL) {
+    try {
+      const u = new URL(process.env.AGY_BROWSER_WS_URL);
+      const port = parseInt(u.port, 10);
+      if (Number.isFinite(port) && port > 0) return port;
+    } catch {}
+  }
   try {
     const portFile = resolvePortFilePath();
-    if (!fs.existsSync(portFile)) return null;
-    const raw = fs.readFileSync(portFile, 'utf8').trim();
-    const lines = raw.split(/\r?\n/);
-    const port = parseInt(lines[0], 10);
-    return Number.isFinite(port) && port > 0 ? port : null;
-  } catch {
-    return null;
-  }
+    if (fs.existsSync(portFile)) {
+      const raw = fs.readFileSync(portFile, 'utf8').trim();
+      const lines = raw.split(/\r?\n/);
+      const port = parseInt(lines[0], 10);
+      if (Number.isFinite(port) && port > 0) return port;
+    }
+  } catch {}
+  return 9222;
 }
 
 function fetchTargets(port) {
@@ -1021,10 +1053,14 @@ async function syncCdp(force = false) {
 const app = new SidecarApp();
 
 app.page('/', () => readTextSafe(path.join(HERE, 'index.html'), ''));
-app.page('/app.js', () => readTextSafe(path.join(HERE, 'app.js'), ''));
-app.page('/dist/bundle.js', () => readTextSafe(path.join(HERE, 'dist', 'bundle.js'), ''));
-app.page('/dist/bundle.js.map', () => readTextSafe(path.join(HERE, 'dist', 'bundle.js.map'), ''));
-app.api('/styles.css', () => new Response(readTextSafe(path.join(HERE, 'styles.css'), ''), { contentType: 'text/css' }), 'GET');
+app.api('/app.js', () => new Response(readTextSafe(path.join(HERE, 'app.js'), ''), {
+  contentType: 'application/javascript',
+  headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+}), 'GET');
+app.api('/styles.css', () => new Response(readTextSafe(path.join(HERE, 'styles.css'), ''), {
+  contentType: 'text/css',
+  headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+}), 'GET');
 app.api('/logo.svg', () => new Response(readTextSafe(path.join(ASSETS_DIR, 'logo.svg'), ''), { contentType: 'image/svg+xml' }), 'GET');
 
 // GET /api/analytics/overview

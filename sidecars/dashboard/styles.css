@@ -852,19 +852,19 @@ html, body {
 }
 
 .chart-shared-hover-band {
-  fill: var(--aura-chart-hover-band, rgba(255, 255, 255, 0.14));
+  fill: var(--aura-chart-hover-band, rgba(255, 255, 255, 0.16));
   pointer-events: none;
   transition: none !important;
 }
 
 html[data-theme="light"] .chart-shared-hover-band,
 body.light .chart-shared-hover-band {
-  fill: rgba(0, 0, 0, 0.08);
+  fill: rgba(0, 0, 0, 0.10);
 }
 
 html[data-theme="dark"] .chart-shared-hover-band,
 body.dark .chart-shared-hover-band {
-  fill: rgba(255, 255, 255, 0.14);
+  fill: rgba(255, 255, 255, 0.16);
 }
 
 .bar-segment {
@@ -1172,4 +1172,125 @@ body.dark .chart-shared-hover-band {
   text-align: center;
   padding: 24px !important;
   color: var(--aura-fg-muted);
+}
+
+/* Model API Endpoint Badge */
+.model-id-badge {
+  font-family: var(--aura-font-mono, monospace);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--aura-control-bg, rgba(255, 255, 255, 0.06));
+  color: var(--aura-fg-muted);
+  border: 1px solid var(--aura-border);
+  letter-spacing: -0.01em;
+  user-select: all;
+}
+
+/* Tool Ecosystem Usage Styles */
+.tool-distribution-summary {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--aura-fg-muted);
+}
+
+.tool-distribution-summary strong {
+  color: var(--aura-fg);
+  font-weight: 600;
+  font-family: var(--aura-font-mono, monospace);
+}
+
+.tool-distribution-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tool-stat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 14px;
+  background: var(--aura-control-bg, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--aura-border);
+  border-radius: 8px;
+}
+
+.tool-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tool-category-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.tool-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--aura-fg);
+  white-space: nowrap;
+}
+
+.tool-raw-badge {
+  font-family: var(--aura-font-mono, monospace);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(148, 143, 133, 0.12);
+  color: var(--aura-fg-muted);
+  border: 1px solid var(--aura-border);
+}
+
+.tool-call-count {
+  font-size: 12px;
+  color: var(--aura-fg-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tool-count-strong {
+  font-weight: 600;
+  color: var(--aura-fg);
+  font-family: var(--aura-font-mono, monospace);
+}
+
+.tool-pct-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--aura-border);
+  color: var(--aura-fg);
+}
+
+.tool-bar-track {
+  width: 100%;
+  height: 5px;
+  background: var(--aura-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tool-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }

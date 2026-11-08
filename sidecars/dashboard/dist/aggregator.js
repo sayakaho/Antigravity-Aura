@@ -11,9 +11,52 @@ try {
 function openDb(filePath) {
   if (!DatabaseSync)
     return null;
-  return new DatabaseSync(filePath, { readOnly: true });
+  try {
+    const db = new DatabaseSync(filePath, { readOnly: true });
+    db.prepare("PRAGMA schema_version").all();
+    return db;
+  } catch {
+    try {
+      return new DatabaseSync(filePath);
+    } catch {
+      return null;
+    }
+  }
 }
-var CACHE_FILE_NAME = "aura_analytics_cache_v5.json";
+var CACHE_FILE_NAME = "aura_analytics_cache_v6.json";
+function canonicalizeTool(raw) {
+  switch (raw) {
+    case "run_command":
+      return { name: "Command & Terminal", category: "Execution", color: "#F59E0B" };
+    case "view_file":
+    case "read_file":
+    case "list_dir":
+    case "read_url_content":
+      return { name: "File & Code Reading", category: "Inspection", color: "#00A67E" };
+    case "replace_file_content":
+    case "edit_file":
+    case "write_to_file":
+    case "write_file":
+      return { name: "Code Editing & File Write", category: "Modification", color: "#3B82F6" };
+    case "grep_search":
+    case "find_by_name":
+      return { name: "Codebase Search", category: "Discovery", color: "#8B5CF6" };
+    case "search_web":
+      return { name: "Web Search & Docs", category: "Search", color: "#06B6D4" };
+    case "invoke_subagent":
+    case "manage_subagents":
+    case "send_message":
+    case "define_subagent":
+      return { name: "Multi-Agent Coordination", category: "Agentic", color: "#EC4899" };
+    case "schedule":
+    case "manage_task":
+      return { name: "Task Scheduling", category: "Workflow", color: "#10B981" };
+    case "ask_question":
+      return { name: "User Interaction", category: "Communication", color: "#6366F1" };
+    default:
+      return { name: raw, category: "Extension", color: "#948F85" };
+  }
+}
 function canonicalModelName(id, name) {
   if (name && name.trim() && name.trim().toLowerCase() !== "unknown")
     return name.trim();
@@ -137,6 +180,25 @@ function extractTimestampFromStepMeta(buf) {
   } catch {}
   return null;
 }
+function extractToolInfo(payloadBuf) {
+  if (!payloadBuf || payloadBuf.length === 0)
+    return null;
+  try {
+    const top = parseProto(payloadBuf);
+    const f5 = top.get(5);
+    if (f5) {
+      const f5Map = parseProto(f5);
+      const f4 = f5Map.get(4);
+      if (f4) {
+        const f4Map = parseProto(f4);
+        const nameBuf = f4Map.get(2);
+        if (nameBuf)
+          return nameBuf.toString("utf8").trim();
+      }
+    }
+  } catch {}
+  return null;
+}
 function formatLocalDateAndHourKeys(dateObj) {
   const yr = dateObj.getFullYear();
   const mo = String(dateObj.getMonth() + 1).padStart(2, "0");
@@ -222,6 +284,9 @@ class GlobalAnalyticsEngine {
     const hourSeries = {};
     const globalModelMap = {};
     const globalDailyModelStats = {};
+    const globalHourlyModelStats = {};
+    const globalDailyToolStats = {};
+    const globalToolsMap = {};
     for (const s of summaries) {
       const convId = s.conversationId;
       const dbPath = path.join(convDir, `${convId}.db`);
@@ -242,12 +307,25 @@ class GlobalAnalyticsEngine {
           if (!db)
             continue;
           const stepTimeMap = new Map;
+          const tools = {};
+          const dailyTools = {};
           try {
-            const stepRows = db.prepare("SELECT idx, metadata FROM steps WHERE metadata IS NOT NULL").all();
+            const stepRows = db.prepare("SELECT idx, step_type, step_payload, metadata FROM steps").all();
             for (const sr of stepRows || []) {
               const ts = extractTimestampFromStepMeta(sr.metadata);
               if (ts)
                 stepTimeMap.set(sr.idx, ts);
+              if (sr.step_type === 132 && sr.step_payload) {
+                const toolName = extractToolInfo(sr.step_payload);
+                if (toolName) {
+                  tools[toolName] = (tools[toolName] || 0) + 1;
+                  const stepDate = ts ? new Date(ts * 1000) : s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(st.mtimeMs);
+                  const { dateKey } = formatLocalDateAndHourKeys(stepDate);
+                  if (!dailyTools[dateKey])
+                    dailyTools[dateKey] = {};
+                  dailyTools[dateKey][toolName] = (dailyTools[dateKey][toolName] || 0) + 1;
+                }
+              }
             }
           } catch {}
           const rows = db.prepare("SELECT data FROM gen_metadata ORDER BY idx ASC").all();
@@ -259,6 +337,7 @@ class GlobalAnalyticsEngine {
           const hourlyBreakdown = {};
           const models = {};
           const dailyModelStats = {};
+          const hourlyModelStats = {};
           const fallbackDate = s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(st.mtimeMs);
           for (const r of rows || []) {
             const top = parseProto(r.data);
@@ -325,6 +404,7 @@ class GlobalAnalyticsEngine {
             }
             if (!dailyModelStats[dateKey][modelName]) {
               dailyModelStats[dateKey][modelName] = {
+                modelId: rawModelId,
                 inTok: 0,
                 outTok: 0,
                 cacheRead: 0,
@@ -341,6 +421,28 @@ class GlobalAnalyticsEngine {
             dailyModelStats[dateKey][modelName].streamSec += streamSec;
             dailyModelStats[dateKey][modelName].ttftSec += ttftSec;
             dailyModelStats[dateKey][modelName].requests += 1;
+            if (!hourlyModelStats[hourKey]) {
+              hourlyModelStats[hourKey] = {};
+            }
+            if (!hourlyModelStats[hourKey][modelName]) {
+              hourlyModelStats[hourKey][modelName] = {
+                modelId: rawModelId,
+                inTok: 0,
+                outTok: 0,
+                cacheRead: 0,
+                thinkTok: 0,
+                streamSec: 0,
+                ttftSec: 0,
+                requests: 0
+              };
+            }
+            hourlyModelStats[hourKey][modelName].inTok += inTok;
+            hourlyModelStats[hourKey][modelName].outTok += outTok;
+            hourlyModelStats[hourKey][modelName].cacheRead += cacheRead;
+            hourlyModelStats[hourKey][modelName].thinkTok += thinkTok;
+            hourlyModelStats[hourKey][modelName].streamSec += streamSec;
+            hourlyModelStats[hourKey][modelName].ttftSec += ttftSec;
+            hourlyModelStats[hourKey][modelName].requests += 1;
           }
           entry = {
             sig,
@@ -355,7 +457,10 @@ class GlobalAnalyticsEngine {
             dailyBreakdown,
             hourlyBreakdown,
             models,
-            dailyModelStats
+            dailyModelStats,
+            hourlyModelStats,
+            tools,
+            dailyTools
           };
           this.cache.sessions[convId] = entry;
           cacheUpdated = true;
@@ -463,6 +568,7 @@ class GlobalAnalyticsEngine {
           for (const [mName, dm] of Object.entries(dModels)) {
             if (!globalDailyModelStats[dKey][mName]) {
               globalDailyModelStats[dKey][mName] = {
+                modelId: dm.modelId || "",
                 inTok: 0,
                 outTok: 0,
                 cacheRead: 0,
@@ -479,6 +585,47 @@ class GlobalAnalyticsEngine {
             globalDailyModelStats[dKey][mName].streamSec += dm.streamSec;
             globalDailyModelStats[dKey][mName].ttftSec += dm.ttftSec;
             globalDailyModelStats[dKey][mName].requests += dm.requests;
+          }
+        }
+      }
+      if (entry.hourlyModelStats) {
+        for (const [hKey, hModels] of Object.entries(entry.hourlyModelStats)) {
+          if (!globalHourlyModelStats[hKey])
+            globalHourlyModelStats[hKey] = {};
+          for (const [mName, hm] of Object.entries(hModels)) {
+            if (!globalHourlyModelStats[hKey][mName]) {
+              globalHourlyModelStats[hKey][mName] = {
+                modelId: hm.modelId || "",
+                inTok: 0,
+                outTok: 0,
+                cacheRead: 0,
+                thinkTok: 0,
+                streamSec: 0,
+                ttftSec: 0,
+                requests: 0
+              };
+            }
+            globalHourlyModelStats[hKey][mName].inTok += hm.inTok;
+            globalHourlyModelStats[hKey][mName].outTok += hm.outTok;
+            globalHourlyModelStats[hKey][mName].cacheRead += hm.cacheRead;
+            globalHourlyModelStats[hKey][mName].thinkTok += hm.thinkTok;
+            globalHourlyModelStats[hKey][mName].streamSec += hm.streamSec;
+            globalHourlyModelStats[hKey][mName].ttftSec += hm.ttftSec;
+            globalHourlyModelStats[hKey][mName].requests += hm.requests;
+          }
+        }
+      }
+      if (entry.tools) {
+        for (const [tName, tCount] of Object.entries(entry.tools)) {
+          globalToolsMap[tName] = (globalToolsMap[tName] || 0) + tCount;
+        }
+      }
+      if (entry.dailyTools) {
+        for (const [dKey, dTools] of Object.entries(entry.dailyTools)) {
+          if (!globalDailyToolStats[dKey])
+            globalDailyToolStats[dKey] = {};
+          for (const [tName, tCount] of Object.entries(dTools)) {
+            globalDailyToolStats[dKey][tName] = (globalDailyToolStats[dKey][tName] || 0) + tCount;
           }
         }
       }
@@ -505,6 +652,18 @@ class GlobalAnalyticsEngine {
       avgTps: m.streamSec > 0 ? Math.round(m.outTok / m.streamSec) : 0,
       avgTtft: m.count > 0 ? Math.round(m.ttftSec / m.count * 100) / 100 : 0
     })).sort((a, b) => b.totalTokens - a.totalTokens);
+    const totalToolCalls = Object.values(globalToolsMap).reduce((a, b) => a + b, 0);
+    const toolDistribution = Object.entries(globalToolsMap).map(([rawName, count]) => {
+      const info = canonicalizeTool(rawName);
+      return {
+        rawName,
+        name: info.name,
+        category: info.category,
+        color: info.color,
+        count,
+        percentage: totalToolCalls > 0 ? Math.round(count / totalToolCalls * 1000) / 10 : 0
+      };
+    }).sort((a, b) => b.count - a.count);
     return {
       totalConversations: summaries.length,
       totalRequests,
@@ -522,7 +681,10 @@ class GlobalAnalyticsEngine {
       timeRangeSeries,
       hourlySeries,
       modelDistribution,
-      dailyModelStats: globalDailyModelStats
+      dailyModelStats: globalDailyModelStats,
+      hourlyModelStats: globalHourlyModelStats,
+      toolDistribution,
+      dailyToolStats: globalDailyToolStats
     };
   }
   getSessionDetails(convId) {
@@ -537,6 +699,7 @@ class GlobalAnalyticsEngine {
       if (!db)
         return null;
       const rows = db.prepare("SELECT idx, data FROM gen_metadata ORDER BY idx ASC").all();
+      const toolRows = db.prepare("SELECT step_payload FROM steps WHERE step_type = 132").all();
       db.close();
       db = null;
       if (!rows || rows.length === 0)
@@ -625,6 +788,24 @@ class GlobalAnalyticsEngine {
         avgTps: m.streamSec > 0 ? Math.round(m.outTok / m.streamSec) : 0,
         avgTtft: m.requests > 0 ? Math.round(m.ttftSec / m.requests * 100) / 100 : 0
       })).sort((a, b) => b.totalTokens - a.totalTokens);
+      const sessionToolsMap = {};
+      for (const tr of toolRows || []) {
+        const t = extractToolInfo(tr.step_payload);
+        if (t)
+          sessionToolsMap[t] = (sessionToolsMap[t] || 0) + 1;
+      }
+      const totalSessionTools = Object.values(sessionToolsMap).reduce((a, b) => a + b, 0);
+      const tools = Object.entries(sessionToolsMap).map(([rawName, count]) => {
+        const info = canonicalizeTool(rawName);
+        return {
+          rawName,
+          name: info.name,
+          category: info.category,
+          color: info.color,
+          count,
+          percentage: totalSessionTools > 0 ? Math.round(count / totalSessionTools * 1000) / 10 : 0
+        };
+      }).sort((a, b) => b.count - a.count);
       return {
         cascadeId: convId,
         totalTokens: {
@@ -639,7 +820,8 @@ class GlobalAnalyticsEngine {
         avgTtft,
         avgTokPerSec: avgRate,
         steps,
-        models
+        models,
+        tools
       };
     } catch {
       if (db)
@@ -649,5 +831,6 @@ class GlobalAnalyticsEngine {
   }
 }
 export {
-  GlobalAnalyticsEngine
+  GlobalAnalyticsEngine,
+  canonicalizeTool
 };

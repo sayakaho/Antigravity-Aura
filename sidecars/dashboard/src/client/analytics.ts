@@ -7,7 +7,7 @@
  * - Smart Non-jittering Tooltip with Boundary-aware Anchor Positioning
  */
 
-import type { GlobalAnalyticsOverview, ConversationSummary, SessionAnalyticsData, ModelTokenStat } from '../types';
+import type { GlobalAnalyticsOverview, ConversationSummary, SessionAnalyticsData, ModelTokenStat, ToolStatItem } from '../types';
 
 export function formatCompactNumber(n: number): string {
   if (!n || n <= 0) return '0';
@@ -113,7 +113,7 @@ export async function fetchConversations(): Promise<ConversationSummary[]> {
 export async function fetchActiveSession(): Promise<SessionAnalyticsData | null> {
   try {
     const urlParams = new URLSearchParams(window.location.search);
-    const convId = urlParams.get('conversationId') || '';
+    const convId = urlParams.get('conversationId') || window.sidecar?.conversationId || '';
     const endpoint = convId ? `/api/analytics/session?id=${encodeURIComponent(convId)}` : '/api/analytics/session';
     const res = await window.sidecar.fetch(endpoint, { method: 'GET' });
     if (!res.ok) return null;
@@ -554,9 +554,9 @@ function renderSessionOverviewArea(
       lineD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
     }
 
-    const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.45;
+    const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.7;
     if (idx % labelInterval === 0 && !isTooCloseToRight) {
-      const textAnchor = idx === 0 ? 'start' : (idx === totalTurns - 1 || x > paddingLeft + chartWidth - 20 ? 'end' : 'middle');
+      const textAnchor = idx === 0 ? 'start' : 'middle';
       xLabelsSvg += `
         <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${textAnchor}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
       `;
@@ -819,10 +819,18 @@ function renderStandardTimelineChart(
       `;
     }
 
-    const isTooCloseToRight = (columns.length - 1 - idx) < labelInterval * 0.45;
-    const showLabel = (isHourly || isSessionTimeline)
-      ? (idx % labelInterval === 0 && !isTooCloseToRight)
-      : (idx % labelInterval === 0 || (idx === columns.length - 1 && (columns.length - 1) % labelInterval >= Math.floor(labelInterval / 2)));
+    let showLabel = false;
+    if (isHourly) {
+      // Explicitly show only 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00; NEVER show 23:00
+      showLabel = idx % 3 === 0 && idx < 23;
+    } else if (isSessionTimeline) {
+      const isTooCloseToRight = (columns.length - 1 - idx) < labelInterval * 0.7;
+      showLabel = (idx % labelInterval === 0 && !isTooCloseToRight);
+    } else {
+      const isTooCloseToRight = (columns.length - 1 - idx) < labelInterval * 0.45;
+      showLabel = (idx % labelInterval === 0 && !isTooCloseToRight)
+        || (idx === columns.length - 1 && (columns.length - 1) % labelInterval >= Math.floor(labelInterval / 2));
+    }
 
     if (showLabel) {
       xLabelsSvg += `
@@ -1033,10 +1041,13 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
     });
   });
 
-  // Instantaneous zero-flicker hide: no delay, no transition artifact, no race condition
+  // Instantaneous zero-flicker hide: zero out width, hide immediately
   stage.addEventListener('mouseleave', () => {
     activeIdx = null;
-    if (hoverBand) hoverBand.style.display = 'none';
+    if (hoverBand) {
+      hoverBand.setAttribute('width', '0');
+      hoverBand.style.display = 'none';
+    }
     tooltip.style.display = 'none';
   });
 }
@@ -1117,6 +1128,21 @@ function getFilterDatesForRange(range: TimeRangeOption): string[] {
   return generateContinuousDateList(getPastDaysString(29), today);
 }
 
+export function getDefaultModelId(mName: string): string {
+  switch (mName) {
+    case 'Gemini 3.8 Flash': return 'gemini-3.8-flash';
+    case 'Gemini 3.8 Flash (High)': return 'gemini-3.8-flash-n';
+    case 'Gemini 3.8 Flash (Exp)': return 'gemini-3.8-flash-exp-a';
+    case 'Gemini 3.8 Flash (Tiered)': return 'gemini-3.8-flash-tiered';
+    case 'Gemini 3.7 Flash': return 'gemini-3.7-flash';
+    case 'Gemini 3.7 Flash (High)': return 'gemini-3.7-flash-n';
+    case 'Gemini 4 Argon (Medium)': return 'gemini-4-argon-m';
+    case 'Gemini 3.1 Pro': return 'gemini-3.1-pro-low';
+    case 'Claude Opus 4.6 Thinking': return 'claude-opus-4-6-thinking';
+    default: return mName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+}
+
 export function renderModelDistribution(overview: GlobalAnalyticsOverview, range: TimeRangeOption): void {
   const container = document.getElementById('analytics-models-list');
   if (!container) return;
@@ -1130,7 +1156,7 @@ export function renderModelDistribution(overview: GlobalAnalyticsOverview, range
     }
   } else {
     const dates = getFilterDatesForRange(range);
-    const statsMap: Record<string, { inTok: number; outTok: number; cacheRead: number; thinkTok: number; streamSec: number; requests: number }> = {};
+    const statsMap: Record<string, { modelId: string; inTok: number; outTok: number; cacheRead: number; thinkTok: number; streamSec: number; requests: number }> = {};
 
     for (const d of dates) {
       const dayModels = overview.dailyModelStats?.[d];
@@ -1138,7 +1164,9 @@ export function renderModelDistribution(overview: GlobalAnalyticsOverview, range
         for (const [mName, st] of Object.entries(dayModels)) {
           if (!mName || mName.toLowerCase().includes('unknown') || (st.inTok + st.outTok + st.cacheRead) === 0) continue;
           if (!statsMap[mName]) {
-            statsMap[mName] = { inTok: 0, outTok: 0, cacheRead: 0, thinkTok: 0, streamSec: 0, requests: 0 };
+            const rawId = (st as any).modelId;
+            const validId = (rawId && rawId !== 'unknown' && rawId !== mName) ? rawId : getDefaultModelId(mName);
+            statsMap[mName] = { modelId: validId, inTok: 0, outTok: 0, cacheRead: 0, thinkTok: 0, streamSec: 0, requests: 0 };
           }
           statsMap[mName].inTok += st.inTok;
           statsMap[mName].outTok += st.outTok;
@@ -1155,7 +1183,7 @@ export function renderModelDistribution(overview: GlobalAnalyticsOverview, range
         const total = st.inTok + st.outTok + st.cacheRead;
         const avgTps = st.streamSec > 0 ? Math.round(st.outTok / st.streamSec) : 0;
         return {
-          modelId: mName,
+          modelId: st.modelId,
           modelName: mName,
           totalTokens: total,
           inputTok: st.inTok,
@@ -1194,6 +1222,7 @@ export function renderModelDistribution(overview: GlobalAnalyticsOverview, range
           <div class="model-title-line">
             <span class="model-dot" style="background: ${color}"></span>
             <span class="model-name">${m.modelName}</span>
+            <span class="model-id-badge" title="API Endpoint ID: ${m.modelId}">${m.modelId}</span>
             ${speedBadge}
           </div>
           <div class="model-token-count">
@@ -1217,16 +1246,400 @@ export function renderModelDistribution(overview: GlobalAnalyticsOverview, range
   container.innerHTML = itemsHtml;
 }
 
+export function canonicalizeTool(raw: string): { name: string; category: string; color: string } {
+  switch (raw) {
+    case 'run_command':
+      return { name: 'Command & Terminal', category: 'Execution', color: '#F59E0B' };
+    case 'view_file':
+    case 'read_file':
+    case 'list_dir':
+    case 'read_url_content':
+      return { name: 'File & Code Reading', category: 'Inspection', color: '#00A67E' };
+    case 'replace_file_content':
+    case 'edit_file':
+    case 'write_to_file':
+    case 'write_file':
+      return { name: 'Code Editing & File Write', category: 'Modification', color: '#3B82F6' };
+    case 'grep_search':
+    case 'find_by_name':
+      return { name: 'Codebase Search', category: 'Discovery', color: '#8B5CF6' };
+    case 'search_web':
+      return { name: 'Web Search & Docs', category: 'Search', color: '#06B6D4' };
+    case 'invoke_subagent':
+    case 'manage_subagents':
+    case 'send_message':
+    case 'define_subagent':
+      return { name: 'Multi-Agent Coordination', category: 'Agentic', color: '#EC4899' };
+    case 'schedule':
+    case 'manage_task':
+      return { name: 'Task Scheduling', category: 'Workflow', color: '#10B981' };
+    case 'ask_question':
+      return { name: 'User Interaction', category: 'Communication', color: '#6366F1' };
+    default:
+      return { name: raw, category: 'Extension', color: '#948F85' };
+  }
+}
+
+export function renderToolDistribution(overview: GlobalAnalyticsOverview, range: TimeRangeOption): void {
+  const container = document.getElementById('analytics-tools-list');
+  if (!container) return;
+
+  let tools: ToolStatItem[] = [];
+  if (range === 'session') {
+    if (activeSessionData && (activeSessionData as any).tools && (activeSessionData as any).tools.length > 0) {
+      tools = (activeSessionData as any).tools;
+    } else {
+      tools = overview.toolDistribution || [];
+    }
+  } else {
+    const dates = getFilterDatesForRange(range);
+    const countsMap: Record<string, number> = {};
+
+    for (const d of dates) {
+      const dayTools = overview.dailyToolStats?.[d];
+      if (dayTools) {
+        for (const [tName, cnt] of Object.entries(dayTools)) {
+          countsMap[tName] = (countsMap[tName] || 0) + cnt;
+        }
+      }
+    }
+
+    const totalCalls = Object.values(countsMap).reduce((a, b) => a + b, 0);
+    if (totalCalls > 0) {
+      tools = Object.entries(countsMap)
+        .map(([rawName, count]) => {
+          const info = canonicalizeTool(rawName);
+          return {
+            rawName,
+            name: info.name,
+            category: info.category,
+            color: info.color,
+            count,
+            percentage: Math.round((count / totalCalls) * 1000) / 10
+          };
+        })
+        .sort((a, b) => b.count - a.count);
+    } else {
+      tools = [];
+    }
+  }
+
+  if (!tools || tools.length === 0) {
+    container.innerHTML = `<div class="chart-empty">No tool executions recorded in this range</div>`;
+    return;
+  }
+
+  const maxCount = Math.max(...tools.map(t => t.count), 1);
+  const totalAll = tools.reduce((a, b) => a + b.count, 0);
+
+  const itemsHtml = tools.map((t) => {
+    const pct = Math.max(3, Math.round((t.count / maxCount) * 100));
+    return `
+      <div class="tool-stat-row">
+        <div class="tool-meta">
+          <div class="tool-title-line">
+            <span class="tool-category-badge" style="background: ${t.color}22; color: ${t.color}; border: 1px solid ${t.color}44">${t.category}</span>
+            <span class="tool-name">${t.name}</span>
+            <span class="tool-raw-badge" title="Raw invocation name: ${t.rawName}">${t.rawName}</span>
+          </div>
+          <div class="tool-call-count">
+            <span class="tool-count-strong">${formatFullNumber(t.count)}</span> calls
+            <span class="tool-pct-badge">${t.percentage.toFixed(1)}%</span>
+          </div>
+        </div>
+        <div class="tool-bar-track">
+          <div class="tool-bar-fill" style="width: ${pct}%; background: ${t.color}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="tool-distribution-summary">
+      <span class="tool-summary-text">Total Invocations: <strong>${formatFullNumber(totalAll)}</strong></span>
+    </div>
+    <div class="tool-distribution-grid">
+      ${itemsHtml}
+    </div>
+  `;
+}
+
 export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: TimeRangeOption): void {
   const chartWrapper = document.getElementById('analytics-model-tps-chart');
   if (!chartWrapper) return;
 
-  let dateList = getFilterDatesForRange(range);
-  if (dateList.length < 5) {
-    const today = getTodayString();
-    dateList = generateContinuousDateList(getPastDaysString(13), today);
+  const isSession = range === 'session' && !!activeSessionData && activeSessionData.steps.length > 0;
+  const isHourly = range === 'today' || range === 'yesterday';
+
+  const svgWidth = 600;
+  const svgHeight = 220;
+  const paddingLeft = 45;
+  const paddingRight = 20;
+  const paddingTop = 24;
+  const paddingBottom = 28;
+  const chartWidth = svgWidth - paddingLeft - paddingRight;
+  const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+  // 1. Session Mode: Turn-by-Turn TPS
+  if (isSession) {
+    const steps = activeSessionData!.steps;
+    const totalTurns = steps.length;
+    let rawMaxTps = 0;
+    const points: Array<{ x: number; y: number; tps: number; stepIdx: number }> = [];
+
+    steps.forEach((st, idx) => {
+      const tps = st.stream > 0 && st.outTok > 0 ? Math.round(st.outTok / st.stream) : 0;
+      if (tps > rawMaxTps) rawMaxTps = tps;
+    });
+
+    const maxTps = Math.max(300, Math.ceil((rawMaxTps * 1.15) / 100) * 100);
+    const stepX = chartWidth / Math.max(1, totalTurns - 1);
+
+    steps.forEach((st, idx) => {
+      const tps = st.stream > 0 && st.outTok > 0 ? Math.round(st.outTok / st.stream) : 0;
+      const x = paddingLeft + (totalTurns > 1 ? idx * stepX : chartWidth / 2);
+      const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+      points.push({ x, y, tps, stepIdx: st.idx + 1 });
+    });
+
+    const yTicks = [0, Math.round(maxTps * 0.33), Math.round(maxTps * 0.66), maxTps];
+    let yAxisLinesSvg = '';
+    let yAxisTextsSvg = '';
+    yTicks.forEach(tickVal => {
+      const y = paddingTop + chartHeight - (tickVal / maxTps) * chartHeight;
+      yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35" />`;
+      yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${tickVal}</text>`;
+    });
+
+    let xLabelsSvg = '';
+    const labelInterval = Math.max(1, Math.floor(totalTurns / 6));
+    steps.forEach((st, idx) => {
+      const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.7;
+      if (idx % labelInterval === 0 && !isTooCloseToRight) {
+        const x = paddingLeft + (totalTurns > 1 ? idx * stepX : chartWidth / 2);
+        xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${st.idx + 1}</text>`;
+      }
+    });
+
+    let pathD = '';
+    let dotsSvg = '';
+    points.forEach((p, i) => {
+      if (i === 0) pathD = `M ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+      else pathD += ` L ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+      if (totalTurns <= 50) {
+        dotsSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="#8B5CF6" stroke="var(--aura-bg-elevated, #1e1e1e)" stroke-width="1.5" />`;
+      }
+    });
+
+    let hoverBandsSvg = '';
+    points.forEach((p, idx) => {
+      const bandW = stepX;
+      const bandX = Math.max(paddingLeft, p.x - bandW / 2);
+      const dataPayload = JSON.stringify([{ model: 'Active Session Turn #' + p.stepIdx, color: '#8B5CF6', tps: p.tps, reqs: 1 }]);
+      hoverBandsSvg += `
+        <rect class="tps-hover-slot"
+              x="${bandX.toFixed(1)}" y="${paddingTop}" width="${bandW.toFixed(1)}" height="${chartHeight}"
+              fill="transparent"
+              data-date="Session Turn #${p.stepIdx}"
+              data-center-x="${p.x.toFixed(1)}"
+              data-models="${encodeURIComponent(dataPayload)}" />
+      `;
+    });
+
+    chartWrapper.innerHTML = `
+      <div class="chart-header">
+        <div class="chart-header-left">
+          <h3 class="chart-title">Model Speed Trends (${getRangeDisplayTitle(range)})</h3>
+        </div>
+      </div>
+      <div class="chart-body" style="position: relative;">
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="tps-svg-element">
+          ${yAxisLinesSvg}
+          ${yAxisTextsSvg}
+          ${xLabelsSvg}
+          <path d="${pathD}" fill="none" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          ${dotsSvg}
+          <line id="tps-scrubber-line" x1="0" y1="${paddingTop}" x2="0" y2="${paddingTop + chartHeight}" stroke="var(--aura-border-focus, #3B82F6)" stroke-width="1.5" stroke-dasharray="2 2" style="display: none; pointer-events: none;" />
+          ${hoverBandsSvg}
+        </svg>
+        <div class="chart-floating-tooltip" id="tps-floating-tooltip" style="display: none;"></div>
+      </div>
+    `;
+
+    attachTpsTooltipListeners(chartWrapper, svgWidth);
+    return;
   }
 
+  // 2. Hourly Granularity (Today / Yesterday): 24 Hours
+  if (isHourly) {
+    const today = getTodayString();
+    const yesterday = getYesterdayString();
+    const targetDate = range === 'today' ? today : yesterday;
+    const hourKeys: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      const hh = String(h).padStart(2, '0');
+      hourKeys.push(`${targetDate} ${hh}:00`);
+    }
+
+    const activeModelsSet = new Set<string>();
+    hourKeys.forEach(hKey => {
+      const hModels = overview.hourlyModelStats?.[hKey];
+      if (hModels) {
+        for (const [mName, st] of Object.entries(hModels)) {
+          if (st.streamSec > 0 && st.outTok > 0 && !mName.toLowerCase().includes('unknown')) {
+            activeModelsSet.add(mName);
+          }
+        }
+      }
+    });
+
+    const activeModelNames = Array.from(activeModelsSet);
+    if (activeModelNames.length === 0) {
+      chartWrapper.innerHTML = `
+        <div class="chart-header">
+          <div class="chart-header-left">
+            <h3 class="chart-title">Model Speed Trends (Hourly Avg TPS)</h3>
+          </div>
+        </div>
+        <div class="chart-empty">No streaming latency data recorded for ${range === 'today' ? 'today' : 'yesterday'}</div>
+      `;
+      return;
+    }
+
+    let rawMaxTps = 0;
+    const seriesByModel: Record<string, Array<{ x: number; y: number; tps: number; hourLabel: string; reqs: number } | null>> = {};
+    const stepX = chartWidth / (hourKeys.length - 1);
+
+    for (const mName of activeModelNames) {
+      hourKeys.forEach(hKey => {
+        const st = overview.hourlyModelStats?.[hKey]?.[mName];
+        if (st && st.streamSec > 0 && st.outTok > 0) {
+          const tps = Math.round(st.outTok / st.streamSec);
+          if (tps > rawMaxTps) rawMaxTps = tps;
+        }
+      });
+    }
+
+    const maxTps = Math.max(300, Math.ceil((rawMaxTps * 1.15) / 100) * 100);
+
+    for (const mName of activeModelNames) {
+      seriesByModel[mName] = [];
+      hourKeys.forEach((hKey, idx) => {
+        const st = overview.hourlyModelStats?.[hKey]?.[mName];
+        const x = paddingLeft + idx * stepX;
+        const hh = hKey.slice(11, 16);
+        if (st && st.streamSec > 0 && st.outTok > 0) {
+          const tps = Math.round(st.outTok / st.streamSec);
+          const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+          seriesByModel[mName].push({ x, y, tps, hourLabel: hh, reqs: st.requests });
+        } else {
+          seriesByModel[mName].push(null);
+        }
+      });
+    }
+
+    const yTicks = [0, Math.round(maxTps * 0.33), Math.round(maxTps * 0.66), maxTps];
+    let yAxisLinesSvg = '';
+    let yAxisTextsSvg = '';
+    yTicks.forEach(tickVal => {
+      const y = paddingTop + chartHeight - (tickVal / maxTps) * chartHeight;
+      yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35" />`;
+      yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${tickVal}</text>`;
+    });
+
+    let xLabelsSvg = '';
+    hourKeys.forEach((hKey, idx) => {
+      // Explicitly show only 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00; NEVER show 23:00
+      if (idx % 3 === 0 && idx < 23) {
+        const x = paddingLeft + idx * stepX;
+        const hh = hKey.slice(11, 16);
+        xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${hh}</text>`;
+      }
+    });
+
+    let pathsSvg = '';
+    let dotsSvg = '';
+    activeModelNames.forEach((mName, mIdx) => {
+      const color = getModelColor(mName, mIdx);
+      const pts = seriesByModel[mName];
+      let currentPath = '';
+
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i];
+        if (p) {
+          if (!currentPath) {
+            currentPath = `M ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+          } else {
+            currentPath += ` L ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+          }
+          dotsSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="${color}" stroke="var(--aura-bg-elevated, #1e1e1e)" stroke-width="1.5" />`;
+        } else {
+          if (currentPath) {
+            pathsSvg += `<path d="${currentPath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+            currentPath = '';
+          }
+        }
+      }
+      if (currentPath) {
+        pathsSvg += `<path d="${currentPath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+      }
+    });
+
+    let hoverBandsSvg = '';
+    hourKeys.forEach((hKey, idx) => {
+      const x = paddingLeft + idx * stepX;
+      const bandW = stepX;
+      const bandX = Math.max(paddingLeft, x - bandW / 2);
+      const dayData: Array<{ model: string; color: string; tps: number; reqs: number }> = [];
+
+      activeModelNames.forEach((mName, mIdx) => {
+        const st = overview.hourlyModelStats?.[hKey]?.[mName];
+        if (st && st.streamSec > 0 && st.outTok > 0) {
+          dayData.push({
+            model: mName,
+            color: getModelColor(mName, mIdx),
+            tps: Math.round(st.outTok / st.streamSec),
+            reqs: st.requests
+          });
+        }
+      });
+
+      hoverBandsSvg += `
+        <rect class="tps-hover-slot"
+              x="${bandX.toFixed(1)}" y="${paddingTop}" width="${bandW.toFixed(1)}" height="${chartHeight}"
+              fill="transparent"
+              data-date="${hKey.slice(0, 16)}"
+              data-center-x="${x.toFixed(1)}"
+              data-models="${encodeURIComponent(JSON.stringify(dayData))}" />
+      `;
+    });
+
+    chartWrapper.innerHTML = `
+      <div class="chart-header">
+        <div class="chart-header-left">
+          <h3 class="chart-title">Model Speed Trends (${getRangeDisplayTitle(range)})</h3>
+        </div>
+      </div>
+      <div class="chart-body" style="position: relative;">
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="tps-svg-element">
+          ${yAxisLinesSvg}
+          ${yAxisTextsSvg}
+          ${xLabelsSvg}
+          ${pathsSvg}
+          ${dotsSvg}
+          <line id="tps-scrubber-line" x1="0" y1="${paddingTop}" x2="0" y2="${paddingTop + chartHeight}" stroke="var(--aura-border-focus, #3B82F6)" stroke-width="1.5" stroke-dasharray="2 2" style="display: none; pointer-events: none;" />
+          ${hoverBandsSvg}
+        </svg>
+        <div class="chart-floating-tooltip" id="tps-floating-tooltip" style="display: none;"></div>
+      </div>
+    `;
+
+    attachTpsTooltipListeners(chartWrapper, svgWidth);
+    return;
+  }
+
+  // 3. Multi-day Granularity: Daily Avg TPS
+  const dateList = getFilterDatesForRange(range);
   const activeModelsMap: Record<string, { totalOut: number; totalStream: number; daysCount: number }> = {};
   for (const d of dateList) {
     const dayStats = overview.dailyModelStats?.[d];
@@ -1255,15 +1668,6 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     `;
     return;
   }
-
-  const svgWidth = 600;
-  const svgHeight = 220;
-  const paddingLeft = 45;
-  const paddingRight = 20;
-  const paddingTop = 24;
-  const paddingBottom = 28;
-  const chartWidth = svgWidth - paddingLeft - paddingRight;
-  const chartHeight = svgHeight - paddingTop - paddingBottom;
 
   let rawMaxTps = 0;
   const seriesByModel: Record<string, Array<{ x: number; y: number; tps: number; date: string; reqs: number } | null>> = {};
@@ -1325,20 +1729,10 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
 
   let pathsSvg = '';
   let dotsSvg = '';
-  let legendHtml = '';
 
   activeModelNames.forEach((mName, mIdx) => {
     const color = getModelColor(mName, mIdx);
     const pts = seriesByModel[mName];
-    const avgOverall = Math.round(activeModelsMap[mName].totalOut / activeModelsMap[mName].totalStream);
-
-    legendHtml += `
-      <span class="legend-item" title="${mName}">
-        <span class="legend-dot" style="background: ${color}"></span>
-        <span class="legend-label">${mName}</span>
-        <span class="legend-sub">(${avgOverall} tok/s)</span>
-      </span>
-    `;
 
     let currentPath = '';
     for (let i = 0; i < pts.length; i++) {
@@ -1396,10 +1790,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   chartWrapper.innerHTML = `
     <div class="chart-header">
       <div class="chart-header-left">
-        <h3 class="chart-title">Model Speed Trends (Daily Avg TPS)</h3>
-      </div>
-      <div class="chart-legend tps-legend">
-        ${legendHtml}
+        <h3 class="chart-title">Model Speed Trends (${getRangeDisplayTitle(range)})</h3>
       </div>
     </div>
     <div class="chart-body" style="position: relative;">
@@ -1524,6 +1915,7 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
     renderMetricCards(processed);
     renderActivityChart(processed.columns, getRangeDisplayTitle(range));
     renderModelDistribution(rawOverview, range);
+    renderToolDistribution(rawOverview, range);
     renderModelTpsChart(rawOverview, range);
   }
 }
@@ -1548,6 +1940,7 @@ export async function refreshAnalytics(): Promise<void> {
     await applyTimeRangeFilter(currentRange);
     renderProjectDistribution(rawOverview.topProjects);
     renderModelDistribution(rawOverview, currentRange);
+    renderToolDistribution(rawOverview, currentRange);
     renderModelTpsChart(rawOverview, currentRange);
   }
 

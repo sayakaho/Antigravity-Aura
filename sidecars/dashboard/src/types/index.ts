@@ -60,6 +60,15 @@ export interface ConversationSummary {
   status: string;
 }
 
+export interface ToolStatItem {
+  rawName: string;
+  name: string;
+  category: string;
+  color: string;
+  count: number;
+  percentage: number;
+}
+
 export interface SessionAnalyticsData {
   cascadeId: string;
   totalTokens: {
@@ -75,6 +84,7 @@ export interface SessionAnalyticsData {
   avgTokPerSec: number;
   steps: ConversationStepMetric[];
   models?: ModelTokenStat[];
+  tools?: ToolStatItem[];
 }
 
 export interface ModelTokenStat {
@@ -91,6 +101,7 @@ export interface ModelTokenStat {
 }
 
 export interface ModelDailyStat {
+  modelId?: string;
   inTok: number;
   outTok: number;
   cacheRead: number;
@@ -130,4 +141,29 @@ export interface GlobalAnalyticsOverview {
   }>;
   modelDistribution: ModelTokenStat[];
   dailyModelStats: Record<string, Record<string, ModelDailyStat>>;
+  hourlyModelStats?: Record<string, Record<string, ModelDailyStat>>;
+  toolDistribution: ToolStatItem[];
+  dailyToolStats: Record<string, Record<string, number>>;
+}
+
+export interface SidecarBridge {
+  fetch: (url: string, init?: RequestInit) => Promise<Response>;
+  conversationId?: string | null;
+  getWorkspaceUris?: () => Promise<string[]>;
+  onWorkspaceChange?: (listener: (uris: string[]) => void) => () => void;
+  agent?: {
+    sendMessage?: (message: string, conversationId?: string) => Promise<void>;
+    startConversation?: (message: string) => Promise<string>;
+    getConversationMetadata?: (conversationId: string) => Promise<any>;
+  };
+  ui?: {
+    toggleAuxPane?: (options?: { open?: boolean }) => void;
+    toggleConversation?: (conversationId: string) => void;
+  };
+}
+
+declare global {
+  interface Window {
+    sidecar: SidecarBridge;
+  }
 }

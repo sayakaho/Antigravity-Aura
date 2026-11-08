@@ -6,14 +6,6 @@ import { initThemeListener, syncTheme } from './theme-sync';
 import { refreshAnalytics, initTimeRangeControls } from './analytics';
 import type { AuraConfig } from '../types';
 
-declare global {
-  interface Window {
-    sidecar: {
-      fetch: (url: string, init?: RequestInit) => Promise<Response>;
-    };
-  }
-}
-
 let currentConfig: AuraConfig | null = null;
 let systemFontsList: string[] = [];
 
@@ -468,6 +460,13 @@ async function initApp(): Promise<void> {
 
   // 15. Time Range Filters Initialization
   initTimeRangeControls();
+
+  // 16. Antigravity Host Workspace Change Listener
+  if (typeof window.sidecar?.onWorkspaceChange === 'function') {
+    window.sidecar.onWorkspaceChange(() => {
+      refreshAnalytics();
+    });
+  }
 
   // Initial Analytics Fetch
   refreshAnalytics();

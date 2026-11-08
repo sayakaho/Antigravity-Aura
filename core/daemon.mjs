@@ -26,7 +26,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CORE_DIR = path.join(ROOT_DIR, 'core');
-const USER_DIR = path.join(ROOT_DIR, 'user');
+const TEMPLATE_USER_DIR = path.join(ROOT_DIR, 'user');
+const USER_DIR = process.env.PLUGIN_DATA ||
+  process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR ||
+  TEMPLATE_USER_DIR;
 
 // ============================================================================
 // 0. 动态探测 node:sqlite（Node >= 22.13 自动解锁，低版本优雅降级）
@@ -82,15 +85,17 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   const appDirName = isInsiders ? 'Antigravity - Insiders' : 'Antigravity';
   const geminiSubDir = isInsiders ? '.gemini/antigravity-insiders' : '.gemini/antigravity';
 
-  let defaultPortFile;
-  if (process.platform === 'darwin') {
-    defaultPortFile = path.join(home, 'Library', 'Application Support', appDirName, 'DevToolsActivePort');
-  } else if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-    defaultPortFile = path.join(appData, appDirName, 'DevToolsActivePort');
-  } else {
-    const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
-    defaultPortFile = path.join(xdgConfig, appDirName, 'DevToolsActivePort');
+  let defaultPortFile = process.env.AGY_BROWSER_ACTIVE_PORT_FILE;
+  if (!defaultPortFile || !fs.existsSync(defaultPortFile)) {
+    if (process.platform === 'darwin') {
+      defaultPortFile = path.join(home, 'Library', 'Application Support', appDirName, 'DevToolsActivePort');
+    } else if (process.platform === 'win32') {
+      const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+      defaultPortFile = path.join(appData, appDirName, 'DevToolsActivePort');
+    } else {
+      const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+      defaultPortFile = path.join(xdgConfig, appDirName, 'DevToolsActivePort');
+    }
   }
 
   const defaultConvDir = path.join(home, geminiSubDir, 'conversations');
@@ -608,6 +613,13 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
 const attachedTargets = new Map();
 
 function readPort(portFile) {
+  if (process.env.AGY_BROWSER_WS_URL) {
+    try {
+      const u = new URL(process.env.AGY_BROWSER_WS_URL);
+      const port = parseInt(u.port, 10);
+      if (Number.isFinite(port) && port > 0) return port;
+    } catch {}
+  }
   try {
     if (!fs.existsSync(portFile)) return null;
     const raw = fs.readFileSync(portFile, 'utf8').trim();
