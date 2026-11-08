@@ -552,9 +552,9 @@ function renderSessionOverviewArea(
       lineD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
     }
 
-    if (idx % labelInterval === 0 || idx === totalTurns - 1) {
+    if (idx % labelInterval === 0) {
       xLabelsSvg += `
-        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${idx === 0 ? 'start' : idx === totalTurns - 1 ? 'end' : 'middle'}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
+        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${idx === 0 ? 'start' : 'middle'}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
       `;
     }
   });
@@ -739,6 +739,7 @@ function renderStandardTimelineChart(
   let xLabelsSvg = '';
 
   const isHourly = columns.length === 24 && (columns[0]?.label.includes(':00') || false);
+  const isSessionTimeline = columns[0]?.label.startsWith('#') || false;
   const labelInterval = isHourly ? 3 : Math.max(1, Math.floor(columns.length / 8));
 
   columns.forEach((item, idx) => {
@@ -814,8 +815,8 @@ function renderStandardTimelineChart(
       `;
     }
 
-    const showLabel = isHourly
-      ? (idx % 3 === 0)
+    const showLabel = (isHourly || isSessionTimeline)
+      ? (idx % labelInterval === 0)
       : (idx % labelInterval === 0 || (idx === columns.length - 1 && (columns.length - 1) % labelInterval >= Math.floor(labelInterval / 2)));
 
     if (showLabel) {
@@ -867,6 +868,7 @@ function renderStandardTimelineChart(
           <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
             ${defsSvg}
             ${gridSvg}
+            <rect id="chart-shared-hover-band" class="chart-shared-hover-band" x="0" y="${paddingTop}" width="0" height="${chartHeight}" rx="4" style="display: none;" />
             ${barsSvg}
             ${xLabelsSvg}
           </svg>
@@ -916,13 +918,20 @@ function attachScrollMaskListeners(stage: HTMLElement, maskLeft: HTMLElement, ma
 function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number): void {
   const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
   const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
+  const hoverBand = chartWrapper.querySelector('#chart-shared-hover-band') as SVGGraphicsElement | null;
   const groups = chartWrapper.querySelectorAll('.chart-column-group');
 
   if (!tooltip || !stage) return;
 
+  let activeIdx: string | null = null;
+
   groups.forEach(group => {
     group.addEventListener('mouseenter', () => {
       const target = group as SVGElement;
+      const idx = target.getAttribute('data-idx');
+      if (idx === activeIdx) return;
+      activeIdx = idx;
+
       const header = target.getAttribute('data-header') || '';
       const inTok = target.getAttribute('data-in') || '0';
       const outTok = target.getAttribute('data-out') || '0';
@@ -931,6 +940,15 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
       const ctxTok = target.getAttribute('data-ctx') || '';
       const reqs = target.getAttribute('data-reqs') || '0';
       const subText = target.getAttribute('data-subtext') || '';
+
+      const slotX = parseFloat(target.getAttribute('data-slot-x') || '0');
+      const slotW = parseFloat(target.getAttribute('data-slot-w') || '0');
+
+      if (hoverBand) {
+        hoverBand.setAttribute('x', String(slotX));
+        hoverBand.setAttribute('width', String(slotW));
+        hoverBand.style.display = 'block';
+      }
 
       const ctxRowHtml = ctxTok ? `
         <div class="tooltip-row ctx-row">
@@ -1006,10 +1024,13 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
       tooltip.style.left = `${Math.round(left)}px`;
       tooltip.style.top = `${Math.round(top)}px`;
     });
+  });
 
-    group.addEventListener('mouseleave', () => {
-      tooltip.style.display = 'none';
-    });
+  // Zero-flicker: hide hover band and tooltip only when cursor exits the entire stage
+  stage.addEventListener('mouseleave', () => {
+    activeIdx = null;
+    if (hoverBand) hoverBand.style.display = 'none';
+    tooltip.style.display = 'none';
   });
 }
 

@@ -834,17 +834,18 @@ html, body {
 .bar-bg-band {
   fill: transparent;
   pointer-events: all;
-  transition: fill 0.15s ease, opacity 0.15s ease;
 }
 
-.chart-column-group:hover .bar-bg-band {
+.chart-shared-hover-band {
   fill: var(--aura-fg);
   opacity: 0.055;
+  pointer-events: none;
+  transition: x 0.04s cubic-bezier(0, 0, 0.2, 1), width 0.04s ease-out;
 }
 
 .chart-column-group:hover .bar-segment {
   filter: brightness(1.22);
-  transition: filter 0.12s ease;
+  transition: filter 0.08s ease;
 }
 
 /* Floating Hover Tooltip */
