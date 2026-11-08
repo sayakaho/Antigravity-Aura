@@ -531,15 +531,6 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
           </div>
           <span class="kpi-breakdown-val">${formatFullNumber(outTok)}</span>
         </div>
-        ${thinkTok > 0 ? `
-        <div class="kpi-breakdown-row">
-          <div class="kpi-breakdown-key">
-            <span class="kpi-dot kpi-dot-think"></span>
-            <span>Reasoning:</span>
-          </div>
-          <span class="kpi-breakdown-val">${formatFullNumber(thinkTok)}</span>
-        </div>
-        ` : ''}
       </div>
     </div>
 
@@ -549,7 +540,6 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
       <div class="kpi-card">
         <div class="kpi-label-row">
           <span>Est. Commercial Value & Cost</span>
-          ${savedCost > 0 ? `<span class="kpi-saved-text-top">Saved $${savedCost.toFixed(2)}</span>` : ''}
         </div>
         <div class="cost-highlight-row">
           <div class="kpi-value-lg">$${actualCost.toFixed(2)}</div>

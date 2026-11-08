@@ -544,8 +544,8 @@ html, body {
   border-radius: 12px;
   padding: 18px 22px;
   display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 28px;
+  grid-template-columns: 1fr 300px;
+  gap: 32px;
   align-items: center;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -593,13 +593,11 @@ html, body {
 .kpi-ratio-seg-input { background: #818CF8; }
 .kpi-ratio-seg-output { background: var(--aura-primary); }
 
-/* Key-Value Breakdown List (Strictly Left Label, Right Pure Number) */
+/* Key-Value Breakdown List (Strictly Left Label, Right Pure Number, No Border Line) */
 .kpi-breakdown-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-left: 20px;
-  border-left: 1px solid var(--aura-border);
+  gap: 8px;
 }
 
 .kpi-breakdown-row {
