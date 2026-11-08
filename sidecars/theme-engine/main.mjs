@@ -82,41 +82,102 @@ function normalizeOverrideDict(rawObj) {
 // ============================================================================
 // 1.1 字体与排版动态计算引擎 (Typography & Layout Engine)
 // ============================================================================
-const SANS_FONT_MAP = {
-  default: "'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
-  sarasa: "'Sarasa UI SC', '更纱黑体 UI SC', system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
-  pingfang: "'PingFang SC', -apple-system, BlinkMacSystemFont, 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif",
-  system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
-};
+let cachedSystemFonts = null;
 
-const MONO_FONT_MAP = {
-  default: "'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace",
-  'sarasa-mono': "'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, monospace",
-  jetbrains: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-  system: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace"
-};
-
-function resolveTypographyVars(typography = {}) {
-  const sansKey = typography.sans || 'default';
-  let fontSans = SANS_FONT_MAP[sansKey];
-  if (!fontSans || sansKey === 'custom') {
-    const custom = (typography.customSans || '').trim();
-    fontSans = custom ? `${custom}, system-ui, sans-serif` : SANS_FONT_MAP.default;
+async function getSystemFonts() {
+  if (cachedSystemFonts && cachedSystemFonts.length > 0) {
+    return cachedSystemFonts;
   }
 
+  const fontSet = new Set([
+    'Anthropic Sans',
+    'Anthropic Mono',
+    'Sarasa UI SC',
+    '更纱黑体 UI SC',
+    'Sarasa Mono Slab SC',
+    '等距更纱黑体 Slab SC',
+    'PingFang SC',
+    'LXGW WenKai',
+    'JetBrains Mono',
+    'Fira Code'
+  ]);
+
+  // 1. 优先通过已连接的主渲染窗口 CDP 查询本地安装字体
+  for (const [, entry] of attachedTargets.entries()) {
+    if (entry.send) {
+      try {
+        const res = await entry.send('Runtime.evaluate', {
+          expression: `(async () => {
+            if (typeof window.queryLocalFonts !== 'function') return [];
+            const fonts = await window.queryLocalFonts();
+            return Array.from(new Set(fonts.map(f => f.family))).filter(Boolean);
+          })()`,
+          awaitPromise: true,
+          returnByValue: true
+        });
+        const cdpFonts = res?.result?.result?.value;
+        if (Array.isArray(cdpFonts) && cdpFonts.length > 0) {
+          for (const f of cdpFonts) fontSet.add(f);
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. 补充 fc-list 探测（针对 macOS / Linux CLI 环境）
+  try {
+    const { execSync } = await import('node:child_process');
+    const out = execSync('fc-list : family', { encoding: 'utf8', timeout: 1200 });
+    const fcFonts = out
+      .split('\n')
+      .flatMap((l) => l.split(','))
+      .map((f) => f.trim())
+      .filter((f) => f && !f.startsWith('.'));
+    for (const f of fcFonts) fontSet.add(f);
+  } catch (e) {}
+
+  cachedSystemFonts = Array.from(fontSet).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return cachedSystemFonts;
+}
+
+function resolveTypographyVars(typography = {}) {
+  const primaryKey = typography.primarySans || 'default';
+  let primarySans = '';
+  if (primaryKey === 'default') {
+    primarySans = "'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene'";
+  } else if (primaryKey === 'custom') {
+    primarySans = (typography.customPrimarySans || '').trim() || 'system-ui';
+  } else {
+    primarySans = `'${primaryKey.replace(/'/g, '')}'`;
+  }
+
+  const fallbackKey = typography.fallbackSans || 'default';
+  let fallbackSans = '';
+  if (fallbackKey === 'default') {
+    fallbackSans = "'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei'";
+  } else if (fallbackKey === 'custom') {
+    fallbackSans = (typography.customFallbackSans || '').trim() || "'PingFang SC'";
+  } else {
+    fallbackSans = `'${fallbackKey.replace(/'/g, '')}'`;
+  }
+
+  const fullSans = `${primarySans}, ${fallbackSans}, system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
+
   const monoKey = typography.mono || 'default';
-  let fontMono = MONO_FONT_MAP[monoKey];
-  if (!fontMono || monoKey === 'custom') {
-    const custom = (typography.customMono || '').trim();
-    fontMono = custom ? `${custom}, ui-monospace, monospace` : MONO_FONT_MAP.default;
+  let mono = '';
+  if (monoKey === 'default') {
+    mono = "'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace";
+  } else if (monoKey === 'custom') {
+    mono = `${(typography.customMono || '').trim() || 'ui-monospace'}, ui-monospace, monospace`;
+  } else {
+    mono = `'${monoKey.replace(/'/g, '')}', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace`;
   }
 
   const fontSize = Number(typography.fontSize) || 16;
   const fontSizePx = `${fontSize}px`;
 
   return {
-    '--ag-cfg-font-sans': fontSans,
-    '--ag-cfg-font-mono': fontMono,
+    '--ag-cfg-font-sans': fullSans,
+    '--ag-cfg-font-mono': mono,
     '--ag-cfg-chat-font-size': fontSizePx,
     '--ag-chat-font-size': fontSizePx
   };
@@ -124,16 +185,20 @@ function resolveTypographyVars(typography = {}) {
 
 function resolveThemeAttrs(userCfg = {}) {
   const composer = userCfg.composer || {};
+  const lightPreset = userCfg.presets?.light || userCfg.lightPreset || 'high-contrast';
+  const darkPreset = userCfg.presets?.dark || userCfg.darkPreset || 'claude-dark';
+
   return {
     'data-ag-wax-seal': composer.waxSeal === false ? 'off' : 'on',
     'data-ag-collinear': composer.collinear === false ? 'off' : 'on',
     'data-ag-hide-arrows': composer.hideArrows === false ? 'off' : 'on',
-    'data-ag-preset': userCfg.preset || 'high-contrast',
+    'data-ag-light-preset': lightPreset,
+    'data-ag-dark-preset': darkPreset,
     'data-ag-custom-font-size': 'true'
   };
 }
 
-async function applyLiveConfigToTargets(userCfg) {
+async function applyLiveConfigToTargets(userCfg, bundleChanged = false) {
   const vars = resolveTypographyVars(userCfg.typography);
   const attrs = resolveThemeAttrs(userCfg);
   const telemetryEnabled = userCfg.telemetry?.enabled !== false;
@@ -149,6 +214,9 @@ async function applyLiveConfigToTargets(userCfg) {
       if (v === null || v === undefined) document.documentElement.removeAttribute(k);
       else document.documentElement.setAttribute(k, v);
     }
+    if (typeof window.__ag_sync_color_scheme_fn === 'function') {
+      window.__ag_sync_color_scheme_fn();
+    }
     const pill = document.getElementById('ag-live-metrics-pill');
     if (pill && !${telemetryEnabled}) {
       pill.style.display = 'none';
@@ -159,6 +227,10 @@ async function applyLiveConfigToTargets(userCfg) {
     if (entry.send) {
       try {
         await entry.send('Runtime.evaluate', { expression: hotCode, returnByValue: true });
+        if (bundleChanged) {
+          await entry.send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
+          if (entry.inject) await entry.inject();
+        }
         if (telemetryEnabled && entry.syncMetricsForSession) {
           await entry.syncMetricsForSession(true);
         }
@@ -473,10 +545,11 @@ function rebuildBundleIfNeeded(force = false) {
   const userCfg = readJsonSafe(path.join(USER_DIR, 'config.json'), {});
   const enabled = userCfg.enabled !== false;
   const channel = userCfg.channel || 'auto';
+  const language = userCfg.language || 'default';
   const presets = Object.assign(
     {
-      light: userCfg.lightPreset || (typeof userCfg.preset === 'string' ? userCfg.preset : 'high-contrast'),
-      dark: userCfg.darkPreset || 'claude-dark'
+      light: userCfg.presets?.light || userCfg.lightPreset || 'high-contrast',
+      dark: userCfg.presets?.dark || userCfg.darkPreset || 'claude-dark'
     },
     userCfg.presets && typeof userCfg.presets === 'object' ? userCfg.presets : {}
   );
@@ -489,7 +562,7 @@ function rebuildBundleIfNeeded(force = false) {
   }
   const modules = Object.assign(
     {
-      i18n: true,
+      i18n: language === 'zh-CN',
       metrics: true,
       composerWaxSeal: true,
       composerCollinear: true,
@@ -500,6 +573,7 @@ function rebuildBundleIfNeeded(force = false) {
     },
     rawModules
   );
+  modules.i18n = language === 'zh-CN';
   if (userCfg.composer) {
     if (typeof userCfg.composer.waxSeal === 'boolean') modules.composerWaxSeal = userCfg.composer.waxSeal;
     if (typeof userCfg.composer.collinear === 'boolean') modules.composerCollinear = userCfg.composer.collinear;
@@ -517,6 +591,7 @@ function rebuildBundleIfNeeded(force = false) {
   activeConfig = {
     enabled,
     channel,
+    language,
     preset,
     presets,
     contextLimit,
@@ -558,6 +633,7 @@ function rebuildBundleIfNeeded(force = false) {
     version: cachedPatchVersion,
     platform: process.platform,
     enabled,
+    language,
     preset,
     presets,
     cssText: baseCss,
@@ -907,9 +983,21 @@ app.api('/api/config', () => {
   return {
     ok: true,
     config: {
-      preset: userCfg.preset || 'high-contrast',
+      language: userCfg.language || 'default',
+      presets: Object.assign(
+        { light: 'high-contrast', dark: 'claude-dark' },
+        userCfg.presets || {}
+      ),
       typography: Object.assign(
-        { sans: 'default', customSans: '', mono: 'default', customMono: '', fontSize: 16 },
+        {
+          primarySans: 'default',
+          fallbackSans: 'default',
+          customPrimarySans: '',
+          customFallbackSans: '',
+          mono: 'default',
+          customMono: '',
+          fontSize: 16
+        },
         userCfg.typography || {}
       ),
       composer: Object.assign(
@@ -929,12 +1017,15 @@ app.api('/api/config', async (data) => {
   const userCfgPath = path.join(USER_DIR, 'config.json');
   const userCfg = readJsonSafe(userCfgPath, {});
 
+  let languageChanged = false;
   if (data && typeof data === 'object') {
-    if (typeof data.preset === 'string') {
-      userCfg.preset = data.preset;
-      userCfg.lightPreset = data.preset;
-      if (!userCfg.presets) userCfg.presets = {};
-      userCfg.presets.light = data.preset;
+    if (typeof data.language === 'string' && data.language !== userCfg.language) {
+      userCfg.language = data.language;
+      languageChanged = true;
+    }
+    if (data.presets && typeof data.presets === 'object') {
+      userCfg.presets = Object.assign(userCfg.presets || {}, data.presets);
+      if (userCfg.presets.light) userCfg.preset = userCfg.presets.light;
     }
     if (data.typography && typeof data.typography === 'object') {
       userCfg.typography = Object.assign(userCfg.typography || {}, data.typography);
@@ -953,11 +1044,17 @@ app.api('/api/config', async (data) => {
     console.error('[Sidecar Engine] Failed to save config:', err);
   }
 
-  rebuildBundleIfNeeded(true);
-  await applyLiveConfigToTargets(userCfg);
+  const bundleChanged = rebuildBundleIfNeeded(true);
+  await applyLiveConfigToTargets(userCfg, bundleChanged || languageChanged);
 
   return { ok: true, config: userCfg };
 });
+
+// GET /api/system-fonts
+app.api('/api/system-fonts', async () => {
+  const fonts = await getSystemFonts();
+  return { ok: true, fonts };
+}, 'GET');
 
 // GET /api/status
 app.api('/api/status', () => ({

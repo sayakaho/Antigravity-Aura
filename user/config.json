@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "language": "zh-CN",
   "channel": "auto",
   "preset": "high-contrast",
   "presets": {
@@ -7,8 +8,10 @@
     "dark": "claude-dark"
   },
   "typography": {
-    "sans": "default",
-    "customSans": "",
+    "primarySans": "default",
+    "fallbackSans": "default",
+    "customPrimarySans": "",
+    "customFallbackSans": "",
     "mono": "default",
     "customMono": "",
     "fontSize": 16
@@ -26,6 +29,8 @@
     "i18n": false,
     "metrics": true,
     "composerWaxSeal": true,
+    "composerCollinear": true,
+    "composerHideArrows": true,
     "deadlockHealer": true,
     "customCss": true,
     "customJs": true

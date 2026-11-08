@@ -1063,7 +1063,12 @@
       });
     }
   } else {
-    // 若用户在配置中关闭了 i18n 模块，实时将已翻译的文本与属性还原为原始英文
+    if (window.__ag_i18n_observer) {
+      try {
+        window.__ag_i18n_observer.disconnect();
+      } catch (e) {}
+      window.__ag_i18n_observer = null;
+    }
     restoreAllTranslations(document.body);
   }
 

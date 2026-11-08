@@ -7,216 +7,273 @@
   <script src="/preload.js"></script>
 </head>
 <body>
-  <div class="page-header">
-    <h1 class="page-title">川瓣主题与排版配置</h1>
-    <p class="page-desc">配置界面字体、排版对齐、输入框微浮雕与实时性能遥测。</p>
-  </div>
+  <div class="settings-container">
+    <div class="page-header">
+      <h1 class="page-title" data-i18n="pageTitle">川瓣主题与排版配置</h1>
+      <p class="page-desc" data-i18n="pageDesc">配置界面字体、排版对齐、输入框微浮雕与实时性能遥测。</p>
+    </div>
 
-  <!-- Appearance -->
-  <div class="settings-section">
-    <h2 class="section-title">外观与主题</h2>
-    <p class="section-desc">切换暖纸护眼底色与输入框微浮雕交互。</p>
-    <div class="settings-card">
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">主题配色预设</div>
-          <div class="settings-sublabel">支持暖燕麦高对比浅色与 Claude 经典暗色。</div>
-        </div>
-        <div class="settings-control">
-          <div class="segmented-control" id="preset-segmented">
-            <button class="segment-btn active" data-val="high-contrast">高对比暖白</button>
-            <button class="segment-btn" data-val="claude-dark">Claude 暗色</button>
-            <button class="segment-btn" data-val="default">原生跟随</button>
+    <!-- Appearance -->
+    <div class="settings-section">
+      <h2 class="section-title" data-i18n="secAppearanceTitle">外观与主题</h2>
+      <p class="section-desc" data-i18n="secAppearanceDesc">为浅色与深色模式分别定制配色预设与微浮雕外框。</p>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="lightPresetLabel">浅色模式预设</div>
+            <div class="settings-sublabel" data-i18n="lightPresetSub">系统处于浅色外观时生效的主题配色方案。</div>
+          </div>
+          <div class="settings-control">
+            <div class="segmented-control" id="preset-light-segmented">
+              <button class="segment-btn active" data-val="high-contrast" data-i18n="optHighContrast">高对比暖白</button>
+              <button class="segment-btn" data-val="claude-desktop-purewhite" data-i18n="optClaudeWhite">经典净白</button>
+              <button class="segment-btn" data-val="default" data-i18n="optDefault">官方原生</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">古朴暗红蜡封输入框</div>
-          <div class="settings-sublabel">首页保持呼吸感外框，聚焦态浮现古朴暗红蜡封高光。</div>
-        </div>
-        <div class="settings-control">
-          <label class="switch-toggle">
-            <input type="checkbox" id="toggle-wax-seal" checked>
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Composer & Layout -->
-  <div class="settings-section">
-    <h2 class="section-title">组件对齐与排版</h2>
-    <p class="section-desc">重排输入框外围元数据与新建会话工具栏。</p>
-    <div class="settings-card">
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">底部组件排版模式</div>
-          <div class="settings-sublabel">将工具栏下移居左，遥测/模型/模式右对齐共线。</div>
-        </div>
-        <div class="settings-control">
-          <div class="segmented-control" id="composer-align-segmented">
-            <button class="segment-btn active" data-val="collinear">绝对水平共线</button>
-            <button class="segment-btn" data-val="native">官方原生</button>
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="darkPresetLabel">深色模式预设</div>
+            <div class="settings-sublabel" data-i18n="darkPresetSub">系统处于深色外观时生效的主题配色方案。</div>
+          </div>
+          <div class="settings-control">
+            <div class="segmented-control" id="preset-dark-segmented">
+              <button class="segment-btn active" data-val="claude-dark" data-i18n="optClaudeDark">Claude 暗色</button>
+              <button class="segment-btn" data-val="vintage-dark" data-i18n="optVintageDark">极简暖暗</button>
+              <button class="segment-btn" data-val="default" data-i18n="optDefault">官方原生</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">移除工具栏尾部下拉箭头</div>
-          <div class="settings-sublabel">消除项目与检出下拉的小三角，统一微浮雕背景。</div>
-        </div>
-        <div class="settings-control">
-          <label class="switch-toggle">
-            <input type="checkbox" id="toggle-hide-arrows" checked>
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Typography -->
-  <div class="settings-section">
-    <h2 class="section-title">字体排版系统</h2>
-    <p class="section-desc">解耦硬编码字体，支持多套中西文排版方案与字号微调。</p>
-    <div class="settings-card">
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">界面无衬线字体 (Sans)</div>
-          <div class="settings-sublabel">用于侧栏、按钮、对话标签等 UI 界面元素。</div>
-        </div>
-        <div class="settings-control">
-          <select class="select-control" id="select-font-sans">
-            <option value="default">船板精调 (Anthropic + 更纱黑体)</option>
-            <option value="sarasa">更纱黑体 UI (Sarasa UI SC)</option>
-            <option value="pingfang">苹方 / 微软雅黑 (系统首选)</option>
-            <option value="system">系统原生无衬线 (System UI)</option>
-            <option value="custom">自定义字体...</option>
-          </select>
-        </div>
-      </div>
-      <div class="settings-row" id="row-custom-sans" style="display: none;">
-        <div class="settings-meta">
-          <div class="settings-label">自定义无衬线字体名</div>
-          <div class="settings-sublabel">输入本地已安装的字体族名称（用逗号分隔）。</div>
-        </div>
-        <div class="settings-control">
-          <input type="text" class="text-control" id="input-custom-sans" placeholder="例如: 霞鹜文楷, PingFang SC">
-        </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">代码与等宽字体 (Mono)</div>
-          <div class="settings-sublabel">用于代码块、终端输出与输入框等宽排版。</div>
-        </div>
-        <div class="settings-control">
-          <select class="select-control" id="select-font-mono">
-            <option value="default">船板精调 (Anthropic Mono)</option>
-            <option value="sarasa-mono">更纱等宽 Slab (打字机板状粗衬线)</option>
-            <option value="jetbrains">JetBrains Mono / Fira Code</option>
-            <option value="system">系统等宽 (SF Mono / Consolas)</option>
-            <option value="custom">自定义字体...</option>
-          </select>
-        </div>
-      </div>
-      <div class="settings-row" id="row-custom-mono" style="display: none;">
-        <div class="settings-meta">
-          <div class="settings-label">自定义等宽字体名</div>
-          <div class="settings-sublabel">输入本地已安装的等宽字体族名称。</div>
-        </div>
-        <div class="settings-control">
-          <input type="text" class="text-control" id="input-custom-mono" placeholder="例如: Fira Code, Menlo">
-        </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">对话正文字阶大小</div>
-          <div class="settings-sublabel">调整聊天对话正文与 Markdown 阅读字阶基准。</div>
-        </div>
-        <div class="settings-control">
-          <div class="segmented-control" id="font-size-segmented">
-            <button class="segment-btn" data-val="14">14px</button>
-            <button class="segment-btn" data-val="15">15px</button>
-            <button class="segment-btn active" data-val="16">16px</button>
-            <button class="segment-btn" data-val="17">17px</button>
-            <button class="segment-btn" data-val="18">18px</button>
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="waxSealLabel">古朴暗红蜡封输入框</div>
+            <div class="settings-sublabel" data-i18n="waxSealSub">首页保持呼吸感外框，聚焦态浮现古朴暗红蜡封高光。</div>
+          </div>
+          <div class="settings-control">
+            <label class="switch-toggle">
+              <input type="checkbox" id="toggle-wax-seal" checked>
+              <span class="switch-slider"></span>
+            </label>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Telemetry -->
-  <div class="settings-section">
-    <h2 class="section-title">实时性能遥测</h2>
-    <p class="section-desc">监控模型生成速度（tok/s）、首字耗时（TTFT）与上下文水位。</p>
-    <div class="settings-card">
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">会话实时指标胶囊</div>
-          <div class="settings-sublabel">在模型选择器左侧显示实时流式速率与悬浮双层详情。</div>
-        </div>
-        <div class="settings-control">
-          <label class="switch-toggle">
-            <input type="checkbox" id="toggle-metrics" checked>
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">遥测采样频率</div>
-          <div class="settings-sublabel">从本地 SQLite 会话数据库同步指标的检测周期。</div>
-        </div>
-        <div class="settings-control">
-          <div class="segmented-control" id="metrics-interval-segmented">
-            <button class="segment-btn" data-val="1500">1.5s</button>
-            <button class="segment-btn active" data-val="2000">2.0s</button>
-            <button class="segment-btn" data-val="3000">3.0s</button>
+    <!-- Language -->
+    <div class="settings-section">
+      <h2 class="section-title" data-i18n="secLanguageTitle">界面语言设置</h2>
+      <p class="section-desc" data-i18n="secLanguageDesc">切换 Antigravity 宿主与本控制台的显示语言。</p>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="languageLabel">界面语言 (Language)</div>
+            <div class="settings-sublabel" data-i18n="languageSub">支持官方纯英或川瓣高质量中文汉化。</div>
+          </div>
+          <div class="settings-control">
+            <div class="segmented-control" id="language-segmented">
+              <button class="segment-btn active" data-val="default" data-i18n="optLangDefault">官方英文 (Default)</button>
+              <button class="segment-btn" data-val="zh-CN" data-i18n="optLangChinese">简体中文 (Chinese)</button>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Engine Status -->
-  <div class="settings-section">
-    <h2 class="section-title">CDP 引擎状态</h2>
-    <div class="settings-card">
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">宿主连接状态</div>
-          <div class="settings-sublabel" id="status-sublabel">已连接至 Antigravity 宿主</div>
+    <!-- Typography -->
+    <div class="settings-section">
+      <h2 class="section-title" data-i18n="secTypoTitle">字体排版系统</h2>
+      <p class="section-desc" data-i18n="secTypoDesc">自动读取系统字体，支持西文首选、中文字体回退拆分与字阶微调。</p>
+      <div class="settings-card">
+        <!-- Sans Primary -->
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="sansPrimaryLabel">界面无衬线字体 (Sans 首选 / 西文)</div>
+            <div class="settings-sublabel" data-i18n="sansPrimarySub">用于界面西文、拉丁字符、数字与主 UI 控件。</div>
+          </div>
+          <div class="settings-control">
+            <select class="select-control" id="select-font-sans-primary">
+              <option value="default" data-i18n="optSansPrimaryDefault">[默认] Anthropic Sans</option>
+              <option value="custom" data-i18n="optCustomInput">自定义字体名...</option>
+            </select>
+          </div>
         </div>
-        <div class="settings-control">
-          <div class="status-pill">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="status-text">正常运行</span>
+        <div class="settings-row" id="row-custom-sans-primary" style="display: none;">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="customSansPrimaryLabel">自定义首选字体族</div>
+            <div class="settings-sublabel" data-i18n="customSansPrimarySub">输入已安装的无衬线西文字体名。</div>
+          </div>
+          <div class="settings-control">
+            <input type="text" class="text-control" id="input-custom-sans-primary" placeholder="例如: Inter, Helvetica">
+          </div>
+        </div>
+
+        <!-- Sans Fallback -->
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="sansFallbackLabel">无衬线备用字体 (Fallback / 中文字体)</div>
+            <div class="settings-sublabel" data-i18n="sansFallbackSub">首选字体缺少字符时优先回退（如更纱黑体、苹方、霞鹜文楷）。</div>
+          </div>
+          <div class="settings-control">
+            <select class="select-control" id="select-font-sans-fallback">
+              <option value="default" data-i18n="optSansFallbackDefault">[默认] 更纱黑体 UI SC (Sarasa UI SC)</option>
+              <option value="custom" data-i18n="optCustomInput">自定义字体名...</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row" id="row-custom-sans-fallback" style="display: none;">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="customSansFallbackLabel">自定义备用中文字体族</div>
+            <div class="settings-sublabel" data-i18n="customSansFallbackSub">输入已安装的无衬线中文字体名。</div>
+          </div>
+          <div class="settings-control">
+            <input type="text" class="text-control" id="input-custom-sans-fallback" placeholder="例如: 霞鹜文楷, PingFang SC">
+          </div>
+        </div>
+
+        <!-- Mono Font -->
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="monoLabel">代码与等宽字体 (Mono)</div>
+            <div class="settings-sublabel" data-i18n="monoSub">用于代码块、终端输出、行号与等宽数据展示。</div>
+          </div>
+          <div class="settings-control">
+            <select class="select-control" id="select-font-mono">
+              <option value="default" data-i18n="optMonoDefault">[默认] Anthropic Mono (更纱等宽 Slab)</option>
+              <option value="custom" data-i18n="optCustomInput">自定义字体名...</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row" id="row-custom-mono" style="display: none;">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="customMonoLabel">自定义等宽字体族</div>
+            <div class="settings-sublabel" data-i18n="customMonoSub">输入已安装的等宽代码字体名。</div>
+          </div>
+          <div class="settings-control">
+            <input type="text" class="text-control" id="input-custom-mono" placeholder="例如: JetBrains Mono, Fira Code">
+          </div>
+        </div>
+
+        <!-- Font Size -->
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="fontSizeLabel">对话正文字阶大小</div>
+            <div class="settings-sublabel" data-i18n="fontSizeSub">调整聊天正文与 Markdown 阅读字阶基准。</div>
+          </div>
+          <div class="settings-control">
+            <div class="segmented-control" id="font-size-segmented">
+              <button class="segment-btn" data-val="14">14px</button>
+              <button class="segment-btn" data-val="15">15px</button>
+              <button class="segment-btn active" data-val="16">16px</button>
+              <button class="segment-btn" data-val="17">17px</button>
+              <button class="segment-btn" data-val="18">18px</button>
+            </div>
           </div>
         </div>
       </div>
-      <div class="settings-row">
-        <div class="settings-meta">
-          <div class="settings-label">样式热重载</div>
-          <div class="settings-sublabel">重新编译当前配置并向所有窗口即时推送最新样式。</div>
+    </div>
+
+    <!-- Composer & Layout -->
+    <div class="settings-section">
+      <h2 class="section-title" data-i18n="secComposerTitle">组件对齐与排版</h2>
+      <p class="section-desc" data-i18n="secComposerDesc">重排输入框外围元数据与新建会话工具栏。</p>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="composerAlignLabel">底部组件排版模式</div>
+            <div class="settings-sublabel" data-i18n="composerAlignSub">将工具栏下移居左，遥测/模型/模式右对齐共线。</div>
+          </div>
+          <div class="settings-control">
+            <div class="segmented-control" id="composer-align-segmented">
+              <button class="segment-btn active" data-val="collinear" data-i18n="optCollinear">绝对水平共线</button>
+              <button class="segment-btn" data-val="native" data-i18n="optNative">官方原生</button>
+            </div>
+          </div>
         </div>
-        <div class="settings-control">
-          <button class="btn-action" id="btn-force-reload">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="23 4 23 10 17 10"></polyline>
-              <polyline points="1 20 1 14 7 14"></polyline>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-            </svg>
-            立即重新应用
-          </button>
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="hideArrowsLabel">移除工具栏尾部下拉箭头</div>
+            <div class="settings-sublabel" data-i18n="hideArrowsSub">消除项目与检出下拉的小三角，统一微浮雕背景。</div>
+          </div>
+          <div class="settings-control">
+            <label class="switch-toggle">
+              <input type="checkbox" id="toggle-hide-arrows" checked>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div id="toast" class="toast">配置已实时生效</div>
+    <!-- Telemetry -->
+    <div class="settings-section">
+      <h2 class="section-title" data-i18n="secTelemetryTitle">实时性能遥测</h2>
+      <p class="section-desc" data-i18n="secTelemetryDesc">监控模型生成速度（tok/s）、首字耗时（TTFT）与上下文水位。</p>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="metricsPillLabel">会话实时指标胶囊</div>
+            <div class="settings-sublabel" data-i18n="metricsPillSub">在模型选择器左侧显示实时流式速率与悬浮双层详情。</div>
+          </div>
+          <div class="settings-control">
+            <label class="switch-toggle">
+              <input type="checkbox" id="toggle-metrics" checked>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="metricsIntervalLabel">遥测采样频率</div>
+            <div class="settings-sublabel" data-i18n="metricsIntervalSub">从本地 SQLite 会话数据库同步指标的检测周期。</div>
+          </div>
+          <div class="settings-control">
+            <div class="segmented-control" id="metrics-interval-segmented">
+              <button class="segment-btn" data-val="1500">1.5s</button>
+              <button class="segment-btn active" data-val="2000">2.0s</button>
+              <button class="segment-btn" data-val="3000">3.0s</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Engine Status -->
+    <div class="settings-section">
+      <h2 class="section-title" data-i18n="secStatusTitle">CDP 引擎状态</h2>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="statusLabel">宿主连接状态</div>
+            <div class="settings-sublabel" id="status-sublabel">已连接至 Antigravity 宿主</div>
+          </div>
+          <div class="settings-control">
+            <div class="status-pill">
+              <span class="status-dot" id="status-dot"></span>
+              <span id="status-text" data-i18n="statusConnected">正常运行</span>
+            </div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-meta">
+            <div class="settings-label" data-i18n="reloadLabel">样式热重载</div>
+            <div class="settings-sublabel" data-i18n="reloadSub">重新编译当前配置并向所有窗口即时推送最新样式。</div>
+          </div>
+          <div class="settings-control">
+            <button class="btn-action" id="btn-force-reload">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span data-i18n="btnReload">立即重新应用</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast">配置已实时生效</div>
+  </div>
 
   <script src="/app.js"></script>
 </body>
