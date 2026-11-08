@@ -643,12 +643,44 @@ html, body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chart-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .chart-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--aura-fg);
+}
+
+.chart-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Mini Segmented Switch for Session Mode */
+.mini-segmented {
+  padding: 2px !important;
+  background: var(--aura-control-bg);
+  border: 1px solid var(--aura-border);
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mini-segmented .segment-btn {
+  padding: 2px 9px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  font-weight: 500;
 }
 
 .chart-legend {
@@ -672,6 +704,71 @@ html, body {
   display: inline-block;
 }
 
+/* Two-column layout: Sticky Left Y-Axis + Viewport */
+.chart-layout-root {
+  display: flex;
+  position: relative;
+  width: 100%;
+}
+
+.chart-y-axis-sticky {
+  width: 48px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.y-axis-svg {
+  width: 48px;
+  height: 220px;
+  display: block;
+}
+
+.chart-viewport-wrapper {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: visible;
+}
+
+/* Option 2: Left & Right Overflow Fade Masks */
+.chart-fade-mask {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  z-index: 25;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--aura-fg-muted);
+  font-size: 15px;
+  font-family: var(--aura-font-sans);
+}
+
+.chart-fade-mask.mask-left {
+  left: 0;
+  background: linear-gradient(to right, var(--aura-bg) 15%, color-mix(in srgb, var(--aura-bg) 60%, transparent) 60%, transparent 100%);
+  justify-content: flex-start;
+  padding-left: 2px;
+}
+
+.chart-fade-mask.mask-right {
+  right: 0;
+  background: linear-gradient(to left, var(--aura-bg) 15%, color-mix(in srgb, var(--aura-bg) 60%, transparent) 60%, transparent 100%);
+  justify-content: flex-end;
+  padding-right: 2px;
+}
+
+.mask-indicator {
+  opacity: 0.65;
+  font-weight: 600;
+  user-select: none;
+}
+
 .chart-stage {
   position: relative;
   width: 100%;
@@ -686,7 +783,7 @@ html, body {
 }
 
 .chart-stage-scrollable::-webkit-scrollbar {
-  height: 5px;
+  height: 4px;
 }
 
 .chart-stage-scrollable::-webkit-scrollbar-track {
@@ -707,6 +804,19 @@ html, body {
   height: auto;
   min-height: 200px;
   display: block;
+}
+
+/* Scrubber Crosshair Line in Overview Mode */
+.chart-scrubber-line {
+  position: absolute;
+  top: 24px;
+  bottom: 30px;
+  width: 1.5px;
+  background: #00A67E;
+  pointer-events: none;
+  z-index: 30;
+  box-shadow: 0 0 8px rgba(0, 166, 126, 0.7);
+  transition: transform 0.04s ease-out;
 }
 
 .chart-column-group {

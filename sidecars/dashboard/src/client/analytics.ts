@@ -418,6 +418,8 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
   `;
 }
 
+let sessionViewMode: 'overview' | 'timeline' = 'overview';
+
 export function renderActivityChart(columns: ChartColumnData[], rangeTitle: string): void {
   const chartWrapper = document.getElementById('analytics-activity-chart');
   if (!chartWrapper) return;
@@ -432,10 +434,40 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
     return;
   }
 
-  // Find max value across all columns
-  const rawMax = Math.max(...columns.map(d => (d.inputTok + d.outTok + d.cacheRead)), 1000);
-  
-  // Nice tick calculation (e.g. 5M, 10M, 15M, 20M)
+  const isSession = currentRange === 'session' && !!activeSessionData && activeSessionData.steps.length > 0;
+
+  if (isSession && sessionViewMode === 'overview') {
+    renderSessionOverviewArea(chartWrapper, activeSessionData!, rangeTitle, columns);
+  } else {
+    renderStandardTimelineChart(chartWrapper, columns, rangeTitle, isSession);
+  }
+}
+
+function attachViewModeSwitchListeners(chartWrapper: HTMLElement, columns: ChartColumnData[], rangeTitle: string): void {
+  const buttons = chartWrapper.querySelectorAll('#session-view-segmented .segment-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const mode = btn.getAttribute('data-mode') as 'overview' | 'timeline';
+      if (mode && mode !== sessionViewMode) {
+        sessionViewMode = mode;
+        renderActivityChart(columns, rangeTitle);
+      }
+    });
+  });
+}
+
+function renderSessionOverviewArea(
+  chartWrapper: HTMLElement,
+  session: SessionAnalyticsData,
+  rangeTitle: string,
+  columns: ChartColumnData[]
+): void {
+  const steps = session.steps;
+  const totalTurns = steps.length;
+  if (totalTurns === 0) return;
+
+  const rawMax = Math.max(...steps.map(s => s.ctx || (s.inTok + s.cacheRead)), 1000);
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
   const normalized = rawMax / magnitude;
   let tickStep = magnitude;
@@ -446,32 +478,234 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
   const yMax = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || (tickStep * 4);
   const yTicks = [0, yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax];
 
-  // Dynamic SVG width calculation: allow horizontal scrolling for extensive session steps
-  const isScrollable = columns.length > 40;
-  const colStepWidth = isScrollable ? 10 : Math.max(6, Math.floor(570 / columns.length));
-  const svgWidth = isScrollable ? Math.max(640, columns.length * colStepWidth + 70) : 640;
   const svgHeight = 220;
-  const paddingLeft = 52;
-  const paddingRight = 18;
   const paddingTop = 24;
   const paddingBottom = 30;
-
-  const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
-  const step = chartWidth / columns.length;
-  const barWidth = Math.max(3, Math.min(22, Math.floor(step * 0.72)));
 
-  // Y-axis grid lines and labels
+  // Fixed Left Y-Axis
+  let yAxisSvg = '';
+  yTicks.forEach(tickVal => {
+    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
+    yAxisSvg += `
+      <text x="40" y="${y + 3.5}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>
+      <line x1="43" y1="${y}" x2="48" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.7' : '0.3'}" />
+    `;
+  });
+
+  // Viewport Area Chart
+  const svgWidth = 590;
+  const chartWidth = svgWidth - 10;
+
   let gridSvg = '';
   yTicks.forEach(tickVal => {
     const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
     gridSvg += `
-      <line x1="${paddingLeft}" y1="${y}" x2="${svgWidth - paddingRight}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.25'}" />
-      <text x="${paddingLeft - 8}" y="${y + 3.5}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>
+      <line x1="0" y1="${y}" x2="${chartWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />
     `;
   });
 
-  // Bars and X-axis labels
+  let areaD = `M 0,${paddingTop + chartHeight}`;
+  let lineD = '';
+  let xLabelsSvg = '';
+
+  const labelInterval = Math.max(1, Math.floor(totalTurns / 6));
+
+  steps.forEach((st, idx) => {
+    const ctx = st.ctx || (st.inTok + st.cacheRead);
+    const x = totalTurns > 1 ? (idx / (totalTurns - 1)) * chartWidth : 0;
+    const y = paddingTop + chartHeight - (ctx / yMax) * chartHeight;
+
+    if (idx === 0) {
+      areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+      lineD = `M ${x.toFixed(1)},${y.toFixed(1)}`;
+    } else {
+      areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+      lineD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+    }
+
+    if (idx % labelInterval === 0 || idx === totalTurns - 1) {
+      xLabelsSvg += `
+        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${idx === 0 ? 'start' : idx === totalTurns - 1 ? 'end' : 'middle'}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
+      `;
+    }
+  });
+
+  areaD += ` L ${chartWidth},${paddingTop + chartHeight} Z`;
+
+  chartWrapper.innerHTML = `
+    <div class="chart-header">
+      <div class="chart-header-left">
+        <div class="chart-title">Token Activity (${rangeTitle})</div>
+      </div>
+      <div class="chart-header-right">
+        <div class="segmented-control mini-segmented" id="session-view-segmented">
+          <button class="segment-btn active" data-mode="overview">Overview</button>
+          <button class="segment-btn" data-mode="timeline">Timeline</button>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-dot" style="background: #00A67E"></span>Context Window Watermark</span>
+        </div>
+      </div>
+    </div>
+    <div class="chart-layout-root">
+      <div class="chart-y-axis-sticky">
+        <svg viewBox="0 0 48 ${svgHeight}" class="y-axis-svg">
+          ${yAxisSvg}
+        </svg>
+      </div>
+      <div class="chart-viewport-wrapper">
+        <div class="chart-stage" id="chart-stage-container">
+          <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="analytics-svg" id="analytics-svg-element">
+            <defs>
+              <linearGradient id="aura-ctx-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#00A67E" stop-opacity="0.45" />
+                <stop offset="65%" stop-color="#00A67E" stop-opacity="0.12" />
+                <stop offset="100%" stop-color="#00A67E" stop-opacity="0.02" />
+              </linearGradient>
+            </defs>
+            ${gridSvg}
+            <path d="${areaD}" fill="url(#aura-ctx-grad)" />
+            <path d="${lineD}" fill="none" stroke="#00A67E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            ${xLabelsSvg}
+          </svg>
+          <div class="chart-scrubber-line" id="chart-scrubber-line" style="display: none;"></div>
+          <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  attachViewModeSwitchListeners(chartWrapper, columns, rangeTitle);
+  attachOverviewScrubberListeners(chartWrapper, steps);
+}
+
+function attachOverviewScrubberListeners(
+  chartWrapper: HTMLElement,
+  steps: SessionAnalyticsData['steps']
+): void {
+  const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
+  const scrubber = chartWrapper.querySelector('#chart-scrubber-line') as HTMLElement | null;
+  const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
+
+  if (!stage || !scrubber || !tooltip) return;
+
+  stage.addEventListener('mousemove', (e) => {
+    const rect = stage.getBoundingClientRect();
+    const relX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const pct = rect.width > 0 ? relX / rect.width : 0;
+    const stepIdx = Math.min(steps.length - 1, Math.max(0, Math.round(pct * (steps.length - 1))));
+    const st = steps[stepIdx];
+    if (!st) return;
+
+    const ctx = st.ctx || (st.inTok + st.cacheRead);
+    const speed = Math.round(st.stream > 0 ? st.outTok / st.stream : 0);
+
+    scrubber.style.display = 'block';
+    scrubber.style.transform = `translateX(${relX}px)`;
+
+    tooltip.innerHTML = `
+      <div class="tooltip-header">Session Turn #${st.idx + 1}</div>
+      <div class="tooltip-row ctx-row">
+        <span class="tooltip-dot" style="background: #3B82F6"></span>
+        <span class="tooltip-label">Context Window</span>
+        <span class="tooltip-val">${formatCompactNumber(ctx)} (${formatFullNumber(ctx)})</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-dot" style="background: #00A67E"></span>
+        <span class="tooltip-label">Cache Read</span>
+        <span class="tooltip-val">${formatFullNumber(st.cacheRead)}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-dot" style="background: #6366F1"></span>
+        <span class="tooltip-label">Input Tokens</span>
+        <span class="tooltip-val">${formatFullNumber(st.inTok)}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-dot" style="background: var(--aura-primary)"></span>
+        <span class="tooltip-label">Output Tokens</span>
+        <span class="tooltip-val">${formatFullNumber(st.outTok)}</span>
+      </div>
+      <div class="tooltip-divider"></div>
+      <div class="tooltip-subline">Speed: ${speed} tok/s · TTFT: ${st.ttft.toFixed(2)}s</div>
+    `;
+    tooltip.style.display = 'block';
+
+    const tipWidth = tooltip.offsetWidth || 180;
+    const tipHeight = tooltip.offsetHeight || 135;
+
+    let left = 0;
+    if (relX > rect.width / 2) {
+      left = relX - tipWidth - 16;
+    } else {
+      left = relX + 16;
+    }
+    left = Math.max(8, Math.min(left, rect.width - tipWidth - 8));
+
+    let top = 10;
+    const maxSafeTop = rect.height - tipHeight - 12;
+    if (maxSafeTop > 10) top = Math.min(top, maxSafeTop);
+
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.top = `${Math.round(top)}px`;
+  });
+
+  stage.addEventListener('mouseleave', () => {
+    scrubber.style.display = 'none';
+    tooltip.style.display = 'none';
+  });
+}
+
+function renderStandardTimelineChart(
+  chartWrapper: HTMLElement,
+  columns: ChartColumnData[],
+  rangeTitle: string,
+  isSession: boolean
+): void {
+  const rawMax = Math.max(...columns.map(d => (d.inputTok + d.outTok + d.cacheRead)), 1000);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+  const normalized = rawMax / magnitude;
+  let tickStep = magnitude;
+  if (normalized <= 2) tickStep = 0.5 * magnitude;
+  else if (normalized <= 5) tickStep = 1 * magnitude;
+  else tickStep = 2 * magnitude;
+
+  const yMax = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || (tickStep * 4);
+  const yTicks = [0, yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax];
+
+  const isScrollable = columns.length > 40;
+  const colStepWidth = isScrollable ? 10 : Math.max(6, Math.floor(540 / columns.length));
+  const svgWidth = isScrollable ? Math.max(580, columns.length * colStepWidth + 40) : 580;
+  const svgHeight = 220;
+  const paddingLeft = 10;
+  const paddingRight = 14;
+  const paddingTop = 24;
+  const paddingBottom = 30;
+
+  const chartHeight = svgHeight - paddingTop - paddingBottom;
+  const chartWidth = svgWidth - paddingLeft - paddingRight;
+  const step = chartWidth / columns.length;
+  const barWidth = Math.max(3, Math.min(22, Math.floor(step * 0.72)));
+
+  // Fixed Left Y-Axis
+  let yAxisSvg = '';
+  yTicks.forEach(tickVal => {
+    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
+    yAxisSvg += `
+      <text x="40" y="${y + 3.5}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>
+      <line x1="43" y1="${y}" x2="48" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.7' : '0.3'}" />
+    `;
+  });
+
+  // Background Grid Lines
+  let gridSvg = '';
+  yTicks.forEach(tickVal => {
+    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
+    gridSvg += `
+      <line x1="0" y1="${y}" x2="${svgWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />
+    `;
+  });
+
   let defsSvg = '<defs>';
   let barsSvg = '';
   let xLabelsSvg = '';
@@ -497,7 +731,6 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
       const yOut = yIn - outHeight;
       const yTop = yOut;
 
-      // Rounded top cap path (flat bottom, smooth rounded top corners)
       const r = Math.min(3.5, barWidth / 2, totalBarHeight);
       defsSvg += `
         <clipPath id="col-clip-${idx}">
@@ -521,10 +754,8 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
            data-top-y="${yOut}"
            data-idx="${idx}">
           
-          <!-- Hover Container Highlight Band (Full Height Background) -->
           <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
           
-          <!-- Stacked Column Segments with Top Rounded Cap -->
           <g clip-path="url(#col-clip-${idx})">
             ${cacheHeight > 0 ? `<rect class="bar-segment bar-cache" x="${x}" y="${yCache}" width="${barWidth}" height="${cacheHeight}" fill="#00A67E" />` : ''}
             ${inHeight > 0 ? `<rect class="bar-segment bar-in" x="${x}" y="${yIn}" width="${barWidth}" height="${inHeight}" fill="#6366F1" opacity="0.85" />` : ''}
@@ -533,7 +764,6 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
         </g>
       `;
     } else {
-      // Empty column: clean baseline without artificial dummy bars
       barsSvg += `
         <g class="chart-column-group" 
            data-header="${item.tooltipHeader}" 
@@ -550,13 +780,11 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
            data-top-y="${paddingTop + chartHeight}"
            data-idx="${idx}">
           
-          <!-- Hover Container Highlight Band (Full Height Background) -->
           <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
         </g>
       `;
     }
 
-    // Display X-axis label
     if (idx % labelInterval === 0 || idx === columns.length - 1) {
       xLabelsSvg += `
         <text x="${centerX}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${item.label}</text>
@@ -566,38 +794,93 @@ export function renderActivityChart(columns: ChartColumnData[], rangeTitle: stri
 
   defsSvg += '</defs>';
 
+  const switchHtml = isSession ? `
+    <div class="segmented-control mini-segmented" id="session-view-segmented">
+      <button class="segment-btn" data-mode="overview">Overview</button>
+      <button class="segment-btn active" data-mode="timeline">Timeline</button>
+    </div>
+  ` : '';
+
   chartWrapper.innerHTML = `
     <div class="chart-header">
-      <div class="chart-title">Token Activity (${rangeTitle})</div>
-      <div class="chart-legend">
-        <span class="legend-item"><span class="legend-dot" style="background: var(--aura-primary)"></span>Output Tokens</span>
-        <span class="legend-item"><span class="legend-dot" style="background: #6366F1"></span>Input Tokens</span>
-        <span class="legend-item"><span class="legend-dot" style="background: #00A67E"></span>Cache Read</span>
+      <div class="chart-header-left">
+        <div class="chart-title">Token Activity (${rangeTitle})</div>
+      </div>
+      <div class="chart-header-right">
+        ${switchHtml}
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-dot" style="background: var(--aura-primary)"></span>Output Tokens</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #6366F1"></span>Input Tokens</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #00A67E"></span>Cache Read</span>
+        </div>
       </div>
     </div>
-    <div class="chart-stage ${isScrollable ? 'chart-stage-scrollable' : ''}" id="chart-stage-container">
-      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
-        ${defsSvg}
-        ${gridSvg}
-        ${barsSvg}
-        ${xLabelsSvg}
-      </svg>
-      <!-- Smart Fixed Hover Tooltip -->
-      <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
+    <div class="chart-layout-root">
+      <div class="chart-y-axis-sticky">
+        <svg viewBox="0 0 48 ${svgHeight}" class="y-axis-svg">
+          ${yAxisSvg}
+        </svg>
+      </div>
+      <div class="chart-viewport-wrapper">
+        ${isScrollable ? `
+          <div class="chart-fade-mask mask-left" id="chart-mask-left" style="opacity: 0;">
+            <span class="mask-indicator">‹</span>
+          </div>
+          <div class="chart-fade-mask mask-right" id="chart-mask-right" style="opacity: 0;">
+            <span class="mask-indicator">›</span>
+          </div>
+        ` : ''}
+        <div class="chart-stage ${isScrollable ? 'chart-stage-scrollable' : ''}" id="chart-stage-container">
+          <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
+            ${defsSvg}
+            ${gridSvg}
+            ${barsSvg}
+            ${xLabelsSvg}
+          </svg>
+          <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
+        </div>
+      </div>
     </div>
   `;
+
+  if (isSession) {
+    attachViewModeSwitchListeners(chartWrapper, columns, rangeTitle);
+  }
 
   if (isScrollable) {
     setTimeout(() => {
       const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
-      if (stage) stage.scrollLeft = stage.scrollWidth;
+      const maskLeft = chartWrapper.querySelector('#chart-mask-left') as HTMLElement | null;
+      const maskRight = chartWrapper.querySelector('#chart-mask-right') as HTMLElement | null;
+      if (stage) {
+        stage.scrollLeft = stage.scrollWidth;
+        if (maskLeft && maskRight) {
+          attachScrollMaskListeners(stage, maskLeft, maskRight);
+        }
+      }
     }, 50);
   }
 
-  attachSmartTooltipListeners(chartWrapper, svgWidth, svgHeight);
+  attachSmartTooltipListeners(chartWrapper, svgWidth);
 }
 
-function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number, svgHeight: number): void {
+function attachScrollMaskListeners(stage: HTMLElement, maskLeft: HTMLElement, maskRight: HTMLElement): void {
+  function updateMasks() {
+    const maxScroll = stage.scrollWidth - stage.clientWidth;
+    if (maxScroll <= 0) {
+      maskLeft.style.opacity = '0';
+      maskRight.style.opacity = '0';
+      return;
+    }
+    maskLeft.style.opacity = stage.scrollLeft > 14 ? '1' : '0';
+    maskRight.style.opacity = (maxScroll - stage.scrollLeft) > 14 ? '1' : '0';
+  }
+
+  stage.addEventListener('scroll', updateMasks, { passive: true });
+  updateMasks();
+}
+
+function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number): void {
   const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
   const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
   const groups = chartWrapper.querySelectorAll('.chart-column-group');
@@ -616,9 +899,6 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
       const reqs = target.getAttribute('data-reqs') || '0';
       const subText = target.getAttribute('data-subtext') || '';
 
-      const svgCenterX = Number(target.getAttribute('data-center-x') || 0);
-      const svgTopY = Number(target.getAttribute('data-top-y') || 0);
-
       const ctxRowHtml = ctxTok ? `
         <div class="tooltip-row ctx-row">
           <span class="tooltip-dot" style="background: #3B82F6"></span>
@@ -627,7 +907,6 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
         </div>
       ` : '';
 
-      // Render Tooltip content
       tooltip.innerHTML = `
         <div class="tooltip-header">${header}</div>
         ${ctxRowHtml}
@@ -656,37 +935,28 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
 
       tooltip.style.display = 'block';
 
-      // Physical measurement of column slot and stage container
       const stageRect = stage.getBoundingClientRect();
       const bandEl = (target.querySelector('.bar-bg-band') || target) as SVGGraphicsElement;
       const bandRect = bandEl.getBoundingClientRect();
 
-      // Physical pixel boundaries of the column background band relative to stage scroll coordinates
       const bandLeft = bandRect.left - stageRect.left + stage.scrollLeft;
       const bandRight = bandRect.right - stageRect.left + stage.scrollLeft;
 
       const tipWidth = tooltip.offsetWidth || 180;
       const tipHeight = tooltip.offsetHeight || 135;
 
-      // Viewport window inside scrollable stage container
       const viewLeft = stage.scrollLeft;
       const viewRight = stage.scrollLeft + stageRect.width;
 
-      // Clear space strictly outside the column's full background band
       const spaceRight = viewRight - (bandRight + 12);
       const spaceLeft = (bandLeft - 12) - viewLeft;
 
       let left = 0;
-      // Absolute rule: Tooltip must NEVER overlap with the column width [bandLeft, bandRight]!
-      // This ensures the mouse pointer on the column background will NEVER obscure the tooltip.
       if (spaceRight >= tipWidth + 6 && (spaceRight >= spaceLeft || spaceLeft < tipWidth)) {
-        // Place strictly to the right of the column background
         left = bandRight + 12;
       } else if (spaceLeft >= tipWidth + 6) {
-        // Place strictly to the left of the column background
         left = bandLeft - tipWidth - 12;
       } else {
-        // Ultra-narrow viewport fallback: place on whichever side has more space, never in the band
         if (spaceRight >= spaceLeft) {
           left = Math.max(bandRight + 4, viewRight - tipWidth - 6);
         } else {
@@ -694,7 +964,6 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
         }
       }
 
-      // Vertical positioning: Keep stable and high in the clear top area, avoiding bottom edge
       let top = 10;
       const maxSafeTop = stageRect.height - tipHeight - 12;
       if (maxSafeTop > 10) {
@@ -780,12 +1049,7 @@ export function renderSessionsTable(conversations: ConversationSummary[]): void 
 
 function getRangeDisplayTitle(range: TimeRangeOption): string {
   switch (range) {
-    case 'session': {
-      const stepTotal = activeSessionData?.steps?.length || 0;
-      return stepTotal > 40
-        ? `Current Active Session (Latest 40 of ${stepTotal} turns)`
-        : 'Current Active Session (Turn-by-turn)';
-    }
+    case 'session': return 'Active Session';
     case 'today': return 'Today (Hourly)';
     case 'yesterday': return 'Yesterday (Hourly)';
     case 'this-week': return 'This Week (Daily)';
