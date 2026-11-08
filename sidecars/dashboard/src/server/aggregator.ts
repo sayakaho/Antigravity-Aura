@@ -39,6 +39,26 @@ interface CacheEntry {
   lastModified: number;
   dailyBreakdown?: Record<string, TokenBreakdown>;
   hourlyBreakdown?: Record<string, TokenBreakdown>;
+  models?: Record<string, {
+    modelId: string;
+    modelName: string;
+    inTok: number;
+    outTok: number;
+    cacheRead: number;
+    thinkTok: number;
+    streamSec: number;
+    ttftSec: number;
+    count: number;
+  }>;
+  dailyModelStats?: Record<string, Record<string, {
+    inTok: number;
+    outTok: number;
+    cacheRead: number;
+    thinkTok: number;
+    streamSec: number;
+    ttftSec: number;
+    requests: number;
+  }>>;
 }
 
 interface AnalyticsCache {
@@ -46,7 +66,31 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v4.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v5.json';
+
+function canonicalModelName(id: string, name?: string): string {
+  if (name && name.trim() && name.trim().toLowerCase() !== 'unknown') return name.trim();
+  if (!id || id === 'unknown') return 'Unknown Model';
+  const cleanId = id.trim().toLowerCase();
+  if (cleanId === 'gemini-3.8-flash') return 'Gemini 3.8 Flash';
+  if (cleanId === 'gemini-3.8-flash-n') return 'Gemini 3.8 Flash (High)';
+  if (cleanId === 'gemini-3.8-flash-exp-a') return 'Gemini 3.8 Flash (Exp)';
+  if (cleanId === 'gemini-3.8-flash-tiered') return 'Gemini 3.8 Flash (Tiered)';
+  if (cleanId === 'gemini-3.7-flash') return 'Gemini 3.7 Flash';
+  if (cleanId === 'gemini-3.7-flash-n') return 'Gemini 3.7 Flash (High)';
+  if (cleanId === 'gemini-3.1-pro-low' || cleanId === 'gemini-3.1-pro') return 'Gemini 3.1 Pro';
+  if (cleanId.includes('claude-opus-4-6-thinking')) return 'Claude Opus 4.6 Thinking';
+  if (cleanId.includes('claude-opus')) return 'Claude Opus';
+  if (cleanId.includes('claude-sonnet')) return 'Claude Sonnet';
+  if (cleanId === 'gemini-4-argon-m' || cleanId.includes('gemini-4-argon')) return 'Gemini 4 Argon (Medium)';
+  if (cleanId.startsWith('gemini-')) {
+    return cleanId
+      .split('-')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+  return id;
+}
 
 function parseProto(buf: Buffer | Uint8Array): Map<number, any> {
   const map = new Map<number, any>();
@@ -221,6 +265,26 @@ export class GlobalAnalyticsEngine {
     const projectStats: Record<string, { convCount: number; tokenCount: number }> = {};
     const dateSeries: Record<string, { input: number; output: number; cache: number; requests: number }> = {};
     const hourSeries: Record<string, { hourKey: string; inputTok: number; outTok: number; cacheRead: number; requests: number }> = {};
+    const globalModelMap: Record<string, {
+      modelId: string;
+      modelName: string;
+      inTok: number;
+      outTok: number;
+      cacheRead: number;
+      thinkTok: number;
+      streamSec: number;
+      ttftSec: number;
+      count: number;
+    }> = {};
+    const globalDailyModelStats: Record<string, Record<string, {
+      inTok: number;
+      outTok: number;
+      cacheRead: number;
+      thinkTok: number;
+      streamSec: number;
+      ttftSec: number;
+      requests: number;
+    }>> = {};
 
     for (const s of summaries) {
       const convId = s.conversationId;
@@ -261,6 +325,26 @@ export class GlobalAnalyticsEngine {
           let count = 0;
           const dailyBreakdown: Record<string, TokenBreakdown> = {};
           const hourlyBreakdown: Record<string, TokenBreakdown> = {};
+          const models: Record<string, {
+            modelId: string;
+            modelName: string;
+            inTok: number;
+            outTok: number;
+            cacheRead: number;
+            thinkTok: number;
+            streamSec: number;
+            ttftSec: number;
+            count: number;
+          }> = {};
+          const dailyModelStats: Record<string, Record<string, {
+            inTok: number;
+            outTok: number;
+            cacheRead: number;
+            thinkTok: number;
+            streamSec: number;
+            ttftSec: number;
+            requests: number;
+          }>> = {};
 
           const fallbackDate = s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(st.mtimeMs);
 
@@ -271,17 +355,23 @@ export class GlobalAnalyticsEngine {
             const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
             const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
 
+            const rawModelId = chat.has(19) ? chat.get(19).toString('utf8').trim() : 'unknown';
+            const rawModelName = chat.has(21) ? chat.get(21).toString('utf8').trim() : '';
+            const modelName = canonicalModelName(rawModelId, rawModelName);
+
             const inTok = usage.get(2) || 0;
             const outTok = usage.get(3) || 0;
             const cacheRead = usage.get(5) || 0;
             const thinkTok = usage.get(9) || 0;
+            const ttftSec = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
+            const streamSec = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
 
             sIn += inTok;
             sOut += outTok;
             sCache += cacheRead;
             sThink += thinkTok;
-            sTtft += (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
-            sStream += (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
+            sTtft += ttftSec;
+            sStream += streamSec;
             count++;
 
             // Precise timestamp from stepIdx mapped via top field 2
@@ -305,6 +395,50 @@ export class GlobalAnalyticsEngine {
             hourlyBreakdown[hourKey].outTok += outTok;
             hourlyBreakdown[hourKey].cacheRead += cacheRead;
             hourlyBreakdown[hourKey].requests += 1;
+
+            // Model tracking
+            if (!models[modelName]) {
+              models[modelName] = {
+                modelId: rawModelId,
+                modelName,
+                inTok: 0,
+                outTok: 0,
+                cacheRead: 0,
+                thinkTok: 0,
+                streamSec: 0,
+                ttftSec: 0,
+                count: 0
+              };
+            }
+            models[modelName].inTok += inTok;
+            models[modelName].outTok += outTok;
+            models[modelName].cacheRead += cacheRead;
+            models[modelName].thinkTok += thinkTok;
+            models[modelName].streamSec += streamSec;
+            models[modelName].ttftSec += ttftSec;
+            models[modelName].count += 1;
+
+            if (!dailyModelStats[dateKey]) {
+              dailyModelStats[dateKey] = {};
+            }
+            if (!dailyModelStats[dateKey][modelName]) {
+              dailyModelStats[dateKey][modelName] = {
+                inTok: 0,
+                outTok: 0,
+                cacheRead: 0,
+                thinkTok: 0,
+                streamSec: 0,
+                ttftSec: 0,
+                requests: 0
+              };
+            }
+            dailyModelStats[dateKey][modelName].inTok += inTok;
+            dailyModelStats[dateKey][modelName].outTok += outTok;
+            dailyModelStats[dateKey][modelName].cacheRead += cacheRead;
+            dailyModelStats[dateKey][modelName].thinkTok += thinkTok;
+            dailyModelStats[dateKey][modelName].streamSec += streamSec;
+            dailyModelStats[dateKey][modelName].ttftSec += ttftSec;
+            dailyModelStats[dateKey][modelName].requests += 1;
           }
 
           entry = {
@@ -318,7 +452,9 @@ export class GlobalAnalyticsEngine {
             reqCount: count || (rows ? rows.length : 1),
             lastModified: st.mtimeMs,
             dailyBreakdown,
-            hourlyBreakdown
+            hourlyBreakdown,
+            models,
+            dailyModelStats
           };
           this.cache.sessions[convId] = entry;
           cacheUpdated = true;
@@ -396,6 +532,58 @@ export class GlobalAnalyticsEngine {
           hourSeries[hourKey].requests += convReq;
         }
       }
+
+      // Aggregate model breakdown
+      if (entry.models) {
+        for (const [mName, m] of Object.entries(entry.models)) {
+          if (!globalModelMap[mName]) {
+            globalModelMap[mName] = {
+              modelId: m.modelId,
+              modelName: m.modelName,
+              inTok: 0,
+              outTok: 0,
+              cacheRead: 0,
+              thinkTok: 0,
+              streamSec: 0,
+              ttftSec: 0,
+              count: 0
+            };
+          }
+          globalModelMap[mName].inTok += m.inTok;
+          globalModelMap[mName].outTok += m.outTok;
+          globalModelMap[mName].cacheRead += m.cacheRead;
+          globalModelMap[mName].thinkTok += m.thinkTok;
+          globalModelMap[mName].streamSec += m.streamSec;
+          globalModelMap[mName].ttftSec += m.ttftSec;
+          globalModelMap[mName].count += m.count;
+        }
+      }
+
+      if (entry.dailyModelStats) {
+        for (const [dKey, dModels] of Object.entries(entry.dailyModelStats)) {
+          if (!globalDailyModelStats[dKey]) globalDailyModelStats[dKey] = {};
+          for (const [mName, dm] of Object.entries(dModels)) {
+            if (!globalDailyModelStats[dKey][mName]) {
+              globalDailyModelStats[dKey][mName] = {
+                inTok: 0,
+                outTok: 0,
+                cacheRead: 0,
+                thinkTok: 0,
+                streamSec: 0,
+                ttftSec: 0,
+                requests: 0
+              };
+            }
+            globalDailyModelStats[dKey][mName].inTok += dm.inTok;
+            globalDailyModelStats[dKey][mName].outTok += dm.outTok;
+            globalDailyModelStats[dKey][mName].cacheRead += dm.cacheRead;
+            globalDailyModelStats[dKey][mName].thinkTok += dm.thinkTok;
+            globalDailyModelStats[dKey][mName].streamSec += dm.streamSec;
+            globalDailyModelStats[dKey][mName].ttftSec += dm.ttftSec;
+            globalDailyModelStats[dKey][mName].requests += dm.requests;
+          }
+        }
+      }
     }
 
     if (cacheUpdated) {
@@ -419,6 +607,22 @@ export class GlobalAnalyticsEngine {
     const hourlySeries = Object.values(hourSeries)
       .sort((a, b) => a.hourKey.localeCompare(b.hourKey));
 
+    const modelDistribution = Object.values(globalModelMap)
+      .filter(m => ((m.inTok + m.outTok + m.cacheRead) > 0 || m.count > 0) && m.modelName !== 'Unknown Model')
+      .map(m => ({
+        modelId: m.modelId,
+        modelName: m.modelName,
+        totalTokens: m.inTok + m.outTok + m.cacheRead,
+        inputTok: m.inTok,
+        outTok: m.outTok,
+        cacheRead: m.cacheRead,
+        thinkTok: m.thinkTok,
+        requests: m.count,
+        avgTps: m.streamSec > 0 ? Math.round(m.outTok / m.streamSec) : 0,
+        avgTtft: m.count > 0 ? Math.round((m.ttftSec / m.count) * 100) / 100 : 0
+      }))
+      .sort((a, b) => b.totalTokens - a.totalTokens);
+
     return {
       totalConversations: summaries.length,
       totalRequests,
@@ -434,7 +638,9 @@ export class GlobalAnalyticsEngine {
       avgTokPerSec: avgRate,
       topProjects,
       timeRangeSeries,
-      hourlySeries
+      hourlySeries,
+      modelDistribution,
+      dailyModelStats: globalDailyModelStats
     };
   }
 
@@ -460,6 +666,17 @@ export class GlobalAnalyticsEngine {
       let ttftSum = 0;
       let streamSum = 0;
       let validCount = 0;
+      const sessionModelsMap: Record<string, {
+        modelId: string;
+        modelName: string;
+        inTok: number;
+        outTok: number;
+        cacheRead: number;
+        thinkTok: number;
+        requests: number;
+        streamSec: number;
+        ttftSec: number;
+      }> = {};
 
       const steps = rows.map((r: any) => {
         const top = parseProto(r.data);
@@ -475,6 +692,31 @@ export class GlobalAnalyticsEngine {
         const respTok = usage.get(10) || 0;
         const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
         const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
+
+        const rawModelId = chat.has(19) ? chat.get(19).toString('utf8') : 'unknown';
+        const rawModelName = chat.has(21) ? chat.get(21).toString('utf8') : undefined;
+        const modelName = canonicalModelName(rawModelId, rawModelName);
+
+        if (!sessionModelsMap[modelName]) {
+          sessionModelsMap[modelName] = {
+            modelId: rawModelId,
+            modelName,
+            inTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0,
+            streamSec: 0,
+            ttftSec: 0
+          };
+        }
+        sessionModelsMap[modelName].inTok += inTok;
+        sessionModelsMap[modelName].outTok += outTok;
+        sessionModelsMap[modelName].cacheRead += cacheRead;
+        sessionModelsMap[modelName].thinkTok += thinkTok;
+        sessionModelsMap[modelName].requests += 1;
+        sessionModelsMap[modelName].streamSec += stream;
+        sessionModelsMap[modelName].ttftSec += ttft;
 
         totalIn += inTok;
         totalOut += outTok;
@@ -502,6 +744,22 @@ export class GlobalAnalyticsEngine {
       const avgTtft = validCount > 0 ? Math.round((ttftSum / validCount) * 100) / 100 : 0;
       const avgRate = validCount > 0 ? Math.round(streamSum / validCount) : 0;
 
+      const models = Object.values(sessionModelsMap)
+        .filter(m => (m.inTok + m.outTok + m.cacheRead) > 0 && !m.modelName.toLowerCase().includes('unknown'))
+        .map(m => ({
+          modelId: m.modelId,
+          modelName: m.modelName,
+          totalTokens: m.inTok + m.outTok + m.cacheRead,
+          inputTok: m.inTok,
+          outTok: m.outTok,
+          cacheRead: m.cacheRead,
+          thinkTok: m.thinkTok,
+          requests: m.requests,
+          avgTps: m.streamSec > 0 ? Math.round(m.outTok / m.streamSec) : 0,
+          avgTtft: m.requests > 0 ? Math.round((m.ttftSec / m.requests) * 100) / 100 : 0
+        }))
+        .sort((a, b) => b.totalTokens - a.totalTokens);
+
       return {
         cascadeId: convId,
         totalTokens: {
@@ -515,7 +773,8 @@ export class GlobalAnalyticsEngine {
         cacheEfficiency: efficiency,
         avgTtft,
         avgTokPerSec: avgRate,
-        steps
+        steps,
+        models
       };
     } catch {
       if (db) db.close();

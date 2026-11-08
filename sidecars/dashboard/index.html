@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>Aura Dashboard</title>
-  <link rel="stylesheet" href="/styles.css?v=6.3.0">
+  <link rel="stylesheet" href="/styles.css?v=6.4.0">
   <script src="/preload.js"></script>
 </head>
 <body>
@@ -67,33 +67,28 @@
         </div>
       </div>
 
+      <!-- Model Token Breakdown -->
+      <div class="settings-section">
+        <h2 class="section-title">Model Token Consumption</h2>
+        <p class="section-desc">Token consumption, prompt caching, and request volume distributed by AI model.</p>
+        <div class="settings-card padding-card" id="analytics-models-list">
+          <div class="chart-loading">Loading model metrics...</div>
+        </div>
+      </div>
+
+      <!-- Model Speed Trends (Daily Avg TPS) -->
+      <div class="settings-section">
+        <div class="chart-card" id="analytics-model-tps-chart">
+          <div class="chart-loading">Rendering model speed trends...</div>
+        </div>
+      </div>
+
       <!-- Projects Breakdown -->
       <div class="settings-section">
         <h2 class="section-title">Workspace & Project Distribution</h2>
         <p class="section-desc">Token consumption and session volume across active repositories.</p>
         <div class="settings-card padding-card" id="analytics-projects-list">
           <div class="chart-loading">Loading workspaces...</div>
-        </div>
-      </div>
-
-      <!-- Recent Conversations -->
-      <div class="settings-section">
-        <h2 class="section-title">Recent Conversation Sessions</h2>
-        <p class="section-desc">Latest interactive sessions with execution step counts and workspace paths.</p>
-        <div class="settings-card">
-          <table class="sessions-table">
-            <thead>
-              <tr>
-                <th style="width: 48%;">Session Title</th>
-                <th style="width: 22%;">Workspace</th>
-                <th style="width: 15%;">Steps</th>
-                <th style="width: 15%;">Activity</th>
-              </tr>
-            </thead>
-            <tbody id="analytics-sessions-tbody">
-              <tr><td colspan="4" class="empty-cell">Scanning session databases...</td></tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -364,6 +359,6 @@
     <div id="toast" class="toast">Configuration applied in real-time</div>
   </div>
 
-  <script src="/app.js?v=6.1.0"></script>
+  <script src="/app.js?v=6.5.0"></script>
 </body>
 </html>

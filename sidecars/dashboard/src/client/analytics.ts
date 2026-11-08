@@ -7,7 +7,7 @@
  * - Smart Non-jittering Tooltip with Boundary-aware Anchor Positioning
  */
 
-import type { GlobalAnalyticsOverview, ConversationSummary, SessionAnalyticsData } from '../types';
+import type { GlobalAnalyticsOverview, ConversationSummary, SessionAnalyticsData, ModelTokenStat } from '../types';
 
 export function formatCompactNumber(n: number): string {
   if (!n || n <= 0) return '0';
@@ -522,18 +522,20 @@ function renderSessionOverviewArea(
   });
 
   // Viewport Area Chart
-  const svgWidth = 590;
-  const chartWidth = svgWidth - 10;
+  const svgWidth = 600;
+  const paddingLeft = 14;
+  const paddingRight = 28;
+  const chartWidth = svgWidth - paddingLeft - paddingRight;
 
   let gridSvg = '';
   yTicks.forEach(tickVal => {
     const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
     gridSvg += `
-      <line x1="0" y1="${y}" x2="${chartWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />
+      <line x1="${paddingLeft}" y1="${y}" x2="${paddingLeft + chartWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />
     `;
   });
 
-  let areaD = `M 0,${paddingTop + chartHeight}`;
+  let areaD = `M ${paddingLeft},${paddingTop + chartHeight}`;
   let lineD = '';
   let xLabelsSvg = '';
 
@@ -541,7 +543,7 @@ function renderSessionOverviewArea(
 
   steps.forEach((st, idx) => {
     const ctx = st.ctx || (st.inTok + st.cacheRead);
-    const x = totalTurns > 1 ? (idx / (totalTurns - 1)) * chartWidth : 0;
+    const x = paddingLeft + (totalTurns > 1 ? (idx / (totalTurns - 1)) * chartWidth : 0);
     const y = paddingTop + chartHeight - (ctx / yMax) * chartHeight;
 
     if (idx === 0) {
@@ -554,13 +556,14 @@ function renderSessionOverviewArea(
 
     const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.45;
     if (idx % labelInterval === 0 && !isTooCloseToRight) {
+      const textAnchor = idx === 0 ? 'start' : (idx === totalTurns - 1 || x > paddingLeft + chartWidth - 20 ? 'end' : 'middle');
       xLabelsSvg += `
-        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${idx === 0 ? 'start' : 'middle'}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
+        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${textAnchor}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
       `;
     }
   });
 
-  areaD += ` L ${chartWidth},${paddingTop + chartHeight} Z`;
+  areaD += ` L ${paddingLeft + chartWidth},${paddingTop + chartHeight} Z`;
 
   chartWrapper.innerHTML = `
     <div class="chart-header">
@@ -1030,17 +1033,11 @@ function attachSmartTooltipListeners(chartWrapper: HTMLElement, svgWidth: number
     });
   });
 
-  // Zero-flicker: fade out hover band and tooltip smoothly when cursor exits the entire stage
+  // Instantaneous zero-flicker hide: no delay, no transition artifact, no race condition
   stage.addEventListener('mouseleave', () => {
     activeIdx = null;
-    if (hoverBand) hoverBand.style.opacity = '0';
-    tooltip.style.opacity = '0';
-    setTimeout(() => {
-      if (!activeIdx) {
-        if (hoverBand) hoverBand.style.display = 'none';
-        tooltip.style.display = 'none';
-      }
-    }, 120);
+    if (hoverBand) hoverBand.style.display = 'none';
+    tooltip.style.display = 'none';
   });
 }
 
@@ -1074,41 +1071,414 @@ export function renderProjectDistribution(projects: GlobalAnalyticsOverview['top
   container.innerHTML = itemsHtml;
 }
 
-export function renderSessionsTable(conversations: ConversationSummary[]): void {
-  const container = document.getElementById('analytics-sessions-tbody');
+const MODEL_COLORS: Record<string, string> = {
+  'Gemini 3.8 Flash': '#00A67E',
+  'Gemini 3.8 Flash (High)': '#8B5CF6',
+  'Gemini 3.8 Flash (Exp)': '#3B82F6',
+  'Gemini 3.7 Flash': '#EC4899',
+  'Claude Opus 4.6 Thinking': '#D97706',
+  'Gemini 4 Argon (Medium)': '#06B6D4',
+  'Gemini 3.1 Pro': '#10B981',
+  'Gemini 3.8 Flash (Tiered)': '#6366F1',
+  'Gemini 3 Flash B': '#F59E0B',
+  'Gemini 3.7 Flash (High)': '#A855F7'
+};
+
+const FALLBACK_COLORS = ['#00A67E', '#8B5CF6', '#3B82F6', '#D97706', '#EC4899', '#06B6D4', '#10B981', '#6366F1', '#F43F5E'];
+
+function getModelColor(modelName: string, index = 0): string {
+  if (MODEL_COLORS[modelName]) return MODEL_COLORS[modelName];
+  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
+
+function getFilterDatesForRange(range: TimeRangeOption): string[] {
+  const today = getTodayString();
+  if (range === 'today') return [today];
+  if (range === 'yesterday') return [getYesterdayString()];
+  if (range === 'this-week') {
+    const monday = getStartOfWeekString();
+    const d = new Date(monday + 'T00:00:00');
+    d.setDate(d.getDate() + 6);
+    const sunday = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    return generateContinuousDateList(monday, sunday);
+  }
+  if (range === 'this-month') {
+    return generateContinuousDateList(getStartOfMonthString(), today);
+  }
+  if (range === 'last-7-days') {
+    return generateContinuousDateList(getPastDaysString(6), today);
+  }
+  if (range === 'last-30-days') {
+    return generateContinuousDateList(getPastDaysString(29), today);
+  }
+  if (range === 'custom' && customStartDate && customEndDate) {
+    return generateContinuousDateList(customStartDate, customEndDate);
+  }
+  return generateContinuousDateList(getPastDaysString(29), today);
+}
+
+export function renderModelDistribution(overview: GlobalAnalyticsOverview, range: TimeRangeOption): void {
+  const container = document.getElementById('analytics-models-list');
   if (!container) return;
 
-  if (!conversations || conversations.length === 0) {
-    container.innerHTML = `<tr><td colspan="4" class="empty-cell">No recent conversation sessions detected</td></tr>`;
+  let models: ModelTokenStat[] = [];
+  if (range === 'session') {
+    if (activeSessionData && (activeSessionData as any).models && (activeSessionData as any).models.length > 0) {
+      models = (activeSessionData as any).models;
+    } else {
+      models = overview.modelDistribution || [];
+    }
+  } else {
+    const dates = getFilterDatesForRange(range);
+    const statsMap: Record<string, { inTok: number; outTok: number; cacheRead: number; thinkTok: number; streamSec: number; requests: number }> = {};
+
+    for (const d of dates) {
+      const dayModels = overview.dailyModelStats?.[d];
+      if (dayModels) {
+        for (const [mName, st] of Object.entries(dayModels)) {
+          if (!mName || mName.toLowerCase().includes('unknown') || (st.inTok + st.outTok + st.cacheRead) === 0) continue;
+          if (!statsMap[mName]) {
+            statsMap[mName] = { inTok: 0, outTok: 0, cacheRead: 0, thinkTok: 0, streamSec: 0, requests: 0 };
+          }
+          statsMap[mName].inTok += st.inTok;
+          statsMap[mName].outTok += st.outTok;
+          statsMap[mName].cacheRead += st.cacheRead;
+          statsMap[mName].thinkTok += st.thinkTok;
+          statsMap[mName].streamSec += st.streamSec;
+          statsMap[mName].requests += st.requests;
+        }
+      }
+    }
+
+    if (Object.keys(statsMap).length > 0) {
+      models = Object.entries(statsMap).map(([mName, st]) => {
+        const total = st.inTok + st.outTok + st.cacheRead;
+        const avgTps = st.streamSec > 0 ? Math.round(st.outTok / st.streamSec) : 0;
+        return {
+          modelId: mName,
+          modelName: mName,
+          totalTokens: total,
+          inputTok: st.inTok,
+          outTok: st.outTok,
+          cacheRead: st.cacheRead,
+          thinkTok: st.thinkTok,
+          requests: st.requests,
+          avgTps,
+          avgTtft: 0
+        };
+      }).sort((a, b) => b.totalTokens - a.totalTokens);
+    } else {
+      models = [];
+    }
+  }
+
+  models = models.filter(m => m.totalTokens > 0 && !m.modelName.toLowerCase().includes('unknown'));
+
+  if (!models || models.length === 0) {
+    container.innerHTML = `<div class="chart-empty">No model usage recorded in this range</div>`;
     return;
   }
 
-  const rows = conversations.slice(0, 15).map(c => {
-    const title = c.title || 'Untitled Session';
-    let proj = 'Default';
-    if (c.workspaceUris) {
-      try {
-        const uris = JSON.parse(c.workspaceUris);
-        if (Array.isArray(uris) && uris.length > 0) {
-          const lastPart = uris[0].replace(/^file:\/\//, '').split('/').filter(Boolean).pop();
-          if (lastPart) proj = decodeURIComponent(lastPart);
-        }
-      } catch {}
-    } else if (c.projectId) {
-      proj = c.projectId.split('/').filter(Boolean).pop() || c.projectId;
-    }
-    const time = formatRelativeTime(c.lastModifiedTime);
+  const maxTokens = Math.max(...models.map(m => m.totalTokens), 1);
+
+  const itemsHtml = models.map((m, idx) => {
+    const pct = Math.max(3, Math.round((m.totalTokens / maxTokens) * 100));
+    const color = getModelColor(m.modelName, idx);
+    const speedBadge = m.avgTps > 0 ? `<span class="model-speed-badge">⚡ ${m.avgTps} tok/s</span>` : '';
+    const rawTotal = m.inputTok + m.cacheRead;
+    const cacheRate = rawTotal > 0 ? Math.round((m.cacheRead / rawTotal) * 100) : 0;
+
     return `
-      <tr class="session-row">
-        <td class="session-title-cell" title="${title}">${title}</td>
-        <td class="session-project-cell"><span class="project-pill" title="${c.workspaceUris || c.projectId}">${proj}</span></td>
-        <td class="session-steps-cell">${c.stepCount} steps</td>
-        <td class="session-time-cell">${time}</td>
-      </tr>
+      <div class="model-stat-row">
+        <div class="model-meta">
+          <div class="model-title-line">
+            <span class="model-dot" style="background: ${color}"></span>
+            <span class="model-name">${m.modelName}</span>
+            ${speedBadge}
+          </div>
+          <div class="model-token-count">
+            <span class="model-tokens-strong">${formatCompactNumber(m.totalTokens)}</span> tokens
+            <span class="model-req-count">(${formatFullNumber(m.requests)} reqs)</span>
+          </div>
+        </div>
+        <div class="model-bar-track">
+          <div class="model-bar-fill" style="width: ${pct}%; background: ${color}"></div>
+        </div>
+        <div class="model-chips">
+          <span class="model-chip"><span class="chip-dot" style="background: #00A67E"></span>Cache: ${cacheRate}% (${formatCompactNumber(m.cacheRead)})</span>
+          <span class="model-chip"><span class="chip-dot" style="background: var(--aura-primary)"></span>Out: ${formatCompactNumber(m.outTok)}</span>
+          <span class="model-chip"><span class="chip-dot" style="background: #6366F1"></span>In: ${formatCompactNumber(m.inputTok)}</span>
+          ${m.thinkTok > 0 ? `<span class="model-chip"><span class="chip-dot" style="background: #A855F7"></span>Think: ${formatCompactNumber(m.thinkTok)}</span>` : ''}
+        </div>
+      </div>
     `;
   }).join('');
 
-  container.innerHTML = rows;
+  container.innerHTML = itemsHtml;
+}
+
+export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: TimeRangeOption): void {
+  const chartWrapper = document.getElementById('analytics-model-tps-chart');
+  if (!chartWrapper) return;
+
+  let dateList = getFilterDatesForRange(range);
+  if (dateList.length < 5) {
+    const today = getTodayString();
+    dateList = generateContinuousDateList(getPastDaysString(13), today);
+  }
+
+  const activeModelsMap: Record<string, { totalOut: number; totalStream: number; daysCount: number }> = {};
+  for (const d of dateList) {
+    const dayStats = overview.dailyModelStats?.[d];
+    if (dayStats) {
+      for (const [mName, st] of Object.entries(dayStats)) {
+        if (st.streamSec > 0 && st.outTok > 0) {
+          if (!activeModelsMap[mName]) activeModelsMap[mName] = { totalOut: 0, totalStream: 0, daysCount: 0 };
+          activeModelsMap[mName].totalOut += st.outTok;
+          activeModelsMap[mName].totalStream += st.streamSec;
+          activeModelsMap[mName].daysCount += 1;
+        }
+      }
+    }
+  }
+
+  const activeModelNames = Object.keys(activeModelsMap).filter(m => !m.toLowerCase().includes('unknown'));
+
+  if (activeModelNames.length === 0) {
+    chartWrapper.innerHTML = `
+      <div class="chart-header">
+        <div class="chart-header-left">
+          <h3 class="chart-title">Model Speed Trends (Daily Avg TPS)</h3>
+        </div>
+      </div>
+      <div class="chart-empty">No streaming latency data recorded in this period</div>
+    `;
+    return;
+  }
+
+  const svgWidth = 600;
+  const svgHeight = 220;
+  const paddingLeft = 45;
+  const paddingRight = 20;
+  const paddingTop = 24;
+  const paddingBottom = 28;
+  const chartWidth = svgWidth - paddingLeft - paddingRight;
+  const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+  let rawMaxTps = 0;
+  const seriesByModel: Record<string, Array<{ x: number; y: number; tps: number; date: string; reqs: number } | null>> = {};
+
+  for (const mName of activeModelNames) {
+    seriesByModel[mName] = [];
+    dateList.forEach((dStr) => {
+      const st = overview.dailyModelStats?.[dStr]?.[mName];
+      if (st && st.streamSec > 0 && st.outTok > 0) {
+        const tps = Math.round(st.outTok / st.streamSec);
+        if (tps > rawMaxTps) rawMaxTps = tps;
+      }
+    });
+  }
+
+  const maxTps = Math.max(500, Math.ceil((rawMaxTps * 1.15) / 100) * 100);
+  const stepX = chartWidth / Math.max(1, dateList.length - 1);
+
+  for (const mName of activeModelNames) {
+    dateList.forEach((dStr, idx) => {
+      const st = overview.dailyModelStats?.[dStr]?.[mName];
+      const x = paddingLeft + idx * stepX;
+      if (st && st.streamSec > 0 && st.outTok > 0) {
+        const tps = Math.round(st.outTok / st.streamSec);
+        const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+        seriesByModel[mName].push({ x, y, tps, date: dStr, reqs: st.requests });
+      } else {
+        seriesByModel[mName].push(null);
+      }
+    });
+  }
+
+  const yTicks = [0, Math.round(maxTps * 0.33), Math.round(maxTps * 0.66), maxTps];
+  let yAxisLinesSvg = '';
+  let yAxisTextsSvg = '';
+
+  yTicks.forEach(tickVal => {
+    const y = paddingTop + chartHeight - (tickVal / maxTps) * chartHeight;
+    yAxisLinesSvg += `
+      <line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35" />
+    `;
+    yAxisTextsSvg += `
+      <text x="${paddingLeft - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${tickVal}</text>
+    `;
+  });
+
+  let xLabelsSvg = '';
+  const labelInterval = Math.max(1, Math.floor(dateList.length / 7));
+  dateList.forEach((dStr, idx) => {
+    const isEdge = idx === dateList.length - 1;
+    const isTooClose = isEdge && (idx % labelInterval < Math.floor(labelInterval / 2)) && idx !== 0;
+    if ((idx % labelInterval === 0 && !isTooClose) || isEdge) {
+      const x = paddingLeft + idx * stepX;
+      xLabelsSvg += `
+        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${formatDateLabel(dStr)}</text>
+      `;
+    }
+  });
+
+  let pathsSvg = '';
+  let dotsSvg = '';
+  let legendHtml = '';
+
+  activeModelNames.forEach((mName, mIdx) => {
+    const color = getModelColor(mName, mIdx);
+    const pts = seriesByModel[mName];
+    const avgOverall = Math.round(activeModelsMap[mName].totalOut / activeModelsMap[mName].totalStream);
+
+    legendHtml += `
+      <span class="legend-item" title="${mName}">
+        <span class="legend-dot" style="background: ${color}"></span>
+        <span class="legend-label">${mName}</span>
+        <span class="legend-sub">(${avgOverall} tok/s)</span>
+      </span>
+    `;
+
+    let currentPath = '';
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (p) {
+        if (!currentPath) {
+          currentPath = `M ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        } else {
+          currentPath += ` L ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        }
+        dotsSvg += `
+          <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--aura-bg-elevated, #1e1e1e)" stroke-width="1.5" class="tps-point" />
+        `;
+      } else {
+        if (currentPath) {
+          pathsSvg += `<path d="${currentPath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+          currentPath = '';
+        }
+      }
+    }
+    if (currentPath) {
+      pathsSvg += `<path d="${currentPath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+    }
+  });
+
+  let hoverBandsSvg = '';
+  dateList.forEach((dStr, idx) => {
+    const x = paddingLeft + idx * stepX;
+    const bandW = stepX;
+    const bandX = Math.max(paddingLeft, x - bandW / 2);
+
+    const dayData: Array<{ model: string; color: string; tps: number; reqs: number }> = [];
+    activeModelNames.forEach((mName, mIdx) => {
+      const st = overview.dailyModelStats?.[dStr]?.[mName];
+      if (st && st.streamSec > 0 && st.outTok > 0) {
+        dayData.push({
+          model: mName,
+          color: getModelColor(mName, mIdx),
+          tps: Math.round(st.outTok / st.streamSec),
+          reqs: st.requests
+        });
+      }
+    });
+
+    hoverBandsSvg += `
+      <rect class="tps-hover-slot" 
+            x="${bandX.toFixed(1)}" y="${paddingTop}" width="${bandW.toFixed(1)}" height="${chartHeight}" 
+            fill="transparent" 
+            data-date="${dStr}"
+            data-center-x="${x.toFixed(1)}"
+            data-models="${encodeURIComponent(JSON.stringify(dayData))}" />
+    `;
+  });
+
+  chartWrapper.innerHTML = `
+    <div class="chart-header">
+      <div class="chart-header-left">
+        <h3 class="chart-title">Model Speed Trends (Daily Avg TPS)</h3>
+      </div>
+      <div class="chart-legend tps-legend">
+        ${legendHtml}
+      </div>
+    </div>
+    <div class="chart-body" style="position: relative;">
+      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="tps-svg-element">
+        ${yAxisLinesSvg}
+        ${yAxisTextsSvg}
+        ${xLabelsSvg}
+        ${pathsSvg}
+        ${dotsSvg}
+        <line id="tps-scrubber-line" x1="0" y1="${paddingTop}" x2="0" y2="${paddingTop + chartHeight}" stroke="var(--aura-border-focus, #3B82F6)" stroke-width="1.5" stroke-dasharray="2 2" style="display: none; pointer-events: none;" />
+        ${hoverBandsSvg}
+      </svg>
+      <div class="chart-floating-tooltip" id="tps-floating-tooltip" style="display: none;"></div>
+    </div>
+  `;
+
+  attachTpsTooltipListeners(chartWrapper, svgWidth);
+}
+
+function attachTpsTooltipListeners(chartWrapper: HTMLElement, svgWidth: number): void {
+  const stage = chartWrapper.querySelector('.chart-body') as HTMLElement | null;
+  const scrubber = chartWrapper.querySelector('#tps-scrubber-line') as SVGLineElement | null;
+  const tooltip = chartWrapper.querySelector('#tps-floating-tooltip') as HTMLElement | null;
+  if (!stage || !tooltip || !scrubber) return;
+
+  const slots = chartWrapper.querySelectorAll('.tps-hover-slot');
+  slots.forEach(slot => {
+    slot.addEventListener('mouseenter', () => {
+      const centerX = parseFloat(slot.getAttribute('data-center-x') || '0');
+      const dateStr = slot.getAttribute('data-date') || '';
+      const rawData = slot.getAttribute('data-models') || '[]';
+      let modelsData: Array<{ model: string; color: string; tps: number; reqs: number }> = [];
+      try {
+        modelsData = JSON.parse(decodeURIComponent(rawData));
+      } catch {}
+
+      scrubber.setAttribute('x1', String(centerX));
+      scrubber.setAttribute('x2', String(centerX));
+      scrubber.style.display = 'block';
+
+      const rowsHtml = modelsData.length > 0 ? modelsData.map(m => `
+        <div class="tooltip-row">
+          <span class="tooltip-dot" style="background: ${m.color}"></span>
+          <span class="tooltip-label">${m.model}</span>
+          <span class="tooltip-val">${m.tps} tok/s (${m.reqs} reqs)</span>
+        </div>
+      `).join('') : '<div class="tooltip-subline">No activity on this date</div>';
+
+      tooltip.innerHTML = `
+        <div class="tooltip-header">${formatFullDate(dateStr)}</div>
+        ${rowsHtml}
+      `;
+
+      tooltip.style.display = 'block';
+      tooltip.style.opacity = '1';
+
+      const stageRect = stage.getBoundingClientRect();
+      const tipWidth = tooltip.offsetWidth || 180;
+      const pxRatio = stageRect.width / svgWidth;
+      const screenX = centerX * pxRatio;
+
+      let left = screenX + 12;
+      if (left + tipWidth > stageRect.width - 12) {
+        left = screenX - tipWidth - 12;
+      }
+      left = Math.max(6, Math.min(left, stageRect.width - tipWidth - 6));
+
+      tooltip.style.left = `${Math.round(left)}px`;
+      tooltip.style.top = `16px`;
+    });
+  });
+
+  stage.addEventListener('mouseleave', () => {
+    scrubber.style.display = 'none';
+    tooltip.style.opacity = '0';
+    setTimeout(() => {
+      if (tooltip.style.opacity === '0') tooltip.style.display = 'none';
+    }, 120);
+  });
 }
 
 function getRangeDisplayTitle(range: TimeRangeOption): string {
@@ -1153,6 +1523,8 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
     const processed = computeProcessedColumns(rawOverview, range);
     renderMetricCards(processed);
     renderActivityChart(processed.columns, getRangeDisplayTitle(range));
+    renderModelDistribution(rawOverview, range);
+    renderModelTpsChart(rawOverview, range);
   }
 }
 
@@ -1160,9 +1532,8 @@ export async function refreshAnalytics(): Promise<void> {
   const refreshBtn = document.getElementById('btn-refresh-analytics');
   if (refreshBtn) refreshBtn.classList.add('loading');
 
-  const [overview, conversations, session] = await Promise.all([
+  const [overview, session] = await Promise.all([
     fetchOverview(),
-    fetchConversations(),
     fetchActiveSession()
   ]);
 
@@ -1176,10 +1547,8 @@ export async function refreshAnalytics(): Promise<void> {
   if (rawOverview) {
     await applyTimeRangeFilter(currentRange);
     renderProjectDistribution(rawOverview.topProjects);
-  }
-
-  if (conversations) {
-    renderSessionsTable(conversations);
+    renderModelDistribution(rawOverview, currentRange);
+    renderModelTpsChart(rawOverview, currentRange);
   }
 
   if (refreshBtn) {

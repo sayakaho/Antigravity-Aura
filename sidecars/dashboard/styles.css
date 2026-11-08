@@ -20,7 +20,7 @@
   --aura-toast-fg: #FFFFFF;
   --aura-toast-border: rgba(255, 255, 255, 0.14);
   --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  --aura-chart-hover-band: rgba(255, 255, 255, 0.18);
+  --aura-chart-hover-band: rgba(255, 255, 255, 0.14);
 }
 
 :root[data-theme='dark'], html[data-theme='dark'] {
@@ -37,7 +37,7 @@
   --aura-toast-fg: #FFFFFF;
   --aura-toast-border: rgba(255, 255, 255, 0.14);
   --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  --aura-chart-hover-band: rgba(255, 255, 255, 0.18);
+  --aura-chart-hover-band: rgba(255, 255, 255, 0.14);
 }
 
 :root[data-theme='light'], html[data-theme='light'] {
@@ -54,7 +54,7 @@
   --aura-toast-fg: #1F1E1D;
   --aura-toast-border: rgba(0, 0, 0, 0.12);
   --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B665E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  --aura-chart-hover-band: rgba(0, 0, 0, 0.055);
+  --aura-chart-hover-band: rgba(0, 0, 0, 0.08);
 }
 
 @media (prefers-color-scheme: light) {
@@ -72,7 +72,7 @@
     --aura-toast-fg: #1F1E1D;
     --aura-toast-border: rgba(0, 0, 0, 0.12);
     --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B665E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    --aura-chart-hover-band: rgba(0, 0, 0, 0.055);
+    --aura-chart-hover-band: rgba(0, 0, 0, 0.08);
   }
 }
 
@@ -440,13 +440,24 @@ html, body {
   box-shadow: var(--aura-active-shadow);
 }
 
-/* Time Range Filter Bar */
+/* Sticky Top Range Filter Bar */
 .analytics-filter-container {
+  position: sticky;
+  top: 0;
+  z-index: 99;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 16px;
+  padding: 10px 28px 12px 28px;
+  margin: 0 -28px 16px -28px;
+  background: color-mix(in srgb, var(--aura-bg) 84%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--aura-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .timerange-segmented {
@@ -841,20 +852,19 @@ html, body {
 }
 
 .chart-shared-hover-band {
-  fill: var(--aura-chart-hover-band, rgba(255, 255, 255, 0.18));
+  fill: var(--aura-chart-hover-band, rgba(255, 255, 255, 0.14));
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  transition: none !important;
 }
 
 html[data-theme="light"] .chart-shared-hover-band,
 body.light .chart-shared-hover-band {
-  fill: rgba(0, 0, 0, 0.055);
+  fill: rgba(0, 0, 0, 0.08);
 }
 
 html[data-theme="dark"] .chart-shared-hover-band,
 body.dark .chart-shared-hover-band {
-  fill: rgba(255, 255, 255, 0.18);
+  fill: rgba(255, 255, 255, 0.14);
 }
 
 .bar-segment {
@@ -1001,50 +1011,136 @@ body.dark .chart-shared-hover-band {
   transition: width 0.3s ease;
 }
 
-/* Recent Conversations Table */
-.sessions-table {
-  width: 100%;
-  border-collapse: collapse;
+/* Model Distribution Breakdown */
+.model-stat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--aura-border);
+}
+
+.model-stat-row:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.model-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.model-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.model-name {
+  font-weight: 500;
+  color: var(--aura-fg);
+}
+
+.model-speed-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--aura-control-bg);
+  color: var(--aura-fg-muted);
+  font-family: var(--aura-font-mono, monospace);
+  font-weight: 500;
+}
+
+.model-token-count {
+  color: var(--aura-fg-muted);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.model-tokens-strong {
+  font-weight: 600;
+  color: var(--aura-fg);
   font-size: 12px;
 }
 
-.sessions-table th {
-  text-align: left;
-  padding: 10px 14px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--aura-fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-bottom: 1px solid var(--aura-border);
+.model-req-count {
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
+.model-bar-track {
+  width: 100%;
+  height: 6px;
   background: var(--aura-control-bg);
-}
-
-.sessions-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--aura-border);
-  color: var(--aura-fg);
-  vertical-align: middle;
-}
-
-.session-row:last-child td {
-  border-bottom: none;
-}
-
-.session-row:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.session-title-cell {
-  font-weight: 500;
-  max-width: 200px;
-  white-space: nowrap;
+  border-radius: 9999px;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.session-project-cell {
-  white-space: nowrap;
+.model-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.35s ease;
+}
+
+.model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--aura-fg-muted);
+  background: var(--aura-control-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+/* Model Speed Trends (Daily TPS Line Chart) */
+.tps-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.legend-sub {
+  font-size: 10px;
+  color: var(--aura-fg-muted);
+  font-family: var(--aura-font-mono, monospace);
+  margin-left: 2px;
+}
+
+.tps-point {
+  cursor: pointer;
+  transition: r 0.2s ease, stroke-width 0.2s ease;
+}
+
+.tps-point:hover {
+  r: 5.5px;
+  stroke-width: 2px;
+}
+
+.tps-hover-slot {
+  cursor: crosshair;
 }
 
 .project-pill {

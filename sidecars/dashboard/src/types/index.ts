@@ -74,6 +74,30 @@ export interface SessionAnalyticsData {
   avgTtft: number;
   avgTokPerSec: number;
   steps: ConversationStepMetric[];
+  models?: ModelTokenStat[];
+}
+
+export interface ModelTokenStat {
+  modelId: string;
+  modelName: string;
+  totalTokens: number;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
+  avgTps: number;
+  avgTtft: number;
+}
+
+export interface ModelDailyStat {
+  inTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  streamSec: number;
+  ttftSec: number;
+  requests: number;
 }
 
 export interface GlobalAnalyticsOverview {
@@ -104,4 +128,6 @@ export interface GlobalAnalyticsOverview {
     cacheRead: number;
     requests: number;
   }>;
+  modelDistribution: ModelTokenStat[];
+  dailyModelStats: Record<string, Record<string, ModelDailyStat>>;
 }
