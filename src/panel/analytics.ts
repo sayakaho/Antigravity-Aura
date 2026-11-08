@@ -393,6 +393,69 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
   };
 }
 
+interface CostAndSavings {
+  actualCost: number;
+  savedCost: number;
+  savedRatio: number;
+}
+
+function getModelPricingRates(nameOrId: string): { inputRate: number; outputRate: number; cacheRate: number } {
+  const s = (nameOrId || '').toLowerCase();
+  if (s.includes('argon') || s.includes('gemini-4') || s.includes('pro') || s.includes('sonnet') || s.includes('opus')) {
+    return { inputRate: 2.00, outputRate: 10.00, cacheRate: 0.10 };
+  }
+  if (s.includes('flash') || s.includes('3.8') || s.includes('3.7') || s.includes('gemini-2') || s.includes('haiku') || s.includes('mini')) {
+    return { inputRate: 0.75, outputRate: 3.75, cacheRate: 0.075 };
+  }
+  return { inputRate: 1.00, outputRate: 4.00, cacheRate: 0.10 };
+}
+
+export function computeApiCostAndSavings(
+  metrics: ReturnType<typeof computeProcessedColumns>,
+  range: TimeRangeOption,
+  overview: GlobalAnalyticsOverview | null
+): CostAndSavings {
+  let actualCost = 0;
+  let baselineCost = 0;
+
+  if (range === 'session' && activeSessionData && activeSessionData.steps.length > 0) {
+    for (const st of activeSessionData.steps) {
+      const rates = getModelPricingRates((activeSessionData as any).model || 'gemini-3.8-flash');
+      actualCost += (st.inTok * rates.inputRate + st.outTok * rates.outputRate + st.cacheRead * rates.cacheRate) / 1_000_000;
+      baselineCost += ((st.inTok + st.cacheRead) * rates.inputRate + st.outTok * rates.outputRate) / 1_000_000;
+    }
+  } else if (overview && overview.dailyModelStats) {
+    const dates = getFilterDatesForRange(range);
+    let matchedAny = false;
+    for (const d of dates) {
+      const dayModels = overview.dailyModelStats[d];
+      if (dayModels) {
+        for (const [mName, st] of Object.entries(dayModels)) {
+          if (!mName || mName.toLowerCase().includes('unknown')) continue;
+          const rates = getModelPricingRates(mName);
+          actualCost += (st.inTok * rates.inputRate + st.outTok * rates.outputRate + st.cacheRead * rates.cacheRate) / 1_000_000;
+          baselineCost += ((st.inTok + st.cacheRead) * rates.inputRate + st.outTok * rates.outputRate) / 1_000_000;
+          matchedAny = true;
+        }
+      }
+    }
+    if (!matchedAny) {
+      const rates = getModelPricingRates('gemini-3.8-flash');
+      actualCost = (metrics.totalTokens.input * rates.inputRate + metrics.totalTokens.output * rates.outputRate + metrics.totalTokens.cacheRead * rates.cacheRate) / 1_000_000;
+      baselineCost = ((metrics.totalTokens.input + metrics.totalTokens.cacheRead) * rates.inputRate + metrics.totalTokens.output * rates.outputRate) / 1_000_000;
+    }
+  } else {
+    const rates = getModelPricingRates('gemini-3.8-flash');
+    actualCost = (metrics.totalTokens.input * rates.inputRate + metrics.totalTokens.output * rates.outputRate + metrics.totalTokens.cacheRead * rates.cacheRate) / 1_000_000;
+    baselineCost = ((metrics.totalTokens.input + metrics.totalTokens.cacheRead) * rates.inputRate + metrics.totalTokens.output * rates.outputRate) / 1_000_000;
+  }
+
+  const savedCost = Math.max(0, baselineCost - actualCost);
+  const savedRatio = baselineCost > 0 ? (savedCost / baselineCost) * 100 : 0;
+
+  return { actualCost, savedCost, savedRatio };
+}
+
 export function renderMetricCards(metrics: ReturnType<typeof computeProcessedColumns>): void {
   const container = document.getElementById('analytics-cards-grid');
   if (!container) return;
@@ -401,46 +464,116 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
   const inTok = metrics.totalTokens.input;
   const outTok = metrics.totalTokens.output;
   const cacheTok = metrics.totalTokens.cacheRead;
+  const thinkTok = metrics.totalTokens.thinking || 0;
   const totalReq = metrics.totalRequests;
 
+  const safeTotal = totalTok > 0 ? totalTok : 1;
+  const cachePercent = ((cacheTok / safeTotal) * 100).toFixed(1);
+  const inPercent = ((inTok / safeTotal) * 100).toFixed(1);
+  const outPercent = ((outTok / safeTotal) * 100).toFixed(1);
+
+  const { actualCost, savedCost, savedRatio } = computeApiCostAndSavings(metrics, currentRange, rawOverview);
+
+  const isSession = currentRange === 'session' && !!activeSessionData;
+  const turnsCount = isSession ? activeSessionData!.steps.length : (rawOverview?.totalConversations || 0);
+  const avgPerTurn = turnsCount > 0 ? Math.round(totalTok / turnsCount) : (totalReq > 0 ? Math.round(totalTok / totalReq) : 0);
+
   container.innerHTML = `
-    <!-- Row 1: Primary Metrics -->
-    <div class="kpi-grid-primary">
-      <div class="kpi-card kpi-card-featured">
+    <!-- Row 1: Hero Full-Width Card -->
+    <div class="kpi-hero-card">
+      <div class="kpi-hero-left">
         <div class="kpi-label">Total Tokens Processed</div>
-        <div class="kpi-value">${formatCompactNumber(totalTok)}</div>
-        <div class="kpi-breakdown">
-          <span class="kpi-tag tag-cached">Cache: ${formatCompactNumber(cacheTok)}</span>
-          <span class="kpi-tag tag-input">In: ${formatCompactNumber(inTok)}</span>
-          <span class="kpi-tag tag-output">Out: ${formatCompactNumber(outTok)}</span>
+        <div class="kpi-hero-value">${formatFullNumber(totalTok)}</div>
+        <div class="kpi-ratio-bar">
+          <div class="kpi-ratio-seg-cache" style="width: ${cachePercent}%;"></div>
+          <div class="kpi-ratio-seg-input" style="width: ${inPercent}%;"></div>
+          <div class="kpi-ratio-seg-output" style="width: ${outPercent}%;"></div>
         </div>
       </div>
 
-      <div class="kpi-card kpi-card-featured">
-        <div class="kpi-label">Total Requests</div>
-        <div class="kpi-value">${formatFullNumber(totalReq)}</div>
-        <div class="kpi-subtext">Completed model inferences for the selected range</div>
+      <!-- Right Key-Value List (Strictly Left Label, Right Pure Number) -->
+      <div class="kpi-breakdown-list">
+        <div class="kpi-breakdown-row">
+          <div class="kpi-breakdown-key">
+            <span class="kpi-dot kpi-dot-input"></span>
+            <span>Input:</span>
+          </div>
+          <span class="kpi-breakdown-val">${formatFullNumber(inTok)}</span>
+        </div>
+        <div class="kpi-breakdown-row">
+          <div class="kpi-breakdown-key">
+            <span class="kpi-dot kpi-dot-cache"></span>
+            <span>Cache Read:</span>
+          </div>
+          <span class="kpi-breakdown-val">${formatFullNumber(cacheTok)}</span>
+        </div>
+        <div class="kpi-breakdown-row">
+          <div class="kpi-breakdown-key">
+            <span class="kpi-dot kpi-dot-output"></span>
+            <span>Output:</span>
+          </div>
+          <span class="kpi-breakdown-val">${formatFullNumber(outTok)}</span>
+        </div>
+        ${thinkTok > 0 ? `
+        <div class="kpi-breakdown-row">
+          <div class="kpi-breakdown-key">
+            <span class="kpi-dot kpi-dot-think"></span>
+            <span>Reasoning:</span>
+          </div>
+          <span class="kpi-breakdown-val">${formatFullNumber(thinkTok)}</span>
+        </div>
+        ` : ''}
       </div>
     </div>
 
-    <!-- Row 2: Secondary Performance Metrics -->
-    <div class="kpi-grid-secondary">
+    <!-- Row 2: Dual Core Cards -->
+    <div class="kpi-grid-dual">
+      <!-- Card 1: Est. API Cost -->
       <div class="kpi-card">
-        <div class="kpi-label">Cache Cost Efficiency</div>
-        <div class="kpi-value">${metrics.cacheEfficiency.toFixed(1)}%</div>
-        <div class="kpi-subtext">Prompt caching saved ~${formatCompactNumber(cacheTok)} tokens from reprocessing</div>
+        <div class="kpi-label">
+          <span>Est. API Cost</span>
+          ${savedCost > 0 ? `<span class="kpi-pill-savings">Saved $${savedCost.toFixed(2)} (${savedRatio.toFixed(1)}%)</span>` : ''}
+        </div>
+        <div class="kpi-value">$${actualCost.toFixed(2)}</div>
+        <div class="kpi-savings-bar">
+          <div class="kpi-savings-fill" style="width: ${Math.min(100, Math.max(0, savedRatio)).toFixed(1)}%;"></div>
+        </div>
       </div>
 
+      <!-- Card 2: Total Requests -->
       <div class="kpi-card">
+        <div class="kpi-label">Total Requests</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+          <div class="kpi-value">${formatFullNumber(totalReq)} <span class="kpi-unit">reqs</span></div>
+          <div class="kpi-breakdown-list" style="padding-left: 14px; border-left: 1px solid var(--aura-border);">
+            <div class="kpi-breakdown-row" style="gap: 14px;">
+              <span class="kpi-breakdown-key">${isSession ? 'Session Turns:' : 'User Turns:'}</span>
+              <span class="kpi-breakdown-val">${formatFullNumber(turnsCount)}</span>
+            </div>
+            <div class="kpi-breakdown-row" style="gap: 14px;">
+              <span class="kpi-breakdown-key">Avg / Turn:</span>
+              <span class="kpi-breakdown-val">${formatFullNumber(avgPerTurn)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Triplet Performance Cards (Clean, zero redundant text) -->
+    <div class="kpi-grid-triplet">
+      <div class="kpi-card kpi-card-compact">
+        <div class="kpi-label">Cache Efficiency</div>
+        <div class="kpi-value">${metrics.cacheEfficiency.toFixed(1)}%</div>
+      </div>
+
+      <div class="kpi-card kpi-card-compact">
         <div class="kpi-label">Avg Streaming Speed</div>
         <div class="kpi-value">${metrics.avgTokPerSec} <span class="kpi-unit">tok/s</span></div>
-        <div class="kpi-subtext">Real-time generation throughput across models</div>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card-compact">
         <div class="kpi-label">Avg Time to First Token</div>
         <div class="kpi-value">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
-        <div class="kpi-subtext">Average latency from prompt dispatch to first chunk</div>
       </div>
     </div>
   `;

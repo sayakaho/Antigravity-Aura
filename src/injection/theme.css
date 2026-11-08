@@ -965,7 +965,8 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   overflow: hidden;
   text-overflow: ellipsis;
   user-select: none;
-  cursor: default;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
 
 #ag-live-metrics-pill:hover {

@@ -45,24 +45,60 @@
 
 ---
 
-## 🚀 原生插件安装与使用指南
+## 🚀 安装与本地开发指南
 
-### 一、快速安装
-将本仓库目录软链接到 Antigravity 全局插件目录：
+### 方式一：终端一键构建与软链接（推荐开发者）
+
+克隆仓库并执行一键编译与软链：
 
 ```bash
-ln -s "/path/to/chuanban-antigravity-theme-patch" ~/.gemini/config/plugins/aura-dashboard
+git clone https://github.com/sayakaho/chuanban-antigravity-theme-patch.git
+cd chuanban-antigravity-theme-patch
+
+bun install
+bun run build          # 编译源码至 dist/ 标准插件包
+bun run link:plugin    # 自动将 dist/ 软链接至 ~/.gemini/config/plugins/aura-dashboard
 ```
 
-Antigravity 会自动识别插件并立即在后台拉起 `dashboard` Sidecar 服务，随应用同生共死。
+重启 Antigravity 即可开箱即用。开发时运行 `bun run dev`，改动 `src/` 代码毫秒级自动构建生效。
 
-通过 CLI 随时启停：
+### 方式二：下载 Release 产物一键解压（推荐普通用户）
+
+1. 在 GitHub Releases 页面下载最新的 `aura-dashboard-v*.zip`；
+2. 解压至 `~/.gemini/config/plugins/aura-dashboard`；
+3. 重启 Antigravity。
+
+### 常用管理命令
 ```bash
-agy plugin enable aura-dashboard
-agy plugin disable aura-dashboard
+agy plugin enable aura-dashboard    # 启用插件
+agy plugin disable aura-dashboard   # 禁用插件
 ```
 
-### 二、打开侧边栏控制面板
+---
+
+## 🛠️ 项目工程架构
+
+本项目采用现代化 **TypeScript + Bun** 标准单体工程，将**仓库源码**与**宿主分发产物**彻底解耦：
+
+```text
+chuanban-antigravity-theme-patch/
+├── .github/workflows/release.yml   # GitHub Actions CI 自动发布流水线
+├── package.json                    # 统一构建脚本 (build, dev, link:plugin)
+├── tsconfig.json                   # 严格 TypeScript 类型配置
+├── plugin.json                     # 插件清单源定义
+├── assets/                         # 矢量图标与截图
+├── skills/                         # Agent 原生控制技能 (aura-theme)
+├── scripts/                        # 构建装配脚本 (build.ts, link.ts)
+├── src/                            # 【统一业务源码收敛于此】
+│   ├── panel/                      # 侧边栏 Webview 前端 (TypeScript + CSS)
+│   ├── server/                     # Sidecar 守护与遥测聚合服务
+│   ├── injection/                  # 注入宿主主窗口的汉化与主题资产
+│   ├── presets/                    # 只读初始配置与个性化覆盖模板
+│   └── types/                      # 全局核心接口契约定义
+└── dist/                           # 【CI / Build 编译输出的标准 Antigravity 插件包】
+```
+
+### 侧边栏控制面板入口
 在任意会话右上角 **⋮** 菜单中选择 **Extensions → Aura Dashboard** 打开，即可：
 - 实时查看当前 CDP 端口与挂载窗口数量；
 - 点击 **实时重载样式** 按钮瞬时热刷新修改后的 CSS；

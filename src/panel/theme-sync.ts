@@ -13,9 +13,30 @@ export function getLuminance(r: number, g: number, b: number): number {
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
 
-export function parseRgb(colorStr: string): { r: number; g: number; b: number; alpha: number } | null {
+export function parseColor(colorStr: string): { r: number; g: number; b: number; alpha: number } | null {
   if (!colorStr) return null;
-  const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  const str = colorStr.trim();
+  // 1. Hex 格式 (#RRGGBB 或 #RGB)
+  if (str.startsWith('#')) {
+    const hex = str.slice(1);
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16),
+        alpha: 1
+      };
+    } else if (hex.length >= 6) {
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        alpha: hex.length >= 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1
+      };
+    }
+  }
+  // 2. RGB/RGBA 格式
+  const match = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
   if (match) {
     return {
       r: parseInt(match[1], 10),
@@ -25,6 +46,10 @@ export function parseRgb(colorStr: string): { r: number; g: number; b: number; a
     };
   }
   return null;
+}
+
+export function parseRgb(colorStr: string): { r: number; g: number; b: number; alpha: number } | null {
+  return parseColor(colorStr);
 }
 
 export function detectEffectiveTheme(): 'dark' | 'light' {
@@ -76,14 +101,26 @@ export function initThemeListener(): void {
       const payload = event.data.payload || {};
       if (payload.scheme === 'light' || payload.scheme === 'dark') {
         hostColorMode = payload.scheme;
-        syncTheme(hostColorMode);
+        syncTheme(hostColorMode || undefined);
       }
     } else if (event.data?.type === 'theme-change') {
-      const vars = event.data?.payload?.cssVariables;
-      if (vars && typeof vars['--background'] === 'string') {
-        const parsed = parseRgb(vars['--background']);
-        if (parsed) {
-          hostColorMode = getLuminance(parsed.r, parsed.g, parsed.b) > 0.179 ? 'light' : 'dark';
+      const payload = event.data?.payload || {};
+      // 1. 显式字段优先探测
+      if (payload.scheme === 'light' || payload.scheme === 'dark') {
+        hostColorMode = payload.scheme;
+      } else if (payload.colorScheme === 'light' || payload.colorScheme === 'dark') {
+        hostColorMode = payload.colorScheme;
+      } else if (typeof payload.isDark === 'boolean') {
+        hostColorMode = payload.isDark ? 'dark' : 'light';
+      } else {
+        // 2. 从宿主背景色变量中计算亮度
+        const vars = payload.cssVariables || {};
+        const bgCandidate = vars['--background'] || vars['--vscode-editor-background'] || vars['--sidebar-background'];
+        if (typeof bgCandidate === 'string') {
+          const parsed = parseColor(bgCandidate);
+          if (parsed) {
+            hostColorMode = getLuminance(parsed.r, parsed.g, parsed.b) > 0.179 ? 'light' : 'dark';
+          }
         }
       }
       syncTheme(hostColorMode || undefined);

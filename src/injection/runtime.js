@@ -574,7 +574,14 @@
       pill = document.createElement('div');
       pill.id = 'ag-live-metrics-pill';
       pill.setAttribute('data-v', '3');
+      pill.setAttribute('title', '点击展开 / 折叠 Aura Dashboard 侧边栏');
       pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tt = document.getElementById('ag-live-metrics-tooltip');
+        if (tt) tt.removeAttribute('data-visible');
+        window.postMessage({ type: 'toggle-aux-pane' }, '*');
+      });
       pill.addEventListener('mouseenter', () => {
         const tt = ensureMetricsTooltip();
         if (!tt || !tt.innerHTML) return;

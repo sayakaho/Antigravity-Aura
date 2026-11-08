@@ -1,0 +1,26 @@
+{
+  "name": "aura-dashboard",
+  "version": "6.0.0",
+  "description": "Antigravity deep performance analytics, Claude-inspired typography, and interface design suite",
+  "type": "module",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "dev": "bun run scripts/build.ts --watch",
+    "link:plugin": "bun run scripts/link.ts",
+    "unlink:plugin": "bun run scripts/unlink.ts"
+  },
+  "keywords": [
+    "antigravity",
+    "plugin",
+    "telemetry",
+    "theme",
+    "sidecar"
+  ],
+  "author": "Aura Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/node": "^26.6.6",
+    "typescript": "^5.7.0"
+  }
+}

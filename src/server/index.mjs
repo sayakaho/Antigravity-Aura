@@ -15,16 +15,34 @@ if (!process.env.ANTIGRAVITY_SIDECAR_WEB_PORT) {
   process.env.ANTIGRAVITY_CSRF_TOKEN = process.env.ANTIGRAVITY_CSRF_TOKEN || 'local-test';
 }
 
-import { SidecarApp, Response } from 'sidecar_sdk';
+let SidecarApp, Response;
+try {
+  const sdk = await import('sidecar_sdk');
+  SidecarApp = sdk.SidecarApp;
+  Response = sdk.Response;
+} catch {
+  const sdkPath = path.join(os.homedir(), '.gemini', 'antigravity', 'lib', 'node_modules', 'sidecar_sdk', 'index.mjs');
+  const sdk = await import(`file://${sdkPath}`);
+  SidecarApp = sdk.SidecarApp;
+  Response = sdk.Response;
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(HERE, '../..');
-const CORE_DIR = path.join(ROOT_DIR, 'core');
-const TEMPLATE_USER_DIR = path.join(ROOT_DIR, 'user');
+
+function resolveDir(prodSub, devSub) {
+  const p1 = path.join(HERE, prodSub);
+  if (fs.existsSync(p1)) return p1;
+  const p2 = path.resolve(HERE, devSub);
+  if (fs.existsSync(p2)) return p2;
+  return p1;
+}
+
+const CORE_DIR = resolveDir('core', '../../src/injection');
+const TEMPLATE_USER_DIR = resolveDir('user', '../../src/presets');
 const USER_DIR = process.env.PLUGIN_DATA ||
   process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR ||
   TEMPLATE_USER_DIR;
-const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
+const ASSETS_DIR = resolveDir('assets', '../../assets');
 const CONVERSATIONS_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
 
 function initDataDirectory() {
@@ -61,7 +79,10 @@ try {
 
 let analyticsEngine = null;
 try {
-  const aggrMod = await import('./dist/aggregator.js').catch(() => null);
+  const aggrPath = fs.existsSync(path.join(HERE, 'dist', 'aggregator.js'))
+    ? './dist/aggregator.js'
+    : './aggregator.js';
+  const aggrMod = await import(aggrPath).catch(() => null);
   if (aggrMod && aggrMod.GlobalAnalyticsEngine) {
     analyticsEngine = new aggrMod.GlobalAnalyticsEngine(path.join(os.homedir(), '.gemini', 'antigravity'));
   }
