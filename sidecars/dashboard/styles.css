@@ -644,25 +644,33 @@ html, body {
   align-items: center;
   margin-bottom: 14px;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap !important;
 }
 
 .chart-header-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .chart-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--aura-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .chart-header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 /* Mini Segmented Switch for Session Mode */
@@ -830,8 +838,8 @@ html, body {
 }
 
 .chart-column-group:hover .bar-bg-band {
-  fill: var(--aura-active-pill);
-  opacity: 0.28;
+  fill: var(--aura-fg);
+  opacity: 0.055;
 }
 
 .chart-column-group:hover .bar-segment {

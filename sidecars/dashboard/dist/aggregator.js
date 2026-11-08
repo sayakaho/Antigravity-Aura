@@ -13,19 +13,20 @@ function openDb(filePath) {
     return null;
   return new DatabaseSync(filePath, { readOnly: true });
 }
-var CACHE_FILE_NAME = "aura_analytics_cache.json";
+var CACHE_FILE_NAME = "aura_analytics_cache_v3.json";
 function parseProto(buf) {
   const map = new Map;
   if (!buf || buf.length === 0)
     return map;
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
   let pos = 0;
-  while (pos < buf.length) {
+  while (pos < b.length) {
     let key = 0;
     let shift = 0;
-    while (pos < buf.length) {
-      const b = buf[pos++];
-      key |= (b & 127) << shift;
-      if (!(b & 128))
+    while (pos < b.length) {
+      const byte = b[pos++];
+      key |= (byte & 127) << shift;
+      if (!(byte & 128))
         break;
       shift += 7;
     }
@@ -36,10 +37,10 @@ function parseProto(buf) {
     if (wireType === 0) {
       let val = 0;
       let s = 0;
-      while (pos < buf.length) {
-        const b = buf[pos++];
-        val |= (b & 127) << s;
-        if (!(b & 128))
+      while (pos < b.length) {
+        const byte = b[pos++];
+        val |= (byte & 127) << s;
+        if (!(byte & 128))
           break;
         s += 7;
       }
@@ -47,16 +48,16 @@ function parseProto(buf) {
     } else if (wireType === 2) {
       let len = 0;
       let s = 0;
-      while (pos < buf.length) {
-        const b = buf[pos++];
-        len |= (b & 127) << s;
-        if (!(b & 128))
+      while (pos < b.length) {
+        const byte = b[pos++];
+        len |= (byte & 127) << s;
+        if (!(byte & 128))
           break;
         s += 7;
       }
-      if (pos + len > buf.length)
+      if (pos + len > b.length)
         break;
-      const slice = buf.subarray(pos, pos + len);
+      const slice = b.subarray(pos, pos + len);
       pos += len;
       map.set(fieldNum, slice);
     } else if (wireType === 1) {
@@ -68,6 +69,31 @@ function parseProto(buf) {
     }
   }
   return map;
+}
+function extractTimestampFromStepMeta(buf) {
+  if (!buf || buf.length === 0)
+    return null;
+  try {
+    const sMap = parseProto(buf);
+    const sub = sMap.get(1);
+    if (sub && sub.length > 0) {
+      const tMap = parseProto(sub);
+      const sec = tMap.get(1);
+      if (typeof sec === "number" && sec > 1e9) {
+        return sec;
+      }
+    }
+  } catch {}
+  return null;
+}
+function formatLocalDateAndHourKeys(dateObj) {
+  const yr = dateObj.getFullYear();
+  const mo = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const dy = String(dateObj.getDate()).padStart(2, "0");
+  const hr = String(dateObj.getHours()).padStart(2, "0");
+  const dateKey = `${yr}-${mo}-${dy}`;
+  const hourKey = `${dateKey} ${hr}:00`;
+  return { dateKey, hourKey };
 }
 
 class GlobalAnalyticsEngine {
@@ -162,24 +188,58 @@ class GlobalAnalyticsEngine {
           db = openDb(dbPath);
           if (!db)
             continue;
-          const rows = db.prepare("SELECT data FROM gen_metadata ORDER BY idx ASC").all();
+          let rows = [];
+          try {
+            rows = db.prepare(`
+              SELECT g.data, s.metadata 
+              FROM gen_metadata g 
+              LEFT JOIN steps s ON g.idx = s.idx 
+              ORDER BY g.idx ASC
+            `).all();
+          } catch {
+            rows = db.prepare("SELECT data FROM gen_metadata ORDER BY idx ASC").all();
+          }
           db.close();
           db = null;
           let sIn = 0, sOut = 0, sCache = 0, sThink = 0, sTtft = 0, sStream = 0;
           let count = 0;
+          const dailyBreakdown = {};
+          const hourlyBreakdown = {};
+          const fallbackDate = s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(st.mtimeMs);
           for (const r of rows || []) {
             const top = parseProto(r.data);
             const chat = top.has(1) ? parseProto(top.get(1)) : new Map;
             const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map;
             const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map;
             const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map;
-            sIn += usage.get(2) || 0;
-            sOut += usage.get(3) || 0;
-            sCache += usage.get(5) || 0;
-            sThink += usage.get(9) || 0;
+            const inTok = usage.get(2) || 0;
+            const outTok = usage.get(3) || 0;
+            const cacheRead = usage.get(5) || 0;
+            const thinkTok = usage.get(9) || 0;
+            sIn += inTok;
+            sOut += outTok;
+            sCache += cacheRead;
+            sThink += thinkTok;
             sTtft += (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
             sStream += (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
             count++;
+            const sec = extractTimestampFromStepMeta(r.metadata);
+            const turnDate = sec ? new Date(sec * 1000) : fallbackDate;
+            const { dateKey, hourKey } = formatLocalDateAndHourKeys(turnDate);
+            if (!dailyBreakdown[dateKey]) {
+              dailyBreakdown[dateKey] = { inTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+            }
+            dailyBreakdown[dateKey].inTok += inTok;
+            dailyBreakdown[dateKey].outTok += outTok;
+            dailyBreakdown[dateKey].cacheRead += cacheRead;
+            dailyBreakdown[dateKey].requests += 1;
+            if (!hourlyBreakdown[hourKey]) {
+              hourlyBreakdown[hourKey] = { inTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+            }
+            hourlyBreakdown[hourKey].inTok += inTok;
+            hourlyBreakdown[hourKey].outTok += outTok;
+            hourlyBreakdown[hourKey].cacheRead += cacheRead;
+            hourlyBreakdown[hourKey].requests += 1;
           }
           entry = {
             sig,
@@ -190,7 +250,9 @@ class GlobalAnalyticsEngine {
             ttft: count > 0 ? sTtft / count : 0,
             stream: sStream,
             reqCount: count || (rows ? rows.length : 1),
-            lastModified: st.mtimeMs
+            lastModified: st.mtimeMs,
+            dailyBreakdown,
+            hourlyBreakdown
           };
           this.cache.sessions[convId] = entry;
           cacheUpdated = true;
@@ -229,21 +291,43 @@ class GlobalAnalyticsEngine {
         projectStats[proj] = { convCount: 0, tokenCount: 0 };
       projectStats[proj].convCount += 1;
       projectStats[proj].tokenCount += entry.inTok + entry.outTok + entry.cacheRead;
-      const dateKey = s.lastModifiedTime ? s.lastModifiedTime.slice(0, 10) : "Recent";
-      if (!dateSeries[dateKey])
-        dateSeries[dateKey] = { input: 0, output: 0, cache: 0, requests: 0 };
-      dateSeries[dateKey].input += entry.inTok;
-      dateSeries[dateKey].output += entry.outTok;
-      dateSeries[dateKey].cache += entry.cacheRead;
-      dateSeries[dateKey].requests += convReq;
-      if (s.lastModifiedTime && s.lastModifiedTime.length >= 13) {
-        const hourKey = s.lastModifiedTime.slice(0, 13) + ":00";
-        if (!hourSeries[hourKey])
-          hourSeries[hourKey] = { hourKey, inputTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
-        hourSeries[hourKey].inputTok += entry.inTok;
-        hourSeries[hourKey].outTok += entry.outTok;
-        hourSeries[hourKey].cacheRead += entry.cacheRead;
-        hourSeries[hourKey].requests += convReq;
+      if (entry.dailyBreakdown && Object.keys(entry.dailyBreakdown).length > 0) {
+        for (const [dateKey, d] of Object.entries(entry.dailyBreakdown)) {
+          if (!dateSeries[dateKey])
+            dateSeries[dateKey] = { input: 0, output: 0, cache: 0, requests: 0 };
+          dateSeries[dateKey].input += d.inTok;
+          dateSeries[dateKey].output += d.outTok;
+          dateSeries[dateKey].cache += d.cacheRead;
+          dateSeries[dateKey].requests += d.requests;
+        }
+      } else {
+        const { dateKey } = formatLocalDateAndHourKeys(s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(st.mtimeMs));
+        if (!dateSeries[dateKey])
+          dateSeries[dateKey] = { input: 0, output: 0, cache: 0, requests: 0 };
+        dateSeries[dateKey].input += entry.inTok;
+        dateSeries[dateKey].output += entry.outTok;
+        dateSeries[dateKey].cache += entry.cacheRead;
+        dateSeries[dateKey].requests += convReq;
+      }
+      if (entry.hourlyBreakdown && Object.keys(entry.hourlyBreakdown).length > 0) {
+        for (const [hourKey, h] of Object.entries(entry.hourlyBreakdown)) {
+          if (!hourSeries[hourKey])
+            hourSeries[hourKey] = { hourKey, inputTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+          hourSeries[hourKey].inputTok += h.inTok;
+          hourSeries[hourKey].outTok += h.outTok;
+          hourSeries[hourKey].cacheRead += h.cacheRead;
+          hourSeries[hourKey].requests += h.requests;
+        }
+      } else {
+        const { hourKey } = formatLocalDateAndHourKeys(s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(st.mtimeMs));
+        if (hourKey) {
+          if (!hourSeries[hourKey])
+            hourSeries[hourKey] = { hourKey, inputTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+          hourSeries[hourKey].inputTok += entry.inTok;
+          hourSeries[hourKey].outTok += entry.outTok;
+          hourSeries[hourKey].cacheRead += entry.cacheRead;
+          hourSeries[hourKey].requests += convReq;
+        }
       }
     }
     if (cacheUpdated) {

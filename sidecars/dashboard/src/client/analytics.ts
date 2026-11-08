@@ -153,6 +153,23 @@ function getPastDaysString(days: number): string {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+function generateContinuousDateList(startStr: string, endStr: string): string[] {
+  const result: string[] = [];
+  const curr = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  if (isNaN(curr.getTime()) || isNaN(end.getTime()) || curr > end) {
+    return [startStr];
+  }
+  while (curr <= end) {
+    const yr = curr.getFullYear();
+    const mo = String(curr.getMonth() + 1).padStart(2, '0');
+    const dy = String(curr.getDate()).padStart(2, '0');
+    result.push(`${yr}-${mo}-${dy}`);
+    curr.setDate(curr.getDate() + 1);
+  }
+  return result;
+}
+
 export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range: TimeRangeOption): {
   columns: ChartColumnData[];
   totalTokens: { input: number; output: number; cacheRead: number; thinking: number; total: number };
@@ -232,7 +249,6 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
       reqs += c.requests;
     }
 
-    // Fallback if no hourly activity exists for yesterday
     const totalTok = inTok + outTok + cacheTok;
     const rawTotal = inTok + cacheTok;
     const efficiency = rawTotal > 0 ? (cacheTok / rawTotal) * 100 : overview.cacheEfficiency;
@@ -253,18 +269,25 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
     };
   }
 
-  // 3. Daily Granularity (This Week, This Month, Last 7 Days, Last 30 Days)
+  // 3. Daily Granularity (This Week, This Month, Last 7 Days, Last 30 Days, Custom)
   let startDate = '0000-00-00';
   let endDate = today;
 
   if (range === 'this-week') {
     startDate = getStartOfWeekString();
+    // Render full Monday to Sunday week range
+    const d = new Date(startDate + 'T00:00:00');
+    d.setDate(d.getDate() + 6);
+    endDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   } else if (range === 'this-month') {
     startDate = getStartOfMonthString();
+    endDate = today;
   } else if (range === 'last-7-days') {
-    startDate = getPastDaysString(7);
+    startDate = getPastDaysString(6);
+    endDate = today;
   } else if (range === 'last-30-days') {
-    startDate = getPastDaysString(30);
+    startDate = getPastDaysString(29);
+    endDate = today;
   } else if (range === 'custom') {
     if (customStartDate && customEndDate) {
       startDate = customStartDate;
@@ -272,27 +295,36 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
     }
   }
 
-  const validSeries = (overview.timeRangeSeries || []).filter(item => {
-    if (!item.date || item.date.startsWith('0001')) return false;
-    return item.date >= startDate && item.date <= endDate;
-  });
+  // Create date lookup map from timeRangeSeries
+  const dateMap: Record<string, { inputTok: number; outTok: number; cacheRead: number; requests: number }> = {};
+  for (const item of overview.timeRangeSeries || []) {
+    if (item.date && !item.date.startsWith('0001')) {
+      dateMap[item.date] = {
+        inputTok: item.inputTok,
+        outTok: item.outTok,
+        cacheRead: item.cacheRead,
+        requests: item.requests || 1
+      };
+    }
+  }
 
-  // Check if range spans over 90 days -> Aggregate Weekly
-  const startMs = new Date(startDate).getTime();
-  const endMs = new Date(endDate).getTime();
+  const dateList = generateContinuousDateList(startDate, endDate);
+  const startMs = new Date(startDate + 'T00:00:00').getTime();
+  const endMs = new Date(endDate + 'T00:00:00').getTime();
   const daySpan = Math.round((endMs - startMs) / 86400000);
 
-  if (daySpan > 90 && validSeries.length > 28) {
-    // 4. Weekly Aggregation
+  // Over 90 days: aggregate by week
+  if (daySpan > 90) {
     const weeklyMap: Record<string, ChartColumnData> = {};
-    for (const item of validSeries) {
-      const d = new Date(item.date + 'T00:00:00');
+    for (const dStr of dateList) {
+      const item = dateMap[dStr] || { inputTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+      const d = new Date(dStr + 'T00:00:00');
       const weekNum = Math.floor(d.getDate() / 7) + 1;
-      const weekKey = `${item.date.slice(0, 7)} W${weekNum}`;
+      const weekKey = `${dStr.slice(0, 7)} W${weekNum}`;
       if (!weeklyMap[weekKey]) {
         weeklyMap[weekKey] = {
           label: weekKey.slice(5),
-          tooltipHeader: `Week of ${item.date}`,
+          tooltipHeader: `Week of ${dStr}`,
           inputTok: 0,
           outTok: 0,
           cacheRead: 0,
@@ -302,7 +334,7 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
       weeklyMap[weekKey].inputTok += item.inputTok;
       weeklyMap[weekKey].outTok += item.outTok;
       weeklyMap[weekKey].cacheRead += item.cacheRead;
-      weeklyMap[weekKey].requests += item.requests || 1;
+      weeklyMap[weekKey].requests += item.requests;
     }
 
     const columns = Object.values(weeklyMap);
@@ -327,15 +359,18 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
     };
   }
 
-  // Standard Daily Columns
-  const columns: ChartColumnData[] = validSeries.map(item => ({
-    label: formatDateLabel(item.date),
-    tooltipHeader: formatFullDate(item.date),
-    inputTok: item.inputTok,
-    outTok: item.outTok,
-    cacheRead: item.cacheRead,
-    requests: item.requests || 1
-  }));
+  // Standard continuous daily columns
+  const columns: ChartColumnData[] = dateList.map(dateStr => {
+    const item = dateMap[dateStr] || { inputTok: 0, outTok: 0, cacheRead: 0, requests: 0 };
+    return {
+      label: formatDateLabel(dateStr),
+      tooltipHeader: formatFullDate(dateStr),
+      inputTok: item.inputTok,
+      outTok: item.outTok,
+      cacheRead: item.cacheRead,
+      requests: item.requests
+    };
+  });
 
   let inTok = 0, outTok = 0, cacheTok = 0, reqs = 0;
   for (const c of columns) {
@@ -349,16 +384,9 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
   const efficiency = rawTotal > 0 ? (cacheTok / rawTotal) * 100 : overview.cacheEfficiency;
 
   return {
-    columns: columns.length > 0 ? columns : (overview.timeRangeSeries || []).slice(-14).map(d => ({
-      label: formatDateLabel(d.date),
-      tooltipHeader: formatFullDate(d.date),
-      inputTok: d.inputTok,
-      outTok: d.outTok,
-      cacheRead: d.cacheRead,
-      requests: d.requests || 1
-    })),
-    totalTokens: columns.length > 0 ? { input: inTok, output: outTok, cacheRead: cacheTok, thinking: overview.totalTokens.thinking, total: totalTok } : overview.totalTokens,
-    totalRequests: reqs || overview.totalRequests || (overview.totalConversations * 10),
+    columns,
+    totalTokens: { input: inTok, output: outTok, cacheRead: cacheTok, thinking: overview.totalTokens.thinking, total: totalTok },
+    totalRequests: reqs,
     cacheEfficiency: efficiency,
     avgTtft: overview.avgTtft,
     avgTokPerSec: overview.avgTokPerSec
@@ -710,7 +738,8 @@ function renderStandardTimelineChart(
   let barsSvg = '';
   let xLabelsSvg = '';
 
-  const labelInterval = Math.max(1, Math.floor(columns.length / 8));
+  const isHourly = columns.length === 24 && (columns[0]?.label.includes(':00') || false);
+  const labelInterval = isHourly ? 3 : Math.max(1, Math.floor(columns.length / 8));
 
   columns.forEach((item, idx) => {
     const x = paddingLeft + idx * step + (step - barWidth) / 2;
@@ -785,7 +814,11 @@ function renderStandardTimelineChart(
       `;
     }
 
-    if (idx % labelInterval === 0 || idx === columns.length - 1) {
+    const showLabel = isHourly
+      ? (idx % 3 === 0)
+      : (idx % labelInterval === 0 || (idx === columns.length - 1 && (columns.length - 1) % labelInterval >= Math.floor(labelInterval / 2)));
+
+    if (showLabel) {
       xLabelsSvg += `
         <text x="${centerX}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${item.label}</text>
       `;
@@ -1050,14 +1083,14 @@ export function renderSessionsTable(conversations: ConversationSummary[]): void 
 function getRangeDisplayTitle(range: TimeRangeOption): string {
   switch (range) {
     case 'session': return 'Active Session';
-    case 'today': return 'Today (Hourly)';
-    case 'yesterday': return 'Yesterday (Hourly)';
-    case 'this-week': return 'This Week (Daily)';
-    case 'this-month': return 'This Month (Daily)';
-    case 'last-7-days': return 'Last 7 Days (Daily)';
-    case 'last-30-days': return 'Last 30 Days (Daily)';
+    case 'today': return 'Today';
+    case 'yesterday': return 'Yesterday';
+    case 'this-week': return 'This Week';
+    case 'this-month': return 'This Month';
+    case 'last-7-days': return 'Last 7 Days';
+    case 'last-30-days': return 'Last 30 Days';
     case 'custom': return 'Custom Range';
-    default: return 'Token Activity';
+    default: return 'Overview';
   }
 }
 
