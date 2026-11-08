@@ -13,7 +13,7 @@ function openDb(filePath) {
     return null;
   return new DatabaseSync(filePath, { readOnly: true });
 }
-var CACHE_FILE_NAME = "aura_analytics_cache_v3.json";
+var CACHE_FILE_NAME = "aura_analytics_cache_v4.json";
 function parseProto(buf) {
   const map = new Map;
   if (!buf || buf.length === 0)
@@ -69,6 +69,24 @@ function parseProto(buf) {
     }
   }
   return map;
+}
+function extractStepIdx(field2) {
+  if (!field2 || field2.length === 0)
+    return null;
+  const b = Buffer.isBuffer(field2) ? field2 : Buffer.from(field2);
+  let p = 0;
+  while (p < b.length) {
+    let val = 0, s = 0;
+    while (p < b.length) {
+      const byte = b[p++];
+      val |= (byte & 127) << s;
+      if (!(byte & 128))
+        break;
+      s += 7;
+    }
+    return val;
+  }
+  return null;
 }
 function extractTimestampFromStepMeta(buf) {
   if (!buf || buf.length === 0)
@@ -188,17 +206,16 @@ class GlobalAnalyticsEngine {
           db = openDb(dbPath);
           if (!db)
             continue;
-          let rows = [];
+          const stepTimeMap = new Map;
           try {
-            rows = db.prepare(`
-              SELECT g.data, s.metadata 
-              FROM gen_metadata g 
-              LEFT JOIN steps s ON g.idx = s.idx 
-              ORDER BY g.idx ASC
-            `).all();
-          } catch {
-            rows = db.prepare("SELECT data FROM gen_metadata ORDER BY idx ASC").all();
-          }
+            const stepRows = db.prepare("SELECT idx, metadata FROM steps WHERE metadata IS NOT NULL").all();
+            for (const sr of stepRows || []) {
+              const ts = extractTimestampFromStepMeta(sr.metadata);
+              if (ts)
+                stepTimeMap.set(sr.idx, ts);
+            }
+          } catch {}
+          const rows = db.prepare("SELECT data FROM gen_metadata ORDER BY idx ASC").all();
           db.close();
           db = null;
           let sIn = 0, sOut = 0, sCache = 0, sThink = 0, sTtft = 0, sStream = 0;
@@ -223,7 +240,8 @@ class GlobalAnalyticsEngine {
             sTtft += (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
             sStream += (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
             count++;
-            const sec = extractTimestampFromStepMeta(r.metadata);
+            const stepIdx = extractStepIdx(top.get(2));
+            const sec = stepIdx !== null ? stepTimeMap.get(stepIdx) : null;
             const turnDate = sec ? new Date(sec * 1000) : fallbackDate;
             const { dateKey, hourKey } = formatLocalDateAndHourKeys(turnDate);
             if (!dailyBreakdown[dateKey]) {

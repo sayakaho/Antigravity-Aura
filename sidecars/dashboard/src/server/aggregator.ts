@@ -46,7 +46,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v3.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v4.json';
 
 function parseProto(buf: Buffer | Uint8Array): Map<number, any> {
   const map = new Map<number, any>();
@@ -98,6 +98,23 @@ function parseProto(buf: Buffer | Uint8Array): Map<number, any> {
     }
   }
   return map;
+}
+
+function extractStepIdx(field2: Buffer | Uint8Array | null | undefined): number | null {
+  if (!field2 || field2.length === 0) return null;
+  const b = Buffer.isBuffer(field2) ? field2 : Buffer.from(field2);
+  let p = 0;
+  while (p < b.length) {
+    let val = 0, s = 0;
+    while (p < b.length) {
+      const byte = b[p++];
+      val |= (byte & 0x7f) << s;
+      if (!(byte & 0x80)) break;
+      s += 7;
+    }
+    return val;
+  }
+  return null;
 }
 
 function extractTimestampFromStepMeta(buf: Uint8Array | Buffer | null | undefined): number | null {
@@ -225,17 +242,18 @@ export class GlobalAnalyticsEngine {
         try {
           db = openDb(dbPath);
           if (!db) continue;
-          let rows: any[] = [];
+
+          // Pre-index step timestamps
+          const stepTimeMap = new Map<number, number>();
           try {
-            rows = db.prepare(`
-              SELECT g.data, s.metadata 
-              FROM gen_metadata g 
-              LEFT JOIN steps s ON g.idx = s.idx 
-              ORDER BY g.idx ASC
-            `).all();
-          } catch {
-            rows = db.prepare('SELECT data FROM gen_metadata ORDER BY idx ASC').all();
-          }
+            const stepRows = db.prepare('SELECT idx, metadata FROM steps WHERE metadata IS NOT NULL').all();
+            for (const sr of stepRows || []) {
+              const ts = extractTimestampFromStepMeta(sr.metadata);
+              if (ts) stepTimeMap.set(sr.idx, ts);
+            }
+          } catch {}
+
+          const rows = db.prepare('SELECT data FROM gen_metadata ORDER BY idx ASC').all();
           db.close();
           db = null;
 
@@ -266,8 +284,9 @@ export class GlobalAnalyticsEngine {
             sStream += (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
             count++;
 
-            // Precise timestamp from step metadata or session fallback
-            const sec = extractTimestampFromStepMeta(r.metadata);
+            // Precise timestamp from stepIdx mapped via top field 2
+            const stepIdx = extractStepIdx(top.get(2));
+            const sec = stepIdx !== null ? stepTimeMap.get(stepIdx) : null;
             const turnDate = sec ? new Date(sec * 1000) : fallbackDate;
             const { dateKey, hourKey } = formatLocalDateAndHourKeys(turnDate);
 
