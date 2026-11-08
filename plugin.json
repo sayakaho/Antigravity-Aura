@@ -1,0 +1,16 @@
+{
+  "name": "chuanban-theme",
+  "displayName": "川瓣主题 (Chuanban Theme)",
+  "version": "5.1.0",
+  "description": "川瓣暖白主题、排版增强、实时指标遥测与侧边栏控制台",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "Chuanban Team"
+  },
+  "keywords": [
+    "theme",
+    "metrics",
+    "beautify",
+    "ui-extension"
+  ]
+}

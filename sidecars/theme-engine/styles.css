@@ -1,0 +1,249 @@
+:root {
+  --cb-primary: var(--primary, #c86446);
+  --cb-primary-hover: color-mix(in srgb, var(--cb-primary) 85%, #000);
+  --cb-bg: var(--background, #fdfbf7);
+  --cb-card: var(--card, #ffffff);
+  --cb-border: var(--border, #e5e0d8);
+  --cb-card-border: var(--card-border, #eae5dc);
+  --cb-text: var(--foreground, #2c2724);
+  --cb-text-muted: var(--muted-foreground, #79716b);
+  --cb-success: #2e7d32;
+  --cb-success-bg: rgba(46, 125, 50, 0.1);
+  --cb-warning: #ed6c02;
+  --cb-warning-bg: rgba(237, 108, 2, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--cb-bg);
+  color: var(--cb-text);
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cb-border);
+}
+
+.logo-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.header-text h1 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.header-text p {
+  font-size: 11px;
+  color: var(--cb-text-muted);
+  margin-top: 2px;
+}
+
+.card {
+  background: var(--cb-card);
+  border: 1px solid var(--cb-card-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cb-text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.badge-connected {
+  color: var(--cb-success);
+  background: var(--cb-success-bg);
+}
+
+.badge-disconnected {
+  color: var(--cb-warning);
+  background: var(--cb-warning-bg);
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-label {
+  font-size: 11px;
+  color: var(--cb-text-muted);
+}
+
+.status-val {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--cb-border);
+  background: var(--cb-card);
+  color: var(--cb-text);
+  transition: all 0.15s ease;
+  user-select: none;
+  flex: 1;
+}
+
+.btn:hover {
+  background: color-mix(in srgb, var(--cb-card) 90%, var(--cb-text) 10%);
+}
+
+.btn-primary {
+  background: var(--cb-primary);
+  border-color: var(--cb-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--cb-primary-hover);
+  border-color: var(--cb-primary-hover);
+}
+
+.toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toggle-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.toggle-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.toggle-desc {
+  font-size: 11px;
+  color: var(--cb-text-muted);
+}
+
+.preset-selector {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.preset-chip {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 5px;
+  border: 1px solid var(--cb-border);
+  background: var(--cb-card);
+  cursor: pointer;
+  color: var(--cb-text);
+}
+
+.preset-chip.active {
+  background: var(--cb-primary);
+  border-color: var(--cb-primary);
+  color: #ffffff;
+}
+
+.toast {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(30, 26, 24, 0.9);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.footer-note {
+  font-size: 10.5px;
+  color: var(--cb-text-muted);
+  text-align: center;
+  margin-top: 16px;
+  line-height: 1.4;
+}
