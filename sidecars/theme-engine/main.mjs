@@ -140,53 +140,81 @@ async function getSystemFonts() {
 }
 
 function resolveTypographyVars(typography = {}) {
-  const primaryKey = typography.primarySans || 'default';
-  let primarySans = '';
-  if (primaryKey === 'default') {
-    primarySans = "'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene'";
-  } else if (primaryKey === 'custom') {
-    primarySans = (typography.customPrimarySans || '').trim() || 'system-ui';
-  } else {
-    primarySans = `'${primaryKey.replace(/'/g, '')}'`;
+  const primaryKey = (typography.primarySans || 'default').trim();
+  const fallbackKey = (typography.fallbackSans || 'default').trim();
+  const isCustomSans = primaryKey !== 'default' || fallbackKey !== 'default';
+
+  let fullSans = '';
+  if (isCustomSans) {
+    let primarySans = '';
+    if (primaryKey === 'default') {
+      primarySans = 'system-ui, -apple-system, BlinkMacSystemFont';
+    } else if (primaryKey === 'custom') {
+      primarySans = (typography.customPrimarySans || '').trim() || 'system-ui';
+    } else {
+      primarySans = `'${primaryKey.replace(/'/g, '')}'`;
+    }
+
+    let fallbackSans = '';
+    if (fallbackKey === 'default') {
+      fallbackSans = "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei'";
+    } else if (fallbackKey === 'custom') {
+      fallbackSans = (typography.customFallbackSans || '').trim() || "'PingFang SC'";
+    } else {
+      fallbackSans = `'${fallbackKey.replace(/'/g, '')}'`;
+    }
+
+    fullSans = `${primarySans}, ${fallbackSans}, system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
   }
 
-  const fallbackKey = typography.fallbackSans || 'default';
-  let fallbackSans = '';
-  if (fallbackKey === 'default') {
-    fallbackSans = "'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei'";
-  } else if (fallbackKey === 'custom') {
-    fallbackSans = (typography.customFallbackSans || '').trim() || "'PingFang SC'";
-  } else {
-    fallbackSans = `'${fallbackKey.replace(/'/g, '')}'`;
-  }
-
-  const fullSans = `${primarySans}, ${fallbackSans}, system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
-
-  const monoKey = typography.mono || 'default';
+  const monoKey = (typography.mono || 'default').trim();
+  const isCustomMono = monoKey !== 'default';
   let mono = '';
-  if (monoKey === 'default') {
-    mono = "'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace";
-  } else if (monoKey === 'custom') {
-    mono = `${(typography.customMono || '').trim() || 'ui-monospace'}, ui-monospace, monospace`;
-  } else {
-    mono = `'${monoKey.replace(/'/g, '')}', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace`;
+  if (isCustomMono) {
+    if (monoKey === 'custom') {
+      mono = `${(typography.customMono || '').trim() || 'ui-monospace'}, ui-monospace, monospace`;
+    } else {
+      mono = `'${monoKey.replace(/'/g, '')}', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace`;
+    }
   }
 
   const fontSize = Number(typography.fontSize) || 16;
   const fontSizePx = `${fontSize}px`;
 
-  return {
-    '--ag-cfg-font-sans': fullSans,
-    '--ag-cfg-font-mono': mono,
+  const vars = {
     '--ag-cfg-chat-font-size': fontSizePx,
     '--ag-chat-font-size': fontSizePx
   };
+
+  if (isCustomSans) {
+    vars['--ag-cfg-font-sans'] = fullSans;
+    vars['--font-sans'] = fullSans;
+  } else {
+    vars['--ag-cfg-font-sans'] = '';
+    vars['--font-sans'] = '';
+  }
+
+  if (isCustomMono) {
+    vars['--ag-cfg-font-mono'] = mono;
+    vars['--font-mono'] = mono;
+  } else {
+    vars['--ag-cfg-font-mono'] = '';
+    vars['--font-mono'] = '';
+  }
+
+  return vars;
 }
 
 function resolveThemeAttrs(userCfg = {}) {
   const composer = userCfg.composer || {};
   const lightPreset = userCfg.presets?.light || userCfg.lightPreset || 'high-contrast';
   const darkPreset = userCfg.presets?.dark || userCfg.darkPreset || 'claude-dark';
+  const typography = userCfg.typography || {};
+
+  const primaryKey = (typography.primarySans || 'default').trim();
+  const fallbackKey = (typography.fallbackSans || 'default').trim();
+  const isCustomSans = primaryKey !== 'default' || fallbackKey !== 'default';
+  const isCustomMono = (typography.mono || 'default').trim() !== 'default';
 
   return {
     'data-ag-wax-seal': composer.waxSeal === false ? 'off' : 'on',
@@ -194,6 +222,8 @@ function resolveThemeAttrs(userCfg = {}) {
     'data-ag-hide-arrows': composer.hideArrows === false ? 'off' : 'on',
     'data-ag-light-preset': lightPreset,
     'data-ag-dark-preset': darkPreset,
+    'data-ag-custom-font': isCustomSans ? 'true' : null,
+    'data-ag-custom-mono': isCustomMono ? 'true' : null,
     'data-ag-custom-font-size': 'true'
   };
 }

@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "language": "zh-CN",
+  "language": "default",
   "channel": "auto",
   "preset": "high-contrast",
   "presets": {
@@ -17,7 +17,7 @@
     "fontSize": 16
   },
   "composer": {
-    "collinear": true,
+    "collinear": false,
     "waxSeal": true,
     "hideArrows": true
   },
