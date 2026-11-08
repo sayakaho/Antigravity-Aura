@@ -1,25 +1,74 @@
 /* Antigravity Native Design System Primitives for Sidecar UI (1:1 Capsule Style) */
 
-:root {
+:root, :host {
+  color-scheme: dark;
   --cb-font-sans: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   --cb-font-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace);
-  --cb-bg: var(--background, #1B1917);
-  --cb-fg: var(--foreground, #EDE8E1);
-  --cb-fg-muted: var(--muted-foreground, #948F85);
-  --cb-card-bg: var(--card, rgba(255, 255, 255, 0.028));
-  --cb-border: var(--border, rgba(255, 255, 255, 0.12));
-  --cb-primary: var(--primary, #D97757);
+  
+  /* 深色色彩系统 (Dark Mode Defaults) */
+  --cb-bg: #1B1917;
+  --cb-fg: #EDE8E1;
+  --cb-fg-muted: #948F85;
+  --cb-card-bg: rgba(255, 255, 255, 0.035);
+  --cb-border: rgba(255, 255, 255, 0.12);
+  --cb-primary: #D97757;
   --cb-primary-hover: color-mix(in srgb, var(--cb-primary) 85%, #000);
-  --cb-control-bg: rgba(0, 0, 0, 0.25);
+  --cb-control-bg: rgba(0, 0, 0, 0.28);
   --cb-active-pill: rgba(255, 255, 255, 0.16);
   --cb-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --cb-toast-bg: rgba(30, 26, 24, 0.95);
+  --cb-toast-fg: #FFFFFF;
+  --cb-toast-border: rgba(255, 255, 255, 0.14);
+  --cb-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+:root[data-theme='dark'], html[data-theme='dark'] {
+  color-scheme: dark;
+  --cb-bg: #1B1917;
+  --cb-fg: #EDE8E1;
+  --cb-fg-muted: #948F85;
+  --cb-card-bg: rgba(255, 255, 255, 0.035);
+  --cb-border: rgba(255, 255, 255, 0.12);
+  --cb-control-bg: rgba(0, 0, 0, 0.28);
+  --cb-active-pill: rgba(255, 255, 255, 0.16);
+  --cb-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --cb-toast-bg: rgba(30, 26, 24, 0.95);
+  --cb-toast-fg: #FFFFFF;
+  --cb-toast-border: rgba(255, 255, 255, 0.14);
+  --cb-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+:root[data-theme='light'], html[data-theme='light'] {
+  color-scheme: light;
+  --cb-bg: #FBF9F5;
+  --cb-fg: #1F1E1D;
+  --cb-fg-muted: #6B665E;
+  --cb-card-bg: #FFFFFF;
+  --cb-border: rgba(0, 0, 0, 0.14);
+  --cb-control-bg: rgba(0, 0, 0, 0.05);
+  --cb-active-pill: #FFFFFF;
+  --cb-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --cb-toast-bg: rgba(255, 255, 255, 0.96);
+  --cb-toast-fg: #1F1E1D;
+  --cb-toast-border: rgba(0, 0, 0, 0.12);
+  --cb-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B665E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
 @media (prefers-color-scheme: light) {
-  :root {
-    --cb-control-bg: rgba(0, 0, 0, 0.045);
+  :root:not([data-theme='dark']), html:not([data-theme='dark']) {
+    color-scheme: light;
+    --cb-bg: #FBF9F5;
+    --cb-fg: #1F1E1D;
+    --cb-fg-muted: #6B665E;
+    --cb-card-bg: #FFFFFF;
+    --cb-border: rgba(0, 0, 0, 0.14);
+    --cb-control-bg: rgba(0, 0, 0, 0.05);
     --cb-active-pill: #FFFFFF;
     --cb-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --cb-toast-bg: rgba(255, 255, 255, 0.96);
+    --cb-toast-fg: #1F1E1D;
+    --cb-toast-border: rgba(0, 0, 0, 0.12);
+    --cb-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B665E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   }
 }
 
@@ -33,8 +82,8 @@ html, body {
   margin: 0 !important;
   padding: 0 !important;
   font-family: var(--cb-font-sans);
-  background-color: var(--cb-bg);
-  color: var(--cb-fg);
+  background-color: var(--cb-bg) !important;
+  color: var(--cb-fg) !important;
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -57,12 +106,14 @@ html, body {
   font-weight: 600;
   color: var(--cb-fg);
   letter-spacing: -0.015em;
+  transition: color 0.15s ease;
 }
 
 .page-desc {
   font-size: 12.5px;
   color: var(--cb-fg-muted);
   margin-top: 3px;
+  transition: color 0.15s ease;
 }
 
 /* Section */
@@ -75,12 +126,14 @@ html, body {
   font-weight: 600;
   color: var(--cb-fg);
   margin-bottom: 2px;
+  transition: color 0.15s ease;
 }
 
 .section-desc {
   font-size: 12px;
   color: var(--cb-fg-muted);
   margin-bottom: 9px;
+  transition: color 0.15s ease;
 }
 
 /* Card */
@@ -89,6 +142,7 @@ html, body {
   border: 1px solid var(--cb-border);
   border-radius: 12px;
   overflow: hidden;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 /* Row */
@@ -99,6 +153,7 @@ html, body {
   padding: 12px 18px;
   border-bottom: 1px solid var(--cb-border);
   gap: 16px;
+  transition: border-color 0.15s ease;
 }
 
 .settings-row:last-child {
@@ -114,6 +169,7 @@ html, body {
   font-size: 13px;
   font-weight: 500;
   color: var(--cb-fg);
+  transition: color 0.15s ease;
 }
 
 .settings-sublabel {
@@ -121,6 +177,7 @@ html, body {
   color: var(--cb-fg-muted);
   margin-top: 1.5px;
   line-height: 1.4;
+  transition: color 0.15s ease;
 }
 
 .settings-control {
@@ -136,6 +193,7 @@ html, body {
   border-radius: 9999px;
   padding: 3px;
   gap: 2px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .segment-btn {
@@ -174,7 +232,7 @@ html, body {
   border-radius: 9999px;
   padding: 5px 28px 5px 12px;
   cursor: pointer;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: var(--cb-select-arrow);
   background-repeat: no-repeat;
   background-position: right 9px center;
   background-size: 11px;
@@ -185,7 +243,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
 .select-control:focus {
@@ -193,7 +251,7 @@ html, body {
 }
 
 .select-control option {
-  background: var(--cb-bg);
+  background: var(--cb-card-bg);
   color: var(--cb-fg);
 }
 
@@ -259,7 +317,7 @@ html, body {
   width: 136px;
   max-width: 136px;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
 .text-control:focus {
@@ -313,9 +371,9 @@ html, body {
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: rgba(30, 26, 24, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #ffffff;
+  background: var(--cb-toast-bg);
+  border: 1px solid var(--cb-toast-border);
+  color: var(--cb-toast-fg);
   padding: 7px 18px;
   border-radius: 9999px;
   font-size: 12px;

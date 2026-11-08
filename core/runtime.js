@@ -326,6 +326,28 @@
     return 'light';
   }
 
+  function broadcastThemeToSidecars(scheme, preset) {
+    try {
+      const iframes = document.querySelectorAll('iframe');
+      for (let i = 0; i < iframes.length; i++) {
+        const f = iframes[i];
+        if (f && f.contentWindow) {
+          f.contentWindow.postMessage(
+            {
+              type: 'ag-theme-sync',
+              payload: {
+                scheme,
+                preset,
+                colorScheme: scheme
+              }
+            },
+            '*'
+          );
+        }
+      }
+    } catch (e) {}
+  }
+
   function syncDualThemePreset() {
     try {
       const scheme = detectEffectiveColorScheme();
@@ -343,6 +365,8 @@
       if (document.documentElement.getAttribute('data-ag-preset') !== targetPreset) {
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
+
+      broadcastThemeToSidecars(scheme, targetPreset);
     } catch (e) {}
   }
 
@@ -396,6 +420,33 @@
           attributeFilter: ['class', 'style']
         });
       }
+    } catch (e) {}
+  }
+
+  // 监听侧边栏/辅助窗格 iframe 挂载，第一时间向新 Sidecar 推送最新主题
+  if (!window.__ag_sidecar_mount_observer_installed && document.body) {
+    window.__ag_sidecar_mount_observer_installed = true;
+    try {
+      const sidecarObserver = new MutationObserver((mutations) => {
+        let hasNewIframe = false;
+        for (let i = 0; i < mutations.length; i++) {
+          const added = mutations[i].addedNodes;
+          for (let j = 0; j < added.length; j++) {
+            const node = added[j];
+            if (node.nodeType === 1) {
+              if (node.tagName === 'IFRAME' || (node.querySelector && node.querySelector('iframe'))) {
+                hasNewIframe = true;
+                break;
+              }
+            }
+          }
+          if (hasNewIframe) break;
+        }
+        if (hasNewIframe && typeof window.__ag_sync_color_scheme_fn === 'function') {
+          setTimeout(window.__ag_sync_color_scheme_fn, 50);
+        }
+      });
+      sidecarObserver.observe(document.body, { childList: true, subtree: true });
     } catch (e) {}
   }
 
