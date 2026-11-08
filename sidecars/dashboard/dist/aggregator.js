@@ -135,6 +135,7 @@ class GlobalAnalyticsEngine {
     let totalOut = 0;
     let totalCache = 0;
     let totalThink = 0;
+    let totalRequests = 0;
     let ttftSum = 0;
     let ttftCount = 0;
     let streamSum = 0;
@@ -187,6 +188,7 @@ class GlobalAnalyticsEngine {
             thinkTok: sThink,
             ttft: count > 0 ? sTtft / count : 0,
             stream: sStream,
+            reqCount: count || (rows ? rows.length : 1),
             lastModified: st.mtimeMs
           };
           this.cache.sessions[convId] = entry;
@@ -201,6 +203,8 @@ class GlobalAnalyticsEngine {
       totalOut += entry.outTok;
       totalCache += entry.cacheRead;
       totalThink += entry.thinkTok;
+      const convReq = entry.reqCount || s.stepCount || 1;
+      totalRequests += convReq;
       if (entry.ttft > 0) {
         ttftSum += entry.ttft;
         ttftCount++;
@@ -226,10 +230,11 @@ class GlobalAnalyticsEngine {
       projectStats[proj].tokenCount += entry.inTok + entry.outTok + entry.cacheRead;
       const dateKey = s.lastModifiedTime ? s.lastModifiedTime.slice(0, 10) : "Recent";
       if (!dateSeries[dateKey])
-        dateSeries[dateKey] = { input: 0, output: 0, cache: 0 };
+        dateSeries[dateKey] = { input: 0, output: 0, cache: 0, requests: 0 };
       dateSeries[dateKey].input += entry.inTok;
       dateSeries[dateKey].output += entry.outTok;
       dateSeries[dateKey].cache += entry.cacheRead;
+      dateSeries[dateKey].requests += convReq;
     }
     if (cacheUpdated) {
       this.saveCache();
@@ -239,9 +244,10 @@ class GlobalAnalyticsEngine {
     const avgTtft = ttftCount > 0 ? Math.round(ttftSum / ttftCount * 100) / 100 : 0;
     const avgRate = streamCount > 0 ? Math.round(streamSum / streamCount) : 0;
     const topProjects = Object.entries(projectStats).map(([projectId, stat]) => ({ projectId, conversationCount: stat.convCount, tokenCount: stat.tokenCount })).sort((a, b) => b.tokenCount - a.tokenCount).slice(0, 5);
-    const timeRangeSeries = Object.entries(dateSeries).map(([date, d]) => ({ date, inputTok: d.input, outTok: d.output, cacheRead: d.cache })).sort((a, b) => a.date.localeCompare(b.date));
+    const timeRangeSeries = Object.entries(dateSeries).map(([date, d]) => ({ date, inputTok: d.input, outTok: d.output, cacheRead: d.cache, requests: d.requests })).sort((a, b) => a.date.localeCompare(b.date));
     return {
       totalConversations: summaries.length,
+      totalRequests,
       totalTokens: {
         input: totalIn,
         output: totalOut,

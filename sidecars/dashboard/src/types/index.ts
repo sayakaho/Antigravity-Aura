@@ -62,6 +62,7 @@ export interface ConversationSummary {
 
 export interface GlobalAnalyticsOverview {
   totalConversations: number;
+  totalRequests: number;
   totalTokens: {
     input: number;
     output: number;
@@ -78,5 +79,6 @@ export interface GlobalAnalyticsOverview {
     inputTok: number;
     outTok: number;
     cacheRead: number;
+    requests: number;
   }>;
 }

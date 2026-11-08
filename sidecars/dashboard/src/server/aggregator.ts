@@ -28,6 +28,7 @@ interface CacheEntry {
   thinkTok: number;
   ttft: number;
   stream: number;
+  reqCount: number;
   lastModified: number;
 }
 
@@ -158,13 +159,14 @@ export class GlobalAnalyticsEngine {
     let totalOut = 0;
     let totalCache = 0;
     let totalThink = 0;
+    let totalRequests = 0;
     let ttftSum = 0;
     let ttftCount = 0;
     let streamSum = 0;
     let streamCount = 0;
 
     const projectStats: Record<string, { convCount: number; tokenCount: number }> = {};
-    const dateSeries: Record<string, { input: number; output: number; cache: number }> = {};
+    const dateSeries: Record<string, { input: number; output: number; cache: number; requests: number }> = {};
 
     for (const s of summaries) {
       const convId = s.conversationId;
@@ -217,6 +219,7 @@ export class GlobalAnalyticsEngine {
             thinkTok: sThink,
             ttft: count > 0 ? sTtft / count : 0,
             stream: sStream,
+            reqCount: count || (rows ? rows.length : 1),
             lastModified: st.mtimeMs
           };
           this.cache.sessions[convId] = entry;
@@ -232,6 +235,8 @@ export class GlobalAnalyticsEngine {
       totalOut += entry.outTok;
       totalCache += entry.cacheRead;
       totalThink += entry.thinkTok;
+      const convReq = entry.reqCount || s.stepCount || 1;
+      totalRequests += convReq;
 
       if (entry.ttft > 0) {
         ttftSum += entry.ttft;
@@ -259,10 +264,11 @@ export class GlobalAnalyticsEngine {
 
       // Group by daily time-series
       const dateKey = s.lastModifiedTime ? s.lastModifiedTime.slice(0, 10) : 'Recent';
-      if (!dateSeries[dateKey]) dateSeries[dateKey] = { input: 0, output: 0, cache: 0 };
+      if (!dateSeries[dateKey]) dateSeries[dateKey] = { input: 0, output: 0, cache: 0, requests: 0 };
       dateSeries[dateKey].input += entry.inTok;
       dateSeries[dateKey].output += entry.outTok;
       dateSeries[dateKey].cache += entry.cacheRead;
+      dateSeries[dateKey].requests += convReq;
     }
 
     if (cacheUpdated) {
@@ -280,11 +286,12 @@ export class GlobalAnalyticsEngine {
       .slice(0, 5);
 
     const timeRangeSeries = Object.entries(dateSeries)
-      .map(([date, d]) => ({ date, inputTok: d.input, outTok: d.output, cacheRead: d.cache }))
+      .map(([date, d]) => ({ date, inputTok: d.input, outTok: d.output, cacheRead: d.cache, requests: d.requests }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
     return {
       totalConversations: summaries.length,
+      totalRequests,
       totalTokens: {
         input: totalIn,
         output: totalOut,

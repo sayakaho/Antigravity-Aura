@@ -436,6 +436,53 @@ html, body {
   box-shadow: var(--aura-active-shadow);
 }
 
+/* Time Range Filter Bar */
+.analytics-filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.timerange-segmented {
+  background: var(--aura-control-bg);
+  border: 1px solid var(--aura-border);
+  border-radius: 9999px;
+  padding: 2.5px;
+  gap: 2px;
+}
+
+.timerange-segmented .segment-btn {
+  padding: 4px 12px;
+  font-size: 11.5px;
+}
+
+.custom-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--aura-control-bg);
+  border: 1px solid var(--aura-border);
+  padding: 3px 8px;
+  border-radius: 9999px;
+}
+
+.date-input {
+  background: transparent;
+  border: none;
+  color: var(--aura-fg);
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+
+.range-sep {
+  color: var(--aura-fg-muted);
+  font-size: 11px;
+}
+
 /* Analytics Toolbar */
 .analytics-toolbar {
   display: flex;
@@ -445,9 +492,10 @@ html, body {
 }
 
 .toolbar-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--aura-fg);
+  letter-spacing: -0.01em;
 }
 
 .btn-sm {
@@ -463,17 +511,32 @@ html, body {
   100% { transform: rotate(360deg); }
 }
 
-/* KPI Summary Cards */
+/* KPI Summary Cards (2-Row Hierarchy) */
 .kpi-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.kpi-grid-primary {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  margin-bottom: 20px;
 }
 
-@media (min-width: 560px) {
-  .kpi-grid {
-    grid-template-columns: repeat(4, 1fr);
+.kpi-grid-secondary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 580px) {
+  .kpi-grid-primary {
+    grid-template-columns: 1fr;
+  }
+  .kpi-grid-secondary {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -486,6 +549,18 @@ html, body {
   flex-direction: column;
   justify-content: space-between;
   min-height: 96px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.kpi-card-featured {
+  padding: 16px 20px;
+  min-height: 108px;
+  background: color-mix(in srgb, var(--aura-card-bg) 95%, var(--aura-primary) 5%);
+}
+
+.kpi-card-featured .kpi-value {
+  font-size: 26px;
+  margin: 6px 0;
 }
 
 .kpi-label {
@@ -500,7 +575,7 @@ html, body {
   font-size: 20px;
   font-weight: 600;
   color: var(--aura-fg);
-  margin: 6px 0;
+  margin: 5px 0;
   letter-spacing: -0.02em;
 }
 
@@ -514,27 +589,28 @@ html, body {
 .kpi-breakdown {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
   margin-top: 4px;
 }
 
 .kpi-tag {
   font-size: 10px;
   font-weight: 500;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 9999px;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .tag-cached {
-  background: rgba(46, 125, 50, 0.15);
-  color: #4caf50;
-  border: 1px solid rgba(46, 125, 50, 0.3);
+  background: rgba(52, 168, 83, 0.15);
+  color: #34A853;
+  border: 1px solid rgba(52, 168, 83, 0.3);
 }
 
 .tag-input {
   background: var(--aura-control-bg);
   color: var(--aura-fg-muted);
+  border: 1px solid var(--aura-border);
 }
 
 .tag-output {
@@ -544,7 +620,7 @@ html, body {
 }
 
 .kpi-subtext {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--aura-fg-muted);
   line-height: 1.35;
 }
@@ -556,13 +632,14 @@ html, body {
   border-radius: 12px;
   padding: 16px;
   overflow: hidden;
+  position: relative;
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .chart-title {
@@ -592,29 +669,111 @@ html, body {
   display: inline-block;
 }
 
-.chart-svg-container {
+.chart-stage {
+  position: relative;
   width: 100%;
-  overflow-x: auto;
 }
 
 .analytics-svg {
   width: 100%;
   height: auto;
-  min-height: 160px;
+  min-height: 200px;
   display: block;
 }
 
-.chart-bar-group {
-  transition: opacity 0.15s ease;
+.chart-column-group {
   cursor: pointer;
 }
 
-.chart-bar-group:hover rect {
-  filter: brightness(1.15);
+.bar-hover-slot {
+  pointer-events: all;
+}
+
+.chart-column-group:hover .bar-segment {
+  filter: brightness(1.25);
+  transition: filter 0.12s ease;
+}
+
+/* Floating Hover Tooltip */
+.chart-floating-tooltip {
+  position: absolute;
+  background: var(--aura-toast-bg);
+  border: 1px solid var(--aura-toast-border);
+  color: var(--aura-toast-fg);
+  border-radius: 9px;
+  padding: 10px 14px;
+  pointer-events: none;
+  z-index: 80;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  min-width: 170px;
+  transition: opacity 0.15s ease;
+}
+
+.tooltip-header {
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--aura-fg);
+  border-bottom: 1px solid var(--aura-border);
+  padding-bottom: 5px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  margin-bottom: 3.5px;
+}
+
+.tooltip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 2px;
+}
+
+.tooltip-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--aura-fg-muted);
+}
+
+.tooltip-val {
+  font-weight: 500;
+  font-family: var(--aura-font-mono);
+  color: var(--aura-fg);
+}
+
+.tooltip-divider {
+  height: 1px;
+  background: var(--aura-border);
+  margin: 6px 0;
+}
+
+.tooltip-row.total-row .tooltip-label {
+  font-weight: 600;
+  color: var(--aura-fg);
+}
+
+.tooltip-row.total-row .tooltip-val {
+  font-weight: 600;
+  color: var(--aura-primary);
+}
+
+.tooltip-subline {
+  font-size: 10px;
+  color: var(--aura-fg-muted);
+  margin-top: 2px;
+  text-align: right;
 }
 
 .chart-empty, .chart-loading {
-  padding: 28px;
+  padding: 32px;
   text-align: center;
   font-size: 12px;
   color: var(--aura-fg-muted);

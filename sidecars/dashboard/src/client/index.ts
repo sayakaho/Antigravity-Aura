@@ -3,7 +3,7 @@
  */
 
 import { initThemeListener, syncTheme } from './theme-sync';
-import { refreshAnalytics } from './analytics';
+import { refreshAnalytics, initTimeRangeControls } from './analytics';
 import type { AuraConfig } from '../types';
 
 declare global {
@@ -465,6 +465,9 @@ async function initApp(): Promise<void> {
   // 14. Analytics Refresh Button
   const refreshAnalyticsBtn = document.getElementById('btn-refresh-analytics');
   refreshAnalyticsBtn?.addEventListener('click', () => refreshAnalytics());
+
+  // 15. Time Range Filters Initialization
+  initTimeRangeControls();
 
   // Initial Analytics Fetch
   refreshAnalytics();
