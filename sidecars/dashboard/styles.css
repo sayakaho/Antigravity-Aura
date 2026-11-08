@@ -20,6 +20,7 @@
   --aura-toast-fg: #FFFFFF;
   --aura-toast-border: rgba(255, 255, 255, 0.14);
   --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  --aura-chart-hover-band: rgba(255, 255, 255, 0.18);
 }
 
 :root[data-theme='dark'], html[data-theme='dark'] {
@@ -36,6 +37,7 @@
   --aura-toast-fg: #FFFFFF;
   --aura-toast-border: rgba(255, 255, 255, 0.14);
   --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23948F85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  --aura-chart-hover-band: rgba(255, 255, 255, 0.18);
 }
 
 :root[data-theme='light'], html[data-theme='light'] {
@@ -52,6 +54,7 @@
   --aura-toast-fg: #1F1E1D;
   --aura-toast-border: rgba(0, 0, 0, 0.12);
   --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B665E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  --aura-chart-hover-band: rgba(0, 0, 0, 0.055);
 }
 
 @media (prefers-color-scheme: light) {
@@ -69,6 +72,7 @@
     --aura-toast-fg: #1F1E1D;
     --aura-toast-border: rgba(0, 0, 0, 0.12);
     --aura-select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B665E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    --aura-chart-hover-band: rgba(0, 0, 0, 0.055);
   }
 }
 
@@ -837,7 +841,7 @@ html, body {
 }
 
 .chart-shared-hover-band {
-  fill: rgba(255, 255, 255, 0.075);
+  fill: var(--aura-chart-hover-band, rgba(255, 255, 255, 0.18));
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -845,7 +849,12 @@ html, body {
 
 html[data-theme="light"] .chart-shared-hover-band,
 body.light .chart-shared-hover-band {
-  fill: rgba(0, 0, 0, 0.038);
+  fill: rgba(0, 0, 0, 0.055);
+}
+
+html[data-theme="dark"] .chart-shared-hover-band,
+body.dark .chart-shared-hover-band {
+  fill: rgba(255, 255, 255, 0.18);
 }
 
 .bar-segment {
