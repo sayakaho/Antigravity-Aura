@@ -1,5 +1,5 @@
 // Backend for Chuanban Theme & Metrics Sidecar
-// Hosts Sidecar Web UI & Supervises CDP Theme Injection into Antigravity
+// Hosts Sidecar Web UI & Supervises CDP Theme Injection + Live Metrics into Antigravity
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,8 +22,11 @@ const ROOT_DIR = path.resolve(HERE, '../..');
 const CORE_DIR = path.join(ROOT_DIR, 'core');
 const USER_DIR = path.join(ROOT_DIR, 'user');
 const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
+const CONVERSATIONS_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
 
+// ============================================================================
 // 0. 动态探测 node:sqlite 支持
+// ============================================================================
 let DatabaseSync = null;
 try {
   const sqliteMod = await import('node:sqlite').catch(() => null);
@@ -34,7 +37,9 @@ try {
   DatabaseSync = null;
 }
 
-// 1. 辅助函数
+// ============================================================================
+// 1. 基础辅助函数
+// ============================================================================
 function readJsonSafe(filePath, fallback = {}) {
   try {
     if (!fs.existsSync(filePath)) return fallback;
@@ -74,7 +79,265 @@ function normalizeOverrideDict(rawObj) {
   return clean;
 }
 
-// 2. 载荷构建与热重载
+// ============================================================================
+// 2. 会话指标 SQLite + Protobuf 解析引擎
+// ============================================================================
+const metricsCache = new Map();
+const MAX_METRICS_CACHE_SIZE = 30;
+
+function setMetricsCache(dbPath, entry) {
+  if (metricsCache.has(dbPath)) metricsCache.delete(dbPath);
+  metricsCache.set(dbPath, entry);
+  if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
+    const oldestKey = metricsCache.keys().next().value;
+    if (oldestKey) metricsCache.delete(oldestKey);
+  }
+}
+
+function parseProto(buf) {
+  let i = 0;
+  const out = new Map();
+  while (i < buf.length) {
+    let tag = 0;
+    let shift = 0;
+    while (i < buf.length) {
+      const b = buf[i++];
+      tag |= (b & 0x7f) << shift;
+      if (!(b & 0x80)) break;
+      shift += 7;
+    }
+    const fn = tag >>> 3;
+    const wt = tag & 7;
+    if (fn <= 0 || fn > 10000) break;
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (i < buf.length) {
+        const b = buf[i++];
+        val += (b & 0x7f) * Math.pow(2, s);
+        if (!(b & 0x80)) break;
+        s += 7;
+      }
+      out.set(fn, val);
+    } else if (wt === 2) {
+      let len = 0;
+      let s = 0;
+      while (i < buf.length) {
+        const b = buf[i++];
+        len |= (b & 0x7f) << s;
+        if (!(b & 0x80)) break;
+        s += 7;
+      }
+      if (len < 0 || i + len > buf.length) break;
+      out.set(fn, buf.subarray(i, i + len));
+      i += len;
+    } else if (wt === 1) {
+      if (i + 8 > buf.length) break;
+      out.set(fn, buf.subarray(i, i + 8));
+      i += 8;
+    } else if (wt === 5) {
+      if (i + 4 > buf.length) break;
+      out.set(fn, buf.subarray(i, i + 4));
+      i += 4;
+    } else {
+      break;
+    }
+  }
+  return out;
+}
+
+function fmtTok(n) {
+  if (!n || n <= 0) return '0';
+  if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+  if (n >= 10000) return Math.round(n / 1000) + 'k';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function fmtNum(n) {
+  return (n || 0).toLocaleString('en-US');
+}
+
+function getDbSignature(cascadeId, conversationsDir) {
+  try {
+    const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
+    if (!fs.existsSync(dbPath)) return null;
+    const st = fs.statSync(dbPath);
+    let walSig = '0:0';
+    const walPath = `${dbPath}-wal`;
+    if (fs.existsSync(walPath)) {
+      const wst = fs.statSync(walPath);
+      walSig = `${wst.mtimeMs}:${wst.size}`;
+    }
+    return `${st.mtimeMs}:${st.size}|${walSig}`;
+  } catch {
+    return null;
+  }
+}
+
+function parseConversationMetrics(cascadeId, conversationsDir) {
+  if (!DatabaseSync) return null;
+  if (!cascadeId || !/^[0-9a-f-]{36}$/i.test(cascadeId)) return null;
+  const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
+  const sig = getDbSignature(cascadeId, conversationsDir);
+  if (!sig) return { cascadeId, hasData: false };
+
+  const cached = metricsCache.get(dbPath);
+  if (cached && cached.sig === sig) {
+    return cached.payload;
+  }
+
+  const contextLimitTokens = activeConfig.contextLimit || 256000;
+  let db;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+    if (!rows || rows.length === 0) {
+      db.close();
+      db = null;
+      const emptyPayload = { cascadeId, hasData: false, sig };
+      setMetricsCache(dbPath, { sig, payload: emptyPayload });
+      return emptyPayload;
+    }
+    const userStat = db
+      .prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS lastIdx FROM steps WHERE step_type = 14')
+      .get();
+    const lastUserStepIdx = userStat?.lastIdx ?? -1;
+    const userStepsCount = userStat?.cnt ?? 0;
+    const turnStat = db
+      .prepare('SELECT COUNT(*) AS cnt FROM steps WHERE step_type = 15 AND idx > ?')
+      .get(lastUserStepIdx);
+    const rawTurnSteps = turnStat?.cnt ?? 0;
+    db.close();
+    db = null;
+
+    let totalIn = 0;
+    let totalCache = 0;
+    let totalOut = 0;
+    let totalThink = 0;
+    let totalResp = 0;
+
+    const parsed = rows.map((r) => {
+      const top = parseProto(r.data);
+      const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
+      const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
+      const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
+      const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
+
+      const inTok = usage.get(2) || 0;
+      const outTok = usage.get(3) || 0;
+      const cacheRead = usage.get(5) || 0;
+      const thinkTok = usage.get(9) || 0;
+      const respTok = usage.get(10) || 0;
+      const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
+      const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
+
+      totalIn += inTok;
+      totalCache += cacheRead;
+      totalOut += outTok;
+      totalThink += thinkTok;
+      totalResp += respTok;
+
+      return {
+        idx: r.idx,
+        inTok,
+        outTok,
+        cacheRead,
+        ctx: inTok + cacheRead,
+        thinkTok,
+        respTok,
+        ttft,
+        stream,
+        totDur: ttft + stream
+      };
+    });
+
+    const valid = parsed.filter((p) => p.ctx > 0 || p.outTok > 0);
+    if (valid.length === 0) {
+      const emptyPayload = { cascadeId, hasData: false, sig };
+      setMetricsCache(dbPath, { sig, payload: emptyPayload });
+      return emptyPayload;
+    }
+
+    const turnSlice = rawTurnSteps > 0 ? valid.slice(-rawTurnSteps) : [];
+    const turnSteps = turnSlice.length;
+    let turnOut = 0;
+    let turnThink = 0;
+    let turnResp = 0;
+    let turnDur = 0;
+    for (let i = 0; i < turnSlice.length; i++) {
+      turnOut += turnSlice[i].outTok;
+      turnThink += turnSlice[i].thinkTok;
+      turnResp += turnSlice[i].respTok;
+      turnDur += turnSlice[i].totDur;
+    }
+
+    const last = valid[valid.length - 1];
+    const streamTps = last.stream >= 0.25 ? last.outTok / last.stream : 0;
+    const e2eTps = last.totDur > 0 ? last.outTok / last.totDur : 0;
+    const displayTps = streamTps > 0 && streamTps <= 600 ? streamTps : e2eTps;
+    const ctxPct = Math.round((last.ctx / contextLimitTokens) * 100);
+    const ctxClass = ctxPct >= 90 ? 'ag-ctx-crit' : ctxPct >= 75 ? 'ag-ctx-warn' : 'ag-ctx-ok';
+    const lastCacheRate = last.ctx > 0 ? ((last.cacheRead / last.ctx) * 100).toFixed(1) : '0.0';
+    const sessionCacheRate = totalIn + totalCache > 0 ? ((totalCache / (totalIn + totalCache)) * 100).toFixed(1) : '0.0';
+    const remainCtx = Math.max(0, contextLimitTokens - last.ctx);
+    const limitKStr = Math.round(contextLimitTokens / 1000) + 'k';
+
+    const inlineHtml = [
+      `<span>${Math.round(displayTps)} tok/s</span>`,
+      `<span class="ag-sep">·</span>`,
+      `<span>TTFT ${last.ttft.toFixed(1)}s</span>`,
+      `<span class="ag-sep">·</span>`,
+      `<span>Ctx ${fmtTok(last.ctx)}/${limitKStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
+      `<span class="ag-sep">·</span>`,
+      `<span>Out ${fmtTok(last.outTok)}</span>`
+    ].join('');
+
+    const turnRowHtml =
+      turnSteps > 1
+        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
+        : '';
+
+    const tooltipHtml = [
+      `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${streamTps > 0 && streamTps <= 600 ? `流式 ${streamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
+      turnRowHtml,
+      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitKStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`
+    ].join('');
+
+    const payload = {
+      cascadeId,
+      hasData: true,
+      sig,
+      displayTps: Math.round(displayTps),
+      ttft: last.ttft,
+      ctxTok: last.ctx,
+      ctxPct,
+      outTok: last.outTok,
+      inlineHtml,
+      tooltipHtml
+    };
+    setMetricsCache(dbPath, { sig, payload });
+    return payload;
+  } catch {
+    if (cached && cached.payload) return cached.payload;
+    return { cascadeId, hasData: false };
+  } finally {
+    try {
+      db?.close();
+    } catch {}
+  }
+}
+
+// ============================================================================
+// 3. 载荷构建与热重载
+// ============================================================================
 const BASE_VERSION = '20261108-v5.1.0-sidecar';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
@@ -224,7 +487,9 @@ function rebuildBundleIfNeeded(force = false) {
 
 rebuildBundleIfNeeded();
 
-// 3. CDP 端口发现与 WebSocket 目标挂载
+// ============================================================================
+// 4. CDP 目标发现与 WebSocket 会话挂载
+// ============================================================================
 const attachedTargets = new Map();
 
 function resolvePortFilePath() {
@@ -299,6 +564,8 @@ function attachTarget(target) {
     try {
       const ws = new WebSocket(wsUrl);
       let msgId = 1;
+      let activeCascadeId = '';
+      let lastPushedHash = '';
       const pendingCallbacks = new Map();
 
       const send = (method, params = {}) =>
@@ -330,26 +597,79 @@ function attachTarget(target) {
         }
       };
 
-      const checkAndInject = async () => {
-        const checkRes = await send('Runtime.evaluate', {
-          expression: `Boolean(window.__AG_THEME_BOOTSTRAPPED__ && window.__AG_PATCH_VERSION__ === ${JSON.stringify(
-            cachedPatchVersion
-          )})`,
+      const syncMetricsForSession = async (force = false) => {
+        if (!DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
+
+        if (!activeCascadeId || force) {
+          const evalRes = await send('Runtime.evaluate', {
+            expression: `(function(){
+              if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
+              const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
+              if (m) return m[1];
+              const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+              return el ? (el.getAttribute('data-cascade-id') || '') : '';
+            })()`,
+            returnByValue: true
+          });
+          const cid = String(evalRes?.result?.value || '').trim();
+          if (/^[0-9a-f-]{36}$/i.test(cid)) {
+            activeCascadeId = cid;
+          }
+        }
+
+        if (!activeCascadeId) return;
+
+        const dbSig = getDbSignature(activeCascadeId, CONVERSATIONS_DIR);
+        const sessionKey = `${activeCascadeId}:${dbSig}`;
+        if (!force && sessionKey === lastPushedHash) return;
+
+        const metrics = parseConversationMetrics(activeCascadeId, CONVERSATIONS_DIR);
+        if (!metrics) return;
+
+        latestMetrics = metrics;
+
+        await send('Runtime.evaluate', {
+          expression: `(function(){
+            if (typeof window.__ag_render_metrics === 'function') {
+              window.__ag_render_metrics(${JSON.stringify(metrics)});
+            }
+          })()`,
           returnByValue: true
         });
-        const isUpToDate = checkRes?.result?.value === true;
-        if (!isUpToDate) {
-          return await inject();
-        }
-        return true;
+        lastPushedHash = sessionKey;
       };
 
-      ws.onopen = async () => {
-        clearTimeout(attachTimeout);
+      const checkAndInject = async () => {
+        try {
+          const checkRes = await send('Runtime.evaluate', {
+            expression:
+              'window.__ag_patch_version === ' +
+              JSON.stringify(cachedPatchVersion) +
+              ' && (' +
+              JSON.stringify(!activeConfig.enabled) +
+              ' || !!document.getElementById("ag-custom-fonts"))',
+            returnByValue: true
+          });
+          if (checkRes?.result?.value !== true) {
+            await inject();
+            await syncMetricsForSession(true);
+          }
+        } catch {}
+      };
+
+      let initialAttachDone = false;
+
+      ws.addEventListener('open', async () => {
+        console.log(`[Sidecar Engine] Attached target: ${target.id} (${target.title || 'Untitled'})`);
         await send('Page.enable');
         await send('Runtime.enable');
+        await send('Runtime.addBinding', { name: '__agRequestMetrics' });
+        await send('Runtime.addBinding', { name: '__ag_on_session_change' });
         await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
         const ok = await inject();
+        await syncMetricsForSession(true);
+        initialAttachDone = true;
+
         attachedTargets.set(target.id, {
           id: target.id,
           title: target.title || '',
@@ -357,34 +677,54 @@ function attachTarget(target) {
           ws,
           send,
           inject,
-          checkAndInject
+          checkAndInject,
+          syncMetricsForSession
         });
+        clearTimeout(attachTimeout);
         finishAttach(ok);
-      };
+      });
 
-      ws.onmessage = (event) => {
+      ws.addEventListener('message', (event) => {
         try {
-          const msg = JSON.parse(event.data);
+          const msg = JSON.parse(String(event.data));
           if (msg.id && pendingCallbacks.has(msg.id)) {
             const cb = pendingCallbacks.get(msg.id);
             pendingCallbacks.delete(msg.id);
             cb(msg);
+            return;
+          }
+          if (
+            msg.method === 'Runtime.bindingCalled' &&
+            (msg.params?.name === '__agRequestMetrics' || msg.params?.name === '__ag_on_session_change')
+          ) {
+            const nextId = String(msg.params.payload || '').trim();
+            if (/^[0-9a-f-]{36}$/i.test(nextId)) {
+              activeCascadeId = nextId;
+              lastPushedHash = '';
+              syncMetricsForSession(true);
+            }
           }
         } catch {}
-      };
+      });
 
-      ws.onerror = () => finishAttach(false);
-      ws.onclose = () => {
+      const closeHandler = () => {
+        clearTimeout(attachTimeout);
+        for (const [, cb] of pendingCallbacks) cb(null);
+        pendingCallbacks.clear();
         attachedTargets.delete(target.id);
         finishAttach(false);
       };
+      ws.addEventListener('close', closeHandler);
+      ws.addEventListener('error', closeHandler);
     } catch {
       finishAttach(false);
     }
   });
 }
 
-// 4. 定时轮询与同步
+// ============================================================================
+// 5. 定时轮询与同步
+// ============================================================================
 let isSyncing = false;
 async function syncCdp(force = false) {
   if (isSyncing) return;
@@ -398,14 +738,13 @@ async function syncCdp(force = false) {
     const targets = await fetchTargets(port);
     if (!Array.isArray(targets) || targets.length === 0) return;
 
-    // 过滤页面：仅针对 Antigravity 主渲染窗口，排除 devtools 以及 sidecar 自身的 Web UI 面板
+    // 过滤页面：针对 Antigravity 宿主主窗口（排查 devtools 和 Launchpad）
+    // 注意：不得加入 !t.url.includes('theme-engine')，否则侧边栏打开时主窗口 URL 带 tab 参数会被误判剔除！
     const pages = targets.filter(
       (t) =>
         t.type === 'page' &&
         t.webSocketDebuggerUrl &&
         !String(t.url || '').startsWith('devtools://') &&
-        !String(t.url || '').includes('/sidecar') &&
-        !String(t.url || '').includes('theme-engine') &&
         isAllowedOrigin(t.url) &&
         !String(t.title || '').includes('Launchpad')
     );
@@ -422,8 +761,12 @@ async function syncCdp(force = false) {
         if (bundleChanged && entry.send) {
           await entry.send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
           await entry.inject();
+          if (entry.syncMetricsForSession) await entry.syncMetricsForSession(true);
         } else if (entry.checkAndInject) {
           await entry.checkAndInject();
+        }
+        if (entry.syncMetricsForSession) {
+          await entry.syncMetricsForSession(false);
         }
       }
     }
@@ -448,7 +791,9 @@ async function syncCdp(force = false) {
   }
 }
 
-// 5. SidecarApp Web UI 服务
+// ============================================================================
+// 6. SidecarApp Web UI 服务
+// ============================================================================
 const app = new SidecarApp();
 
 app.page('/', () => readTextSafe(path.join(HERE, 'index.html'), ''));
@@ -473,6 +818,7 @@ app.api('/api/reload', async () => {
   await syncCdp(true);
   for (const [, entry] of attachedTargets.entries()) {
     if (entry.inject) await entry.inject();
+    if (entry.syncMetricsForSession) await entry.syncMetricsForSession(true);
   }
   return {
     ok: true,
@@ -495,7 +841,9 @@ app.api('/api/toggle-preset', async (data) => {
   return { ok: true, preset: userCfg.preset };
 });
 
-// 6. 启动进程与退出守护
+// ============================================================================
+// 7. 启动进程与退出守护
+// ============================================================================
 const syncInterval = setInterval(() => syncCdp(false), 2000);
 
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {

@@ -20,6 +20,7 @@ async function updateStatus() {
     const valTargets = document.getElementById('val-targets');
     const valSize = document.getElementById('val-size');
     const valVersion = document.getElementById('val-version');
+    const valMetrics = document.getElementById('val-metrics-status');
 
     if (data.connected) {
       badge.className = 'badge badge-connected';
@@ -33,6 +34,16 @@ async function updateStatus() {
     if (valTargets) valTargets.textContent = `${data.targetCount || 0} 个窗口`;
     if (valSize) valSize.textContent = data.cssLength ? `${(data.cssLength / 1024).toFixed(1)} KB` : '-';
     if (valVersion) valVersion.textContent = data.patchVersion || 'v5.1.0';
+
+    if (valMetrics) {
+      if (data.metrics && data.metrics.hasData) {
+        valMetrics.textContent = `${data.metrics.displayTps} tok/s · TTFT ${Number(data.metrics.ttft).toFixed(1)}s`;
+        valMetrics.style.color = 'var(--cb-primary)';
+      } else {
+        valMetrics.textContent = '运行中 (等待会话)';
+        valMetrics.style.color = 'var(--cb-success)';
+      }
+    }
 
     // Highlight active preset
     if (data.preset) {
