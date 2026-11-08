@@ -179,8 +179,8 @@ html, body {
   background-position: right 9px center;
   background-size: 11px;
   outline: none;
-  width: 145px;
-  max-width: 145px;
+  width: 136px;
+  max-width: 136px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -256,8 +256,8 @@ html, body {
   border-radius: 9999px;
   padding: 5px 14px;
   outline: none;
-  width: 145px;
-  max-width: 145px;
+  width: 136px;
+  max-width: 136px;
   box-sizing: border-box;
   transition: border-color 0.15s;
 }
