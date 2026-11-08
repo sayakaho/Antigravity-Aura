@@ -39,10 +39,10 @@
 }
 
 :root, body, body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"] {
-  --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
-  --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
-  --font-sans: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
-  --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
+  --vscode-font-family: var(--ag-cfg-font-sans, 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif) !important;
+  --editor-font-family: var(--ag-cfg-font-mono, 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace) !important;
+  --font-sans: var(--ag-cfg-font-sans, 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif) !important;
+  --font-mono: var(--ag-cfg-font-mono, 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace) !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
   /* 恢复标准字重级阶，对齐稳定版（彻底消除 Insiders 强制引入的 250/350/450 细字重缺陷） */
@@ -1039,7 +1039,7 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
 
 /* === v5.0.0 User Theme Variables, Windows ClearType & Feature Switches === */
 :root {
-  --ag-chat-font-size: 16px;
+  --ag-chat-font-size: var(--ag-cfg-chat-font-size, 16px);
   --ag-wax-seal-hover: #74221A;
   --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
   --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
@@ -1064,5 +1064,38 @@ html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"] {
   border-width: 1px !important;
   border-color: rgba(31, 30, 29, 0.15) !important;
   box-shadow: none !important;
+}
+
+html[data-ag-collinear="off"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer,
+html[data-ag-collinear="off"] #antigravity\.agentSidePanelInputBox .agy-composer-footer {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  height: auto !important;
+}
+
+html[data-ag-collinear="off"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer > .shrink-0 > div:last-child,
+html[data-ag-collinear="off"] #antigravity\.agentSidePanelInputBox .agy-composer-footer > .shrink-0 > div:last-child {
+  position: static !important;
+  right: auto !important;
+  bottom: auto !important;
+}
+
+html[data-ag-collinear="off"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]),
+html[data-ag-collinear="off"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) {
+  position: static !important;
+}
+
+html[data-ag-collinear="off"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"],
+html[data-ag-collinear="off"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"] {
+  position: static !important;
+  position-anchor: none !important;
+  right: auto !important;
+  top: auto !important;
+}
+
+html[data-ag-hide-arrows="off"] [id="antigravity.agentSidePanelInputBox"] button > svg:last-child {
+  display: inline-block !important;
 }
 

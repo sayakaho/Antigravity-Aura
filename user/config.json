@@ -6,7 +6,22 @@
     "light": "high-contrast",
     "dark": "claude-dark"
   },
-  "contextLimit": 256000,
+  "typography": {
+    "sans": "default",
+    "customSans": "",
+    "mono": "default",
+    "customMono": "",
+    "fontSize": 16
+  },
+  "composer": {
+    "collinear": true,
+    "waxSeal": true,
+    "hideArrows": true
+  },
+  "telemetry": {
+    "enabled": true,
+    "interval": 2000
+  },
   "modules": {
     "i18n": false,
     "metrics": true,

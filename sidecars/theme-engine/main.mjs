@@ -80,6 +80,94 @@ function normalizeOverrideDict(rawObj) {
 }
 
 // ============================================================================
+// 1.1 字体与排版动态计算引擎 (Typography & Layout Engine)
+// ============================================================================
+const SANS_FONT_MAP = {
+  default: "'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
+  sarasa: "'Sarasa UI SC', '更纱黑体 UI SC', system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
+  pingfang: "'PingFang SC', -apple-system, BlinkMacSystemFont, 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif",
+  system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+};
+
+const MONO_FONT_MAP = {
+  default: "'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace",
+  'sarasa-mono': "'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, monospace",
+  jetbrains: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  system: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace"
+};
+
+function resolveTypographyVars(typography = {}) {
+  const sansKey = typography.sans || 'default';
+  let fontSans = SANS_FONT_MAP[sansKey];
+  if (!fontSans || sansKey === 'custom') {
+    const custom = (typography.customSans || '').trim();
+    fontSans = custom ? `${custom}, system-ui, sans-serif` : SANS_FONT_MAP.default;
+  }
+
+  const monoKey = typography.mono || 'default';
+  let fontMono = MONO_FONT_MAP[monoKey];
+  if (!fontMono || monoKey === 'custom') {
+    const custom = (typography.customMono || '').trim();
+    fontMono = custom ? `${custom}, ui-monospace, monospace` : MONO_FONT_MAP.default;
+  }
+
+  const fontSize = Number(typography.fontSize) || 16;
+  const fontSizePx = `${fontSize}px`;
+
+  return {
+    '--ag-cfg-font-sans': fontSans,
+    '--ag-cfg-font-mono': fontMono,
+    '--ag-cfg-chat-font-size': fontSizePx,
+    '--ag-chat-font-size': fontSizePx
+  };
+}
+
+function resolveThemeAttrs(userCfg = {}) {
+  const composer = userCfg.composer || {};
+  return {
+    'data-ag-wax-seal': composer.waxSeal === false ? 'off' : 'on',
+    'data-ag-collinear': composer.collinear === false ? 'off' : 'on',
+    'data-ag-hide-arrows': composer.hideArrows === false ? 'off' : 'on',
+    'data-ag-preset': userCfg.preset || 'high-contrast',
+    'data-ag-custom-font-size': 'true'
+  };
+}
+
+async function applyLiveConfigToTargets(userCfg) {
+  const vars = resolveTypographyVars(userCfg.typography);
+  const attrs = resolveThemeAttrs(userCfg);
+  const telemetryEnabled = userCfg.telemetry?.enabled !== false;
+
+  const hotCode = `(function() {
+    const vars = ${JSON.stringify(vars)};
+    for (const [k, v] of Object.entries(vars)) {
+      if (v) document.documentElement.style.setProperty(k, v);
+      else document.documentElement.style.removeProperty(k);
+    }
+    const attrs = ${JSON.stringify(attrs)};
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === null || v === undefined) document.documentElement.removeAttribute(k);
+      else document.documentElement.setAttribute(k, v);
+    }
+    const pill = document.getElementById('ag-live-metrics-pill');
+    if (pill && !${telemetryEnabled}) {
+      pill.style.display = 'none';
+    }
+  })()`;
+
+  for (const [, entry] of attachedTargets.entries()) {
+    if (entry.send) {
+      try {
+        await entry.send('Runtime.evaluate', { expression: hotCode, returnByValue: true });
+        if (telemetryEnabled && entry.syncMetricsForSession) {
+          await entry.syncMetricsForSession(true);
+        }
+      } catch (e) {}
+    }
+  }
+}
+
+// ============================================================================
 // 2. 会话指标 SQLite + Protobuf 解析引擎
 // ============================================================================
 const metricsCache = new Map();
@@ -404,16 +492,27 @@ function rebuildBundleIfNeeded(force = false) {
       i18n: true,
       metrics: true,
       composerWaxSeal: true,
+      composerCollinear: true,
+      composerHideArrows: true,
       deadlockHealer: true,
       customCss: true,
       customJs: true
     },
     rawModules
   );
+  if (userCfg.composer) {
+    if (typeof userCfg.composer.waxSeal === 'boolean') modules.composerWaxSeal = userCfg.composer.waxSeal;
+    if (typeof userCfg.composer.collinear === 'boolean') modules.composerCollinear = userCfg.composer.collinear;
+    if (typeof userCfg.composer.hideArrows === 'boolean') modules.composerHideArrows = userCfg.composer.hideArrows;
+  }
+  if (userCfg.telemetry && typeof userCfg.telemetry.enabled === 'boolean') {
+    modules.metrics = userCfg.telemetry.enabled;
+  }
   if (!DatabaseSync) modules.metrics = false;
   modules.metricsCapsule = modules.metrics;
 
-  const themeVars = userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {};
+  const typoVars = resolveTypographyVars(userCfg.typography);
+  const themeVars = Object.assign({}, typoVars, userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {});
 
   activeConfig = {
     enabled,
@@ -611,7 +710,7 @@ function attachTarget(target) {
             })()`,
             returnByValue: true
           });
-          const cid = String(evalRes?.result?.value || '').trim();
+          const cid = String(evalRes?.result?.result?.value || evalRes?.result?.value || '').trim();
           if (/^[0-9a-f-]{36}$/i.test(cid)) {
             activeCascadeId = cid;
           }
@@ -650,7 +749,8 @@ function attachTarget(target) {
               ' || !!document.getElementById("ag-custom-fonts"))',
             returnByValue: true
           });
-          if (checkRes?.result?.value !== true) {
+          const isUpToDate = checkRes?.result?.result?.value === true || checkRes?.result?.value === true;
+          if (!isUpToDate) {
             await inject();
             await syncMetricsForSession(true);
           }
@@ -800,6 +900,64 @@ app.page('/', () => readTextSafe(path.join(HERE, 'index.html'), ''));
 app.page('/app.js', () => readTextSafe(path.join(HERE, 'app.js'), ''));
 app.api('/styles.css', () => new Response(readTextSafe(path.join(HERE, 'styles.css'), ''), { contentType: 'text/css' }), 'GET');
 app.api('/logo.svg', () => new Response(readTextSafe(path.join(ASSETS_DIR, 'logo.svg'), ''), { contentType: 'image/svg+xml' }), 'GET');
+
+// GET /api/config
+app.api('/api/config', () => {
+  const userCfg = readJsonSafe(path.join(USER_DIR, 'config.json'), {});
+  return {
+    ok: true,
+    config: {
+      preset: userCfg.preset || 'high-contrast',
+      typography: Object.assign(
+        { sans: 'default', customSans: '', mono: 'default', customMono: '', fontSize: 16 },
+        userCfg.typography || {}
+      ),
+      composer: Object.assign(
+        { collinear: true, waxSeal: true, hideArrows: true },
+        userCfg.composer || {}
+      ),
+      telemetry: Object.assign(
+        { enabled: true, interval: 2000 },
+        userCfg.telemetry || {}
+      )
+    }
+  };
+}, 'GET');
+
+// POST /api/config
+app.api('/api/config', async (data) => {
+  const userCfgPath = path.join(USER_DIR, 'config.json');
+  const userCfg = readJsonSafe(userCfgPath, {});
+
+  if (data && typeof data === 'object') {
+    if (typeof data.preset === 'string') {
+      userCfg.preset = data.preset;
+      userCfg.lightPreset = data.preset;
+      if (!userCfg.presets) userCfg.presets = {};
+      userCfg.presets.light = data.preset;
+    }
+    if (data.typography && typeof data.typography === 'object') {
+      userCfg.typography = Object.assign(userCfg.typography || {}, data.typography);
+    }
+    if (data.composer && typeof data.composer === 'object') {
+      userCfg.composer = Object.assign(userCfg.composer || {}, data.composer);
+    }
+    if (data.telemetry && typeof data.telemetry === 'object') {
+      userCfg.telemetry = Object.assign(userCfg.telemetry || {}, data.telemetry);
+    }
+  }
+
+  try {
+    fs.writeFileSync(userCfgPath, JSON.stringify(userCfg, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Sidecar Engine] Failed to save config:', err);
+  }
+
+  rebuildBundleIfNeeded(true);
+  await applyLiveConfigToTargets(userCfg);
+
+  return { ok: true, config: userCfg };
+});
 
 // GET /api/status
 app.api('/api/status', () => ({

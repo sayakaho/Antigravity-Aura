@@ -144,6 +144,8 @@
     document.documentElement.removeAttribute('data-ag-color-scheme');
     document.documentElement.removeAttribute('data-ag-page-type');
     document.documentElement.removeAttribute('data-ag-wax-seal');
+    document.documentElement.removeAttribute('data-ag-collinear');
+    document.documentElement.removeAttribute('data-ag-hide-arrows');
     restoreAllTranslations(document.body);
     window.__ag_patch_version = PATCH_VERSION + '-disabled';
     return;
@@ -180,6 +182,8 @@
 
   applyThemeVars(THEME_VARS);
   document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
+  document.documentElement.setAttribute('data-ag-collinear', MODULES.composerCollinear === false ? 'off' : 'on');
+  document.documentElement.setAttribute('data-ag-hide-arrows', MODULES.composerHideArrows === false ? 'off' : 'on');
   const detectedOs =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   document.documentElement.setAttribute('data-ag-os', detectedOs);
