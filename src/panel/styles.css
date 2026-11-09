@@ -1625,3 +1625,56 @@ body.dark .chart-shared-hover-band {
   border-top: 1.5px dashed;
   display: inline-block;
 }
+
+/* ============================================================================
+   Advanced Settings (1:1 with Antigravity Native hQ Component)
+   ============================================================================ */
+.advanced-settings-wrapper {
+  margin-top: 20px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.advanced-settings-trigger {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--aura-fg-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+  -webkit-appearance: none;
+}
+
+.advanced-settings-trigger:hover {
+  color: var(--aura-fg);
+  background: var(--aura-control-bg) !important;
+}
+
+.advanced-settings-chevron {
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  color: var(--aura-fg-muted);
+  display: inline-block;
+}
+
+.advanced-settings-trigger.expanded .advanced-settings-chevron {
+  transform: rotate(90deg);
+}
+
+.advanced-settings-body {
+  width: 100%;
+  animation: aura-fade-in 0.15s ease-out;
+}

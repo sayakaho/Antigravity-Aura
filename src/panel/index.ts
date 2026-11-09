@@ -167,6 +167,14 @@ export async function loadConfig(): Promise<void> {
     const metricsToggle = document.getElementById('toggle-metrics') as HTMLInputElement | null;
     if (metricsToggle) metricsToggle.checked = config.telemetry?.enabled !== false;
     updateSegmentedUI('metrics-interval-segmented', config.telemetry?.interval || 2000);
+
+    // 6. Advanced Settings
+    const adv = config.advanced || {};
+    const cwToggle = document.getElementById('toggle-context-window-selector') as HTMLInputElement | null;
+    if (cwToggle) cwToggle.checked = adv.contextWindowSelector !== false;
+
+    const labsToggle = document.getElementById('toggle-labs-dev-mode') as HTMLInputElement | null;
+    if (labsToggle) labsToggle.checked = adv.labsDeveloperMode !== false;
   } catch (e) {
     console.error('loadConfig failed:', e);
   }
@@ -471,6 +479,50 @@ async function initApp(): Promise<void> {
   if (typeof window.sidecar?.onWorkspaceChange === 'function') {
     window.sidecar.onWorkspaceChange(() => {
       refreshAnalytics();
+    });
+  }
+
+  // 17. Advanced Settings Accordion Toggle (1:1 with Antigravity hQ)
+  const advBtn = document.getElementById('btn-toggle-advanced-settings');
+  const advContent = document.getElementById('advanced-settings-content');
+  if (advBtn && advContent) {
+    advBtn.addEventListener('click', () => {
+      const isExpanded = advBtn.classList.contains('expanded');
+      if (isExpanded) {
+        advBtn.classList.remove('expanded');
+        advBtn.setAttribute('aria-expanded', 'false');
+        advContent.style.display = 'none';
+      } else {
+        advBtn.classList.add('expanded');
+        advBtn.setAttribute('aria-expanded', 'true');
+        advContent.style.display = 'block';
+      }
+    });
+  }
+
+  // 18. Advanced: Context Window Selector Toggle
+  const cwToggle = document.getElementById('toggle-context-window-selector') as HTMLInputElement | null;
+  if (cwToggle) {
+    cwToggle.addEventListener('change', () => {
+      saveConfig({
+        advanced: {
+          ...currentConfig?.advanced,
+          contextWindowSelector: cwToggle.checked
+        } as any
+      });
+    });
+  }
+
+  // 19. Advanced: Labs & Dev Mode Toggle
+  const labsToggle = document.getElementById('toggle-labs-dev-mode') as HTMLInputElement | null;
+  if (labsToggle) {
+    labsToggle.addEventListener('change', () => {
+      saveConfig({
+        advanced: {
+          ...currentConfig?.advanced,
+          labsDeveloperMode: labsToggle.checked
+        } as any
+      });
     });
   }
 

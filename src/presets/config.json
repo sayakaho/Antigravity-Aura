@@ -25,6 +25,19 @@
     "enabled": true,
     "interval": 2000
   },
+  "advanced": {
+    "labsDeveloperMode": true,
+    "contextWindowSelector": true,
+    "defaultContextWindow": "256k",
+    "experimentalFlags": {
+      "enable-developer-mode": true,
+      "enable-context-usage-indicator": true,
+      "enable-resource-manager": true,
+      "enable-split-view": true,
+      "enable-code-search-palette": true,
+      "enable-trajectory-debug-tools": true
+    }
+  },
   "modules": {
     "i18n": false,
     "metrics": true,

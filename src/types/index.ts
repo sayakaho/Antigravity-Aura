@@ -28,12 +28,20 @@ export interface TelemetryConfig {
   interval: number;
 }
 
+export interface AdvancedConfig {
+  labsDeveloperMode?: boolean;
+  contextWindowSelector?: boolean;
+  defaultContextWindow?: '256k' | '512k';
+  experimentalFlags?: Record<string, boolean>;
+}
+
 export interface AuraConfig {
   language: 'default' | 'zh-CN';
   presets: PresetConfig;
   composer: ComposerConfig;
   typography: TypographyConfig;
   telemetry: TelemetryConfig;
+  advanced?: AdvancedConfig;
 }
 
 export interface ConversationStepMetric {

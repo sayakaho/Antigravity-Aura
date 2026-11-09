@@ -1171,19 +1171,73 @@
   }
 
   // ============================================================================
-  // 4.5 实验特性与上下文窗口选择器注入 (Option A: Context Window Selector)
+  // 4.5 原生实验特性与上下文窗口选择器注入 (Native Context Window Selector)
   // ============================================================================
   const ADVANCED = boot.advanced || {};
   const CW_ENABLED = ADVANCED.contextWindowSelector !== false;
-  const DEFAULT_CW = ADVANCED.defaultContextWindow || '256k';
+  const LABS_ENABLED = ADVANCED.labsDeveloperMode !== false;
+
+  function syncDeveloperSettings() {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+
+      // 1. 设置 userCohort 为 google，解锁 native labs、developerMode 以及 contextWindowSelector 的 runtimeGating
+      const envOverrideStr = window.localStorage.getItem('jetski.developer.featureEnvironmentOverride');
+      let envOverride = {};
+      try { envOverride = envOverrideStr ? JSON.parse(envOverrideStr) : {}; } catch (e) {}
+
+      if (LABS_ENABLED || CW_ENABLED) {
+        envOverride.enabled = true;
+        envOverride.userCohort = 'google';
+      } else {
+        delete envOverride.userCohort;
+      }
+      window.localStorage.setItem('jetski.developer.featureEnvironmentOverride', JSON.stringify(envOverride));
+
+      // 2. 同步自定义 flag 覆盖
+      const flagOverridesStr = window.localStorage.getItem('jetski.developer.customFlagOverrides');
+      let flags = {};
+      try { flags = flagOverridesStr ? JSON.parse(flagOverridesStr) : {}; } catch (e) {}
+
+      if (LABS_ENABLED) {
+        flags['enable-developer-mode'] = true;
+        flags['enable-context-usage-indicator'] = true;
+        flags['enable-resource-manager'] = true;
+        flags['enable-split-view'] = true;
+        flags['enable-code-search-palette'] = true;
+        flags['enable-trajectory-debug-tools'] = true;
+        flags['labs-autonomous-mode'] = true;
+        flags['labs-inline-actions'] = true;
+      } else {
+        delete flags['enable-developer-mode'];
+      }
+
+      // 注意：排除会导致非内部网络崩溃的 labs-concierge-agent
+      delete flags['labs-concierge-agent'];
+
+      if (CW_ENABLED) {
+        flags['context-window-selector'] = true;
+      } else {
+        delete flags['context-window-selector'];
+      }
+
+      window.localStorage.setItem('jetski.developer.customFlagOverrides', JSON.stringify(flags));
+    } catch (err) {
+      console.warn('[Aura] Failed to sync developer settings:', err);
+    }
+  }
 
   function setupContextWindowPatch() {
+    syncDeveloperSettings();
+
+    // 彻底清理旧的注入 bar 与 DOM 样式
+    const existingBar = document.getElementById('ag-cw-selector-bar');
+    if (existingBar) existingBar.remove();
+
     if (!CW_ENABLED) {
       if (window.__ag_cw_bindings && window.__ag_cw_bindings.contextWindow) {
         delete window.__ag_cw_bindings.contextWindow;
       }
-      const existingBar = document.getElementById('ag-cw-selector-bar');
-      if (existingBar) existingBar.remove();
       return;
     }
 
@@ -1203,35 +1257,74 @@
 
     const N4 = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra', max: 'Max' };
 
-    function CustomEffortRow({ option, effort, selected, contextWindow }) {
-      const effortLabel = N4[effort] || effort;
-      const isSelected = selected;
-      const curCw = contextWindow?.selected || DEFAULT_CW;
+    function getNativeMenuComponents() {
+      if (window.__ag_menu_comps?.XS && window.__ag_menu_comps?.YS && window.__ag_menu_comps?.PS && window.__ag_menu_comps?.QS) {
+        return window.__ag_menu_comps;
+      }
+      const comps = window.__ag_menu_comps || {};
+      const panel = document.querySelector('[data-testid="model-selector-panel"]') || document.body;
+      const items = panel.querySelectorAll('[role="menuitem"], [data-testid^="model-selector"]');
+      for (const el of items) {
+        const key = Object.keys(el).find(k => k.startsWith('__reactFiber'));
+        let cur = el[key];
+        while (cur) {
+          const name = cur.type?.name;
+          if (name === 'XS' && !comps.XS) comps.XS = cur.type;
+          if (name === 'YS' && !comps.YS) comps.YS = cur.type;
+          if (name === 'PS' && !comps.PS) comps.PS = cur.type;
+          if (name === 'QS' && !comps.QS) comps.QS = cur.type;
+          cur = cur.return;
+        }
+      }
+      window.__ag_menu_comps = comps;
+      return comps;
+    }
 
-      return h('div', {
-        key: effort,
-        className: 'flex items-center justify-between p-1.5 rounded hover:bg-accent/40 text-xs transition-colors'
-      },
-        h('span', { className: 'font-medium truncate' }, effortLabel),
-        h('div', { className: 'flex items-center gap-1 shrink-0' },
-          (option.contextWindowOptions || [
-            { name: '256k', description: '256K' },
-            { name: '512k', description: '512K' }
-          ]).map(cw => {
-            const active = isSelected && (curCw === cw.name || (!curCw && cw.name === DEFAULT_CW));
-            return h('button', {
+    function NativeEffortRow({ option, effort, selected, contextWindow }) {
+      const comps = getNativeMenuComponents();
+      const effortLabel = N4[effort] || effort;
+      const curCw = contextWindow?.selected || '256k';
+
+      if (!comps.XS || !comps.YS || !comps.PS || !comps.QS) {
+        return h('div', {
+          key: effort,
+          className: 'text-xs px-2 py-1 flex items-center justify-between cursor-pointer hover:bg-secondary rounded',
+          onClick: () => contextWindow?.select?.(option, curCw)
+        },
+          h('span', null, effortLabel),
+          selected ? h('span', { className: 'opacity-70 text-[11px]' }, curCw) : null
+        );
+      }
+
+      const { XS, YS, PS, QS } = comps;
+      const cwOptions = option.contextWindowOptions || [
+        { name: '256k', description: '256,000 tokens', expensive: false },
+        { name: '512k', description: '512,000 tokens', expensive: true }
+      ];
+
+      return h(XS, { key: effort, title: effortLabel },
+        h(YS, {
+          selected: selected,
+          onClick: () => contextWindow?.select?.(option, contextWindow.selected || '256k')
+        },
+          h('span', {
+            'data-testid': 'model-selector-effort-option',
+            'data-effort': effort,
+            className: 'truncate text-xs text-left'
+          }, effortLabel),
+          selected && contextWindow?.selected ? h('span', { className: 'shrink-0 opacity-70 text-xs' }, contextWindow.selected) : null
+        ),
+        h(PS, { side: 'right', align: 'start', className: 'min-w-36' },
+          cwOptions.map(cw => {
+            const isCwSelected = selected && (curCw === cw.name || (!curCw && cw.name === '256k'));
+            return h(QS, {
               key: cw.name,
-              type: 'button',
-              className: 'text-[11px] px-1.5 py-0.5 rounded border transition-colors ' +
-                (active
-                  ? 'border-primary bg-primary/20 text-primary font-bold'
-                  : 'border-border/60 hover:bg-muted/80 text-muted-foreground'),
-              onClick: (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                contextWindow?.select?.(option, cw.name);
-              }
-            }, cw.name);
+              selected: isCwSelected,
+              onClick: () => contextWindow?.select?.(option, cw.name)
+            },
+              h('span', { className: 'truncate text-xs' }, cw.name),
+              cw.description ? h('span', { className: 'shrink-0 opacity-60 text-[10px]' }, cw.description) : null
+            );
           })
         )
       );
@@ -1260,11 +1353,9 @@
 
       if (bindings) {
         window.__ag_cw_bindings = bindings;
-        if (!bindings.contextWindow || !bindings.contextWindow.EffortRow) {
-          bindings.contextWindow = {
-            EffortRow: CustomEffortRow
-          };
-        }
+        bindings.contextWindow = {
+          EffortRow: NativeEffortRow
+        };
       }
 
       if (reduxStore) {
@@ -1305,72 +1396,12 @@
       return { bindings, reduxStore };
     }
 
-    function enhanceDropdownPanel() {
-      const panel = document.querySelector('[data-testid="model-selector-panel"]');
-      if (!panel) return;
-      if (panel.querySelector('#ag-cw-selector-bar')) return;
-
-      const triggerBtn = document.querySelector('[data-testid="model-selector-trigger"]');
-      let curSelectedCw = triggerBtn?.getAttribute('data-context-window');
-      if (!curSelectedCw || curSelectedCw === 'Default') curSelectedCw = DEFAULT_CW;
-
-      const bar = document.createElement('div');
-      bar.id = 'ag-cw-selector-bar';
-      bar.className = 'ag-cw-bar';
-      bar.innerHTML = `
-        <span class="ag-cw-title">Context Window</span>
-        <div class="ag-cw-tabs">
-          <button type="button" class="ag-cw-tab ${curSelectedCw === '256k' ? 'active' : ''}" data-cw="256k">256k</button>
-          <button type="button" class="ag-cw-tab ${curSelectedCw === '512k' ? 'active' : ''}" data-cw="512k">512k</button>
-        </div>
-      `;
-
-      bar.querySelectorAll('.ag-cw-tab').forEach(tab => {
-        tab.addEventListener('click', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          const targetCw = tab.getAttribute('data-cw');
-          bar.querySelectorAll('.ag-cw-tab').forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-
-          const store = window.__ag_redux_store;
-          if (store) {
-            try {
-              const state = store.getState();
-              const convId = Object.keys(state.modelSelection?.byConversation || {})[0];
-              const curModel = state.modelSelection?.byConversation?.[convId]?.model ||
-                state.userStatus?.cascadeModelConfigData?.clientModelConfigs?.[0]?.value;
-
-              store.dispatch({
-                type: 'modelSelection/modelPicked',
-                payload: {
-                  conversationId: convId,
-                  model: curModel,
-                  contextWindow: targetCw
-                }
-              });
-
-              if (triggerBtn) {
-                triggerBtn.setAttribute('data-context-window', targetCw);
-              }
-            } catch (err) {
-              console.error('[Aura] Failed to select context window:', err);
-            }
-          }
-        });
-      });
-
-      panel.insertBefore(bar, panel.firstChild);
-    }
-
     hookFiberAndRedux();
-    enhanceDropdownPanel();
 
     if (!window.__ag_cw_watcher) {
       window.__ag_cw_watcher = setInterval(() => {
         hookFiberAndRedux();
-        enhanceDropdownPanel();
-      }, 1500);
+      }, 2000);
     }
   }
 

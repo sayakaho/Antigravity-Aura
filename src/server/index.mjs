@@ -678,6 +678,23 @@ function rebuildBundleIfNeeded(force = false) {
   const typoVars = resolveTypographyVars(userCfg.typography);
   const themeVars = Object.assign({}, typoVars, userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {});
 
+  const advanced = Object.assign(
+    {
+      labsDeveloperMode: true,
+      contextWindowSelector: true,
+      defaultContextWindow: '256k',
+      experimentalFlags: {
+        'enable-developer-mode': true,
+        'enable-context-usage-indicator': true,
+        'enable-resource-manager': true,
+        'enable-split-view': true,
+        'enable-code-search-palette': true,
+        'enable-trajectory-debug-tools': true
+      }
+    },
+    userCfg.advanced || {}
+  );
+
   activeConfig = {
     enabled,
     channel,
@@ -687,6 +704,7 @@ function rebuildBundleIfNeeded(force = false) {
     contextLimit,
     modules,
     themeVars,
+    advanced,
     selectors: userCfg.selectors || {},
     allowedOrigins: Array.isArray(userCfg.allowedOrigins)
       ? userCfg.allowedOrigins
@@ -729,6 +747,7 @@ function rebuildBundleIfNeeded(force = false) {
     cssText: baseCss,
     customCss,
     themeVars,
+    advanced,
     i18nDict: mergedDict,
     modules,
     features: modules,
@@ -1160,6 +1179,22 @@ app.api('/api/config', () => {
       telemetry: Object.assign(
         { enabled: true, interval: 2000 },
         userCfg.telemetry || {}
+      ),
+      advanced: Object.assign(
+        {
+          labsDeveloperMode: true,
+          contextWindowSelector: true,
+          defaultContextWindow: '256k',
+          experimentalFlags: {
+            'enable-developer-mode': true,
+            'enable-context-usage-indicator': true,
+            'enable-resource-manager': true,
+            'enable-split-view': true,
+            'enable-code-search-palette': true,
+            'enable-trajectory-debug-tools': true
+          }
+        },
+        userCfg.advanced || {}
       )
     }
   };
@@ -1188,6 +1223,15 @@ app.api('/api/config', async (data) => {
     }
     if (data.telemetry && typeof data.telemetry === 'object') {
       userCfg.telemetry = Object.assign(userCfg.telemetry || {}, data.telemetry);
+    }
+    if (data.advanced && typeof data.advanced === 'object') {
+      userCfg.advanced = Object.assign(userCfg.advanced || {}, data.advanced);
+      if (data.advanced.experimentalFlags && typeof data.advanced.experimentalFlags === 'object') {
+        userCfg.advanced.experimentalFlags = Object.assign(
+          userCfg.advanced.experimentalFlags || {},
+          data.advanced.experimentalFlags
+        );
+      }
     }
   }
 
