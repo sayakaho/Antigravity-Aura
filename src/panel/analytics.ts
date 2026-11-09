@@ -870,10 +870,18 @@ function attachOverviewScrubberListeners(
 
     const ctx = st.effectiveCtx;
     const isActionTurn = (st.inTok === 0 && st.outTok === 0 && st.cacheRead === 0);
-    const speed = Math.round(st.stream > 0 ? st.outTok / st.stream : 0);
-    const speedSubline = isActionTurn
-      ? 'Action / Non-LLM Turn'
-      : (st.stream > 0 ? `Speed: ${speed} tok/s · TTFT: ${st.ttft.toFixed(2)}s` : (st.outTok > 0 ? `Speed: ~${st.outTok} tok/s · TTFT: ${st.ttft.toFixed(2)}s` : `Latency: ${st.totDur > 0 ? st.totDur.toFixed(2) + 's' : '--'}`));
+    const isRealStream = st.stream >= 0.25 && st.outTok >= 20 && (st.outTok / st.stream) <= 600;
+    const streamTps = isRealStream ? Math.round(st.outTok / st.stream) : 0;
+    const e2eTps = st.totDur > 0 ? Math.round(st.outTok / st.totDur) : 0;
+
+    let speedSubline = '';
+    if (isActionTurn) {
+      speedSubline = 'Action / Non-LLM Turn';
+    } else if (streamTps > 0) {
+      speedSubline = `Stream: ${streamTps} tok/s · E2E: ${e2eTps} tok/s · TTFT: ${st.ttft.toFixed(2)}s`;
+    } else {
+      speedSubline = `Throughput: ${e2eTps} tok/s (E2E) · Latency: ${st.totDur.toFixed(2)}s`;
+    }
 
     // 2. Exact Snap Positioning on the rendering polyline
     const ptSvgX = paddingLeft + (totalTurns > 1 ? (stepIdx / (totalTurns - 1)) * chartWidth : chartWidth / 2);
@@ -1644,16 +1652,17 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     let rawMaxTps = 0;
 
     steps.forEach((st) => {
-      if (st.stream >= 0.08 && st.outTok > 0) {
-        const tps = Math.round(st.outTok / st.stream);
-        if (tps <= 2500 && tps > rawMaxTps) rawMaxTps = tps;
-      } else if (st.outTok > 0 && st.totDur >= 0.1) {
-        const tps = Math.round(st.outTok / st.totDur);
-        if (tps <= 2500 && tps > rawMaxTps) rawMaxTps = tps;
+      const isRealStream = st.stream >= 0.25 && st.outTok >= 20 && (st.outTok / st.stream) <= 600;
+      let tps = 0;
+      if (isRealStream) {
+        tps = Math.round(st.outTok / st.stream);
+      } else if (st.outTok > 0 && st.totDur > 0) {
+        tps = Math.round(st.outTok / st.totDur);
       }
+      if (tps <= 600 && tps > rawMaxTps) rawMaxTps = tps;
     });
 
-    const rawMax = Math.max(rawMaxTps, 300);
+    const rawMax = Math.min(600, Math.max(rawMaxTps, 300));
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
     const normalized = rawMax / magnitude;
     let tickStep = magnitude;
@@ -1661,21 +1670,23 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     else if (normalized <= 5) tickStep = 1 * magnitude;
     else tickStep = 2 * magnitude;
 
-    const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 400;
+    const maxTps = Math.min(600, Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4)) || 400;
     const yTicks = [0, maxTps * 0.25, maxTps * 0.5, maxTps * 0.75, maxTps];
     const stepX = chartWidth / Math.max(1, totalTurns - 1);
 
-    const points: Array<{ x: number; y: number; tps: number; stepIdx: number }> = [];
+    const points: Array<{ x: number; y: number; tps: number; isStream: boolean; stepIdx: number }> = [];
     steps.forEach((st, idx) => {
+      const isRealStream = st.stream >= 0.25 && st.outTok >= 20 && (st.outTok / st.stream) <= 600;
       let tps = 0;
-      if (st.stream >= 0.08 && st.outTok > 0) {
-        tps = Math.min(maxTps, Math.round(st.outTok / st.stream));
-      } else if (st.outTok > 0 && st.totDur >= 0.1) {
-        tps = Math.min(maxTps, Math.round(st.outTok / st.totDur));
+      if (isRealStream) {
+        tps = Math.round(st.outTok / st.stream);
+      } else if (st.outTok > 0 && st.totDur > 0) {
+        tps = Math.round(st.outTok / st.totDur);
       }
+      tps = Math.min(maxTps, tps);
       const x = paddingLeft + (totalTurns > 1 ? idx * stepX : chartWidth / 2);
       const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
-      points.push({ x, y, tps, stepIdx: st.idx + 1 });
+      points.push({ x, y, tps, isStream: isRealStream, stepIdx: st.idx + 1 });
     });
 
     let yAxisLinesSvg = '';
@@ -1717,7 +1728,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     points.forEach((p, idx) => {
       const bandW = stepX;
       const bandX = Math.max(paddingLeft, p.x - bandW / 2);
-      const dataPayload = JSON.stringify([{ model: 'Active Session Turn #' + p.stepIdx, color: '#8B5CF6', tps: p.tps, reqs: 1 }]);
+      const dataPayload = JSON.stringify([{ model: (p.isStream ? 'Stream Speed #' : 'E2E Throughput #') + p.stepIdx, color: p.isStream ? '#8B5CF6' : '#3B82F6', tps: p.tps, reqs: 1 }]);
       hoverBandsSvg += `
         <rect class="tps-hover-slot"
               x="${bandX.toFixed(1)}" y="${paddingTop}" width="${bandW.toFixed(1)}" height="${chartHeight}"
