@@ -587,7 +587,6 @@ html, body {
   display: flex;
   overflow: hidden;
   width: 100%;
-  max-width: 380px;
 }
 .kpi-ratio-seg-cache { background: #00A67E; }
 .kpi-ratio-seg-input { background: #818CF8; }
@@ -835,13 +834,34 @@ html, body {
 @media (max-width: 680px) {
   .kpi-hero-card {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 12px;
+    padding: 18px 20px;
+  }
+  .hero-left {
+    width: 100%;
+  }
+  .hero-ratio-wrapper {
+    width: 100%;
+  }
+  .kpi-ratio-bar {
+    width: 100%;
+    max-width: 100%;
+  }
+  .ratio-labels {
+    width: 100%;
   }
   .kpi-breakdown-list {
-    padding-left: 0;
-    border-left: none;
-    border-top: 1px solid var(--aura-border);
-    padding-top: 12px;
+    width: 100%;
+    max-width: 100%;
+    margin-right: 0;
+    justify-self: stretch;
+    border-top: 1px solid color-mix(in srgb, var(--aura-border) 60%, transparent);
+    padding-top: 10px;
+    margin-top: 4px;
+    gap: 7px;
+  }
+  .kpi-breakdown-row {
+    width: 100%;
   }
   .kpi-grid-dual {
     grid-template-columns: 1fr;
