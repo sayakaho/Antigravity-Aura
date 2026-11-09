@@ -39,7 +39,17 @@
 }
 
 :root {
-  /* 恢复标准字重级阶，对齐稳定版（消除 Insiders 引入的 250/350/450 细字重缺陷） */
+  --ag-chat-font-size: var(--ag-cfg-chat-font-size, 15px);
+  --ag-wax-seal-hover: #74221A;
+  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
+  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
+  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
+}
+
+/* 恢复标准字重级阶，对齐稳定版（消除 Insiders 在 body[data-agy-font] 引入的 250/350/450 细字重缺陷） */
+:root,
+html body[data-agy-font],
+html body[data-agy-font] :where(.font-sans) {
   --font-weight-light: 300 !important;
   --font-weight-normal: 400 !important;
   --font-weight-medium: 500 !important;
@@ -47,12 +57,6 @@
   --font-weight-bold: 700 !important;
   --font-weight-black: 900 !important;
   --agy-gsf-bold-wght: 600 !important;
-
-  --ag-chat-font-size: var(--ag-cfg-chat-font-size, 15px);
-  --ag-wax-seal-hover: #74221A;
-  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
-  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
-  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
 }
 
 /* Windows ClearType 亚像素抗锯齿适配：O(1) 根变量级关闭微墨晕，避免低分屏字体发虚 */
@@ -73,11 +77,14 @@ body[data-agy-font="google-sans"] {
   line-height: 1.62;
 }
 
-/* 1. 自定义无衬线字体（隔离代码块与等宽文本） */
-html[data-ag-custom-font="true"] {
+/* 1. 自定义无衬线字体（隔离代码块与等宽文本；同步覆盖 body[data-agy-font] 以防止宿主重定义 --font-sans 遮蔽 Portal/菜单） */
+html[data-ag-custom-font="true"],
+html[data-ag-custom-font="true"] body,
+html[data-ag-custom-font="true"] body[data-agy-font],
+html[data-ag-custom-font="true"] body[data-agy-font] .font-sans {
   --vscode-font-family: var(--ag-cfg-font-sans) !important;
   --font-sans: var(--ag-cfg-font-sans) !important;
-  --default-font-family: var(--font-sans) !important;
+  --default-font-family: var(--ag-cfg-font-sans) !important;
 }
 
 html[data-ag-custom-font="true"],
@@ -716,14 +723,22 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox spa
 }
 
 /* 菜单、弹出层与设置弹窗 */
+[data-base-ui-portal],
 [role="menu"],
 [role="menuitem"],
+[role="menuitemcheckbox"],
+[role="menuitemradio"],
+[role="listbox"],
+[role="option"],
+[role="tooltip"],
 .agy-overlay,
 .agy-overlay-item,
+.agy-dialog,
+.compact-tooltip,
 [data-radix-menu-content],
 [data-radix-popper-content-wrapper],
 [data-side] {
-  font-family: var(--font-sans) !important;
+  font-family: var(--ag-cfg-font-sans, var(--font-sans)) !important;
 }
 
 html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"],
@@ -764,8 +779,9 @@ html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="text-muted-foregro
   color: #1A1A1A !important;
 }
 
-[role="dialog"] {
-  font-family: var(--font-sans) !important;
+[role="dialog"],
+[role="alertdialog"] {
+  font-family: var(--ag-cfg-font-sans, var(--font-sans)) !important;
 }
 
 html:not([data-ag-color-scheme="dark"]) [role="dialog"] h2,
