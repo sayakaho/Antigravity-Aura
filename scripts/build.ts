@@ -178,7 +178,8 @@ export async function runBuild(isDev = false): Promise<void> {
   // 8. Assemble Strict /plugin Root Metadata & Capabilities (no bloated previews or redundant SKILL.md)
   copyFileSafe(path.join(ROOT_DIR, 'plugin.json'), path.join(DIST_DIR, 'plugin.json'));
   copyFileSafe(path.join(ROOT_DIR, 'README.md'), path.join(DIST_DIR, 'README.md'));
-  copyFileSafe(path.join(ROOT_DIR, 'assets', 'logo.svg'), path.join(DIST_DIR, 'assets', 'logo.svg'));
+  copyFileSafe(path.join(ROOT_DIR, 'LICENSE'), path.join(DIST_DIR, 'LICENSE'));
+  copyFileSafe(path.join(ROOT_DIR, 'assets', 'logo.png'), path.join(DIST_DIR, 'assets', 'logo.png'));
   copyDirRecursive(path.join(ROOT_DIR, 'skills'), path.join(DIST_DIR, 'skills'));
 
   const elapsed = Date.now() - startTime;

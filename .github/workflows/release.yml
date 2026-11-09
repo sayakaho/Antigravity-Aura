@@ -135,7 +135,8 @@ jobs:
             const required = [
               "dist/plugin.json",
               "dist/README.md",
-              "dist/assets/logo.svg",
+              "dist/LICENSE",
+              "dist/assets/logo.png",
               "dist/skills/aura-theme/SKILL.md",
               "dist/sidecars/dashboard/main.mjs",
               "dist/sidecars/dashboard/package.json",

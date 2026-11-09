@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -98,11 +99,16 @@ app.api(
 );
 
 app.api(
-  '/logo.svg',
-  () =>
-    new Response(readTextSafe(path.join(ASSETS_DIR, 'logo.svg'), ''), {
-      contentType: 'image/svg+xml'
-    }),
+  '/logo.png',
+  () => {
+    const logoPath = path.join(ASSETS_DIR, 'logo.png');
+    if (!fs.existsSync(logoPath)) {
+      return new Response(new Uint8Array(), { contentType: 'image/png', status: 404 });
+    }
+    return new Response(fs.readFileSync(logoPath), {
+      contentType: 'image/png'
+    });
+  },
   'GET'
 );
 

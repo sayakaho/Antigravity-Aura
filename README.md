@@ -1,106 +1,109 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Antigravity Aura" width="88" height="88" />
+<img src="assets/logo.png" alt="Antigravity Aura" width="88" height="88" />
 
 # Antigravity Aura
 
-**Native Plugin + Sidecar suite delivering Claude-inspired themes, multi-layer typography, bilingual localization, and real-time SQLite performance telemetry for Google Antigravity.**
+**Theme presets, custom font stacks, and local SQLite performance analytics for Google Antigravity, built on the native Plugin + Sidecar API.**
 
 [![Version](https://img.shields.io/badge/version-0.1.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.13.0%20(node%3Asqlite)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](package.json)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 English | [简体中文](README.zh-CN.md)
 
-[Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [Configuration](#configuration) · [Architecture](#architecture) · [Development](#development) · [Attribution](#attribution)
+[Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [Configuration](#configuration) · [Architecture](#architecture) · [Credits](#credits)
 
 </div>
 
----
-
 ## Overview
 
-**Antigravity Aura** (packaged as `aura-dashboard`) runs cleanly inside Google Antigravity's native **Plugin + Sidecar** lifecycle. Rather than patching client `.asar` archives or running external OS daemons, the Sidecar boots alongside the host application, discovers active windows over Chrome DevTools Protocol (CDP), parses Antigravity's local SQLite conversation store with built-in `node:sqlite`, and serves an integrated Auxiliary Pane Webview for live analytics and customization.
-
----
+**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without patching `.asar` archives or running external OS daemons. The sidecar starts with the host application, attaches to active windows over CDP for live style and script injection, and reads the local SQLite conversation store via Node 22's built-in `node:sqlite` to serve an analytics and preferences panel in the Auxiliary Pane.
 
 ## Screenshots
 
-> [!NOTE]
-> Screenshot slots are reserved below for the current v0.1.0 release UI. Capture images to the paths listed and uncomment the image tags to display them here.
+### Workspace
 
-### Workspace & Live Telemetry Capsule
+![Antigravity Aura Workspace](assets/screenshot-workspace.png)
 
-> **Placeholder** — Save screenshot to `assets/screenshot-workspace.png`  
-> Recommended view: main workspace with Light/Dark theme active, collinear composer bottom toolbar, and live telemetry capsule (`tok/s · TTFT · Ctx · Out`) with hover details.
+### Auxiliary Pane
 
-<!-- ![Workspace & Telemetry Capsule](assets/screenshot-workspace.png) -->
-
-### Analytics Dashboard & Preferences
-
-| Analytics View (`assets/screenshot-analytics.png`) | Preferences View (`assets/screenshot-preferences.png`) |
-| :--- | :--- |
-| **Placeholder** — KPI summary cards, Token Activity (`Overview` / `Timeline`), `Model Speed Trends`, and `Turn Latency vs. TTFT` scatter plot. | **Placeholder** — Light/Dark theme presets, system font selectors, telemetry polling interval, CDP connection status, and instant hot-reload controls. |
-| <!-- ![Analytics Dashboard](assets/screenshot-analytics.png) --> | <!-- ![Preferences Console](assets/screenshot-preferences.png) --> |
-
----
+<table>
+  <tr>
+    <th width="50%">Analytics</th>
+    <th width="50%">Preferences</th>
+  </tr>
+  <tr>
+    <td valign="top" align="center">
+      <img src="assets/screenshot-analytics.png" alt="Analytics Dashboard" width="100%" />
+    </td>
+    <td valign="top" align="center">
+      <img src="assets/screenshot-preferences.png" alt="Preferences" width="100%" />
+    </td>
+  </tr>
+</table>
 
 ## Features
 
-- **Claude-Inspired Light & Dark Presets**: Independent configuration for Light (`Claude Light`, `Pure Light`, `Native Default`) and Dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances.
-- **Three-Chain Typography System**: Automatic enumeration of locally installed fonts via host APIs and `fc-list`, with separate stacks for primary Latin sans, CJK fallback, monospace code blocks, and reading size (`10–28px`).
-- **Composer & Interface Refinements**:
-  - Collinear bottom toolbar alignment (telemetry capsule, model selector, and mode selector aligned horizontally with optional arrow hiding).
-  - Optional Vintage Wax Seal composer focus border and new-session toolbar hover styling fixes.
-  - Bilingual UI localization (`English (Default)` / `Chinese (Simplified)`) with reversible `WeakMap` text restoration and custom dictionary overrides.
-- **Real-Time Telemetry Capsule**: Inline composer indicator polling local SQLite/Protobuf conversation data (`tok/s · TTFT · Ctx% · Out`); click to toggle the Auxiliary Pane.
-- **Multi-Dimensional Analytics Dashboard**:
-  - Eight selectable time ranges (`Session`, `Today`, `Yesterday`, `This Week`, `This Month`, `Last 7 Days`, `Last 30 Days`, `Custom`).
-  - Unified weighted TPS rules across capsule, session turns, model trends, and daily/hourly rollups via [`src/shared/tps.ts`](src/shared/tps.ts).
-  - Six KPI cards (tokens, weighted/P50 throughput & turn latency, requests/turns, cache hit rate, average TTFT, per-model API cost estimate), `Overview` / `Timeline` session charts, `Turn Latency vs. TTFT` scatter distribution (`P50` / `P95` references), and model/tool/workspace breakdowns.
-- **Host Resilience & Hot Reload**: Routing deadlock and zoom-shortcut healers, `StorageEvent`-synchronized safe experimental flags (blocking unstable flags at both schema and injection layers), and instant CDP style hot-reload (`Reapply Now`).
-
----
+- **Light & Dark Theme Presets**: Independent light and dark mode themes, including Claude-inspired warm paper, pure white, vintage dark, and native defaults.
+- **Custom Font Stacks**: Enumerates locally installed fonts with separate configuration for Latin, CJK fallback, monospace code blocks, and chat reading size.
+- **Composer & UI Refinements**:
+  - Horizontal baseline alignment for the bottom composer toolbar, with an option to hide dropdown chevrons.
+  - Optional wax-seal composer focus border and hover background fixes on the new-session toolbar.
+  - Live English / Simplified Chinese UI switching backed by a `WeakMap`, with support for custom dictionary overrides.
+- **Inline Telemetry Capsule**: Displays throughput, TTFT, context usage, and output tokens from the latest turn directly in the composer bar. Click the capsule to toggle the side panel.
+- **Local Performance Analytics**:
+  - Aggregates metrics by active session or custom date ranges.
+  - Tracks token usage, weighted and P50 throughput, turn latency, cache hit rate, average TTFT, and estimated API cost per model.
+  - Includes session timeline charts, a turn latency vs. TTFT scatter plot with P50/P95 reference lines, and breakdowns by model, tool call, and workspace.
+- **Host Fixes & Live Reload**: Resolves settings routing deadlocks and broken zoom shortcuts, syncs filtered experimental flags across windows, and supports instant cross-window style reload.
 
 ## Requirements
 
 | Dependency | Requirement | Scope |
 | :--- | :--- | :--- |
-| **Google Antigravity** | Native Plugin + Sidecar support, CDP enabled | Runtime |
-| **Node.js** | `>= 22.13.0` (built-in `node:sqlite`) | Runtime |
-| **Bun** | `>= 1.2` | Source build & tests only |
-| **Platform** | macOS, Windows, or Linux | Runtime & build |
-
----
+| **Google Antigravity** | Native Plugin + Sidecar support with CDP enabled | Runtime |
+| **Node.js** | `>= 22.13.0` with built-in `node:sqlite` | Runtime |
+| **Bun** | `>= 1.2` | Build & test |
+| **OS** | macOS, Windows, or Linux | Runtime & build |
 
 ## Installation
 
-### Option 1: Install from Release Archive (Recommended)
+### Install with Antigravity
 
-1. Download the latest `aura-dashboard-v*.zip` (and optional `.sha256` checksum) from [GitHub Releases](https://github.com/sayakaho/Antigravity-Aura/releases).
-2. Extract the archive contents directly into:
+Copy this repository URL and send it to **Antigravity** in chat to have it install and enable the plugin for you:
+
+```text
+Install the Antigravity Aura plugin from https://github.com/sayakaho/Antigravity-Aura
+```
+
+Restart Antigravity after installation completes to load the plugin.
+
+### Release Archive
+
+1. Grab the latest `aura-dashboard-v*.zip` from [GitHub Releases](https://github.com/sayakaho/Antigravity-Aura/releases).
+2. Extract the archive so `plugin.json` sits directly inside:
    ```text
    ~/.gemini/config/plugins/aura-dashboard
    ```
-   *(Ensure `plugin.json` sits at the root of that folder.)*
-3. Restart Antigravity. Click the telemetry capsule on the composer or open **⋮ → Extensions → Aura Dashboard** in the session header.
+3. Restart Antigravity. Click the telemetry capsule in the composer bar or open **⋮ → Extensions → Aura Dashboard**.
 
-### Option 2: Build & Link from Source
+### Build from Source
 
 ```bash
 git clone https://github.com/sayakaho/Antigravity-Aura.git
 cd Antigravity-Aura
 
 bun install
-bun run typecheck      # Strict TypeScript check
-bun test               # Unit test suite
-bun run build          # Production single-bundle build into dist/
-bun run link:plugin    # Symlink dist/ -> ~/.gemini/config/plugins/aura-dashboard
+bun run typecheck
+bun test
+bun run build
+bun run link:plugin
 ```
 
-Verify the packaged manifest and manage plugin activation using the Antigravity CLI:
+Manage the plugin via the Antigravity CLI:
 
 ```bash
 agy plugin validate ./dist
@@ -108,40 +111,36 @@ agy plugin enable aura-dashboard
 agy plugin disable aura-dashboard
 ```
 
----
-
 ## Configuration
 
-All visual, typography, telemetry, and advanced settings can be adjusted live from **Auxiliary Pane → Preferences** without restarting Antigravity.
+Themes, typography, polling intervals, and experimental flags can be updated live in **Auxiliary Pane → Preferences**.
 
-For file-based customization, Antigravity provisions a persistent `PLUGIN_DATA` directory on first launch at `~/.gemini/antigravity/plugin_data/aura-dashboard/` seeded from [`src/presets/`](src/presets). Existing files are never overwritten across plugin upgrades.
+On first launch, Antigravity initializes a persistent data directory at `~/.gemini/antigravity/plugin_data/aura-dashboard/`. Files in this directory are preserved across plugin updates:
 
-| File | Purpose |
+| File | Description |
 | :--- | :--- |
-| `config.json` | Schema-validated plugin configuration (`presets`, `typography`, `composer`, `telemetry`, `language`, `advanced`). |
-| `custom.css` | User stylesheet appended after built-in theme rules when `modules.customCss` is enabled. |
-| `custom.js` | Top-level window extension script receiving the runtime `ctx` sandbox when `modules.customJs` is enabled. |
-| `i18n.override.json` | Custom key-value overrides merged on top of the built-in localization dictionary (`zh-CN`). |
+| `config.json` | Main plugin configuration |
+| `custom.css` | User stylesheet appended when `modules.customCss` is enabled |
+| `custom.js` | Top-level window script executed when `modules.customJs` is enabled |
+| `i18n.override.json` | Custom key-value overrides merged over the built-in `zh-CN` dictionary |
 
-> **Optional Fonts**: High-contrast typography presets pair well with `Anthropic Sans`, `Anthropic Serif`, `Anthropic Mono`, `Sarasa Gothic`, or `LXGW WenKai`. Any installed system font can be selected directly in Preferences.
-
----
+> Recommended fonts: `Anthropic Sans`, `Anthropic Serif`, `Anthropic Mono`, `Sarasa Gothic`, or `LXGW WenKai`.
 
 ## Architecture
 
 ```text
-Antigravity Host (Electron + CDP + Local SQLite/Protobuf Store)
+Antigravity Host
    │
-   ├──► Sidecar Server (dist/sidecars/dashboard/main.mjs)
-   │       ├── SQLite + BigInt Protobuf Decoder & Global Analytics Cache
-   │       ├── Config Normalizer & Live Injection Bundle Compiler
-   │       ├── CDP Client Manager (auto-discovery + hot CSS/JS injection)
-   │       └── HTTP UI & REST API (Auxiliary Pane Webview)
+   ├──► Sidecar Server — dist/sidecars/dashboard/main.mjs
+   │       ├── Local SQLite & Protobuf conversation parser
+   │       ├── Config validation & injection bundle compiler
+   │       ├── CDP target discovery & hot CSS/JS injection
+   │       └── HTTP server for the Auxiliary Pane Webview
    │
-   └──► Host Top-Level Window (Injected Runtime)
-           ├── Theme Presets, Typography Vars & Wax Seal / Collinear Composer
-           ├── WeakMap UI Localizer & Routing/Zoom Healers
-           └── Inline Telemetry Capsule + Safe Experiment StorageEvent Sync
+   └──► Host Window — Injected Runtime
+           ├── Theme CSS variables, font stacks & composer layout
+           ├── WeakMap UI localizer & routing/zoom fixes
+           └── Inline telemetry capsule & experimental flag sync
 ```
 
 <details>
@@ -149,48 +148,34 @@ Antigravity Host (Electron + CDP + Local SQLite/Protobuf Store)
 
 ```text
 Antigravity-Aura/
-├── .github/workflows/release.yml   # Automated CI verification, Release Zip & SHA256 workflow
-├── assets/                         # Plugin SVG icon and documentation preview assets
-├── scripts/                        # Bun build pipeline (build.ts, link.ts, unlink.ts)
-├── skills/aura-theme/SKILL.md      # Runtime agent skill distributed inside the plugin bundle
+├── .github/workflows/release.yml   # CI verification & release packaging
+├── assets/                         # Plugin icon and preview screenshots
+├── scripts/                        # Build and plugin symlink scripts
+├── skills/aura-theme/SKILL.md      # Bundled skill manifest, config schema & HTTP API reference
 ├── src/
-│   ├── injection/                  # Browser runtime engine, theme.css, i18n, healers, experiments
-│   ├── panel/                      # Auxiliary Pane frontend (analytics/*, settings, theme-sync)
-│   ├── presets/                    # Seed templates copied to dist/sidecars/dashboard/user/
-│   ├── server/                     # Sidecar Node ESM backend, SQLite/Protobuf, CDP & HTTP API
-│   ├── shared/                     # Shared pure modules (tps, config-schema, catalog, format)
-│   └── types/                      # Shared TypeScript contracts & Sidecar SDK declarations
-├── tests/                          # Bun unit tests across analytics, schema, proto & injection
+│   ├── injection/                  # In-window runtime, theme CSS, i18n, and host fixes
+│   ├── panel/                      # Auxiliary Pane Webview frontend
+│   ├── presets/                    # Default templates for persistent user config
+│   ├── server/                     # Sidecar backend, SQLite/Protobuf parser, and CDP client
+│   ├── shared/                     # Shared TPS calculation and config schema validation
+│   └── types/                      # TypeScript contracts and Sidecar SDK declarations
+├── tests/                          # Unit tests
+├── LICENSE
 ├── package.json
-├── plugin.json                     # Antigravity /plugin manifest
-├── SKILL.md                        # Developer & AI Agent technical contract reference
+├── plugin.json                     # Antigravity plugin manifest
 └── tsconfig.json
 ```
 
 </details>
 
-For complete technical contracts, schema details, embedded-asset boundaries, and Sidecar HTTP API documentation, see [`SKILL.md`](SKILL.md).
+See [`skills/aura-theme/SKILL.md`](skills/aura-theme/SKILL.md) for config schemas, customization hooks, and HTTP API endpoints.
 
----
+## Credits
 
-## Development
+This project draws design foundations from [**Anarcadia/chuanban-antigravity-theme-patch**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) by **船板 ([@Anarcadia](https://github.com/Anarcadia))**, specifically referencing:
 
-```bash
-bun run dev            # Watch src/ and rebuild dist/ incrementally
-bun run typecheck      # Run TypeScript compiler in strict mode
-bun test               # Execute all unit tests
-bun run build          # Produce optimized single-bundle dist/ (11 files, ~308 KB)
-bun run unlink:plugin  # Remove ~/.gemini/config/plugins/aura-dashboard symlink
-```
+- Warm-paper light color palette and font stack pairing
+- Initial Simplified Chinese UI localization dictionary
+- Inline composer metrics capsule concept
 
-Releases are automated via [`.github/workflows/release.yml`](.github/workflows/release.yml) on `v*` git tag pushes or manual `workflow_dispatch` runs, running frozen installs, typechecking, unit tests, Node 22 `node:sqlite` + syntax checks, `/plugin` layout validation, and checksum packaging.
-
----
-
-## Attribution
-
-**Antigravity Aura** originally evolved from [**Anarcadia/chuanban-antigravity-theme-patch**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) created by **船板 ([@Anarcadia](https://github.com/Anarcadia))**, whose early work is gratefully acknowledged:
-
-- **Inherited Foundations**: The warm-paper high-contrast light palette concept, multi-chain `Anthropic` / `Sarasa` typography pairing, base Simplified Chinese UI dictionary, inline composer metrics capsule idea, and settings routing deadlock fix approach.
-- **Independent Evolution**: Transitioned away from external OS background daemons to Antigravity's native `Plugin + Sidecar` lifecycle; rewrote the full stack in Strict TypeScript with Bun single-bundle embedding; added the Auxiliary Pane Analytics & Preferences Webview, dark presets (`claude-dark` / `vintage-dark`), toggleable UI language, unified TPS engine, collinear new-session hover fixes, `StorageEvent` experiment synchronization, unit tests, and automated CI/Release workflows.
-- **History & License**: Full Git commit history is preserved in this repository to maintain transparent attribution. Project metadata and original code added here are declared under the [`MIT`](package.json) license (note: the upstream repository did not ship a `LICENSE` file).
+Released under the [MIT](LICENSE) license.
