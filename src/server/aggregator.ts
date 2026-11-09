@@ -1065,7 +1065,7 @@ export class GlobalAnalyticsEngine {
 
       // End-to-End Throughput Speed (Scheme B)
       const avgE2eRate = sessionE2eSeconds > 0
-        ? Math.round(sessionE2eOutTokens / sessionE2eSeconds)
+        ? Math.round(sessionE2eTokens / sessionE2eSeconds)
         : 69;
       let p50E2eRate = 49;
       if (sessionE2eTpsList.length > 0) {
@@ -1134,7 +1134,8 @@ export class GlobalAnalyticsEngine {
         models,
         tools
       };
-    } catch {
+    } catch (err) {
+      console.error('[Aggregator] getSessionDetails error:', err);
       if (db) db.close();
       return null;
     }
