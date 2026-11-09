@@ -3,6 +3,8 @@
  * W3C Relative Luminance Detection + PostMessage Bridge Sync
  */
 
+import { loadPanelThemeState, savePanelThemeState } from './panel-state';
+
 let hostColorMode: 'dark' | 'light' | null = null;
 
 export function getLuminance(r: number, g: number, b: number): number {
@@ -55,10 +57,6 @@ export function detectEffectiveTheme(): 'dark' | 'light' {
   if (hostColorMode === 'light' || hostColorMode === 'dark') {
     return hostColorMode;
   }
-  const inlineScheme = document.documentElement.style.colorScheme;
-  if (inlineScheme === 'light' || inlineScheme === 'dark') {
-    return inlineScheme;
-  }
 
   const probe = document.createElement('div');
   probe.setAttribute('aria-hidden', 'true');
@@ -78,6 +76,16 @@ export function detectEffectiveTheme(): 'dark' | 'light' {
     probe.remove();
   }
 
+  const cachedTheme = loadPanelThemeState();
+  if (cachedTheme) {
+    return cachedTheme;
+  }
+
+  const inlineScheme = document.documentElement.style.colorScheme;
+  if (inlineScheme === 'light' || inlineScheme === 'dark') {
+    return inlineScheme;
+  }
+
   if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
     return 'dark';
   }
@@ -93,6 +101,7 @@ export function syncTheme(forcedTheme?: 'dark' | 'light'): void {
   if (html.style.colorScheme !== effectiveTheme) {
     html.style.colorScheme = effectiveTheme;
   }
+  savePanelThemeState(effectiveTheme);
 }
 
 export function initThemeListener(): void {

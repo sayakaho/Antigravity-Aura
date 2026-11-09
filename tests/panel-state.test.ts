@@ -2,18 +2,23 @@ import { describe, expect, test } from 'bun:test';
 import {
   ANALYTICS_RANGE_STORAGE_KEY,
   PANEL_TAB_STORAGE_KEY,
+  PANEL_THEME_STORAGE_KEY,
   PROJECT_SCOPE_STORAGE_KEY,
   loadAnalyticsRangeState,
   loadPanelTabState,
+  loadPanelThemeState,
   loadProjectScopeState,
   parseAnalyticsRangeState,
   parsePanelTab,
+  parsePanelTheme,
   parseProjectScopeState,
   saveAnalyticsRangeState,
   savePanelTabState,
+  savePanelThemeState,
   saveProjectScopeState,
   type StorageLike
 } from '../src/panel/panel-state';
+import { buildSessionAnalyticsEndpoint, resolveAnalyticsSessionId } from '../src/shared/session';
 
 function createMemoryStorage(initial: Record<string, string> = {}): StorageLike {
   const map = new Map<string, string>(Object.entries(initial));
@@ -132,5 +137,35 @@ describe('Panel UI state persistence helpers', () => {
     expect(loadProjectScopeState(store)).toBe('all-time');
 
     expect(parseProjectScopeState('invalid')).toBe('follow');
+  });
+
+  test('saves and loads cached panel theme state safely', () => {
+    const store = createMemoryStorage();
+    expect(loadPanelThemeState(store)).toBeNull();
+
+    savePanelThemeState('light', store);
+    expect(store.getItem(PANEL_THEME_STORAGE_KEY)).toBe('light');
+    expect(loadPanelThemeState(store)).toBe('light');
+
+    expect(parsePanelTheme('sepia')).toBeNull();
+    expect(loadPanelThemeState(null)).toBeNull();
+  });
+
+  test('resolves live CDP session over stale iframe fallbackId while preserving explicit id queries', () => {
+    expect(
+      resolveAnalyticsSessionId({ id: 'explicit-1', fallbackId: 'stale-1' }, 'live-2')
+    ).toBe('explicit-1');
+    expect(
+      resolveAnalyticsSessionId({ conversationId: 'explicit-conv', fallbackId: 'stale-1' }, 'live-2')
+    ).toBe('explicit-conv');
+    expect(resolveAnalyticsSessionId({ fallbackId: 'stale-1' }, 'live-2')).toBe('live-2');
+    expect(resolveAnalyticsSessionId({ fallbackId: 'stale-1' }, '')).toBe('stale-1');
+    expect(resolveAnalyticsSessionId({}, '')).toBe('');
+
+    expect(buildSessionAnalyticsEndpoint('')).toBe('/api/analytics/session');
+    expect(buildSessionAnalyticsEndpoint(null)).toBe('/api/analytics/session');
+    expect(buildSessionAnalyticsEndpoint('conv-123')).toBe(
+      '/api/analytics/session?fallbackId=conv-123'
+    );
   });
 });

@@ -316,6 +316,7 @@ export interface SidecarStatusResponse {
   preset: string;
   modules: ResolvedRuntimeModules;
   metrics: LiveMetricsPayload | null;
+  activeCascadeId?: string;
 }
 
 export interface SidecarBridge {

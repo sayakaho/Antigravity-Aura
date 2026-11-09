@@ -286,8 +286,24 @@ export function initMetricsCapsule(enabled: boolean, selectors: SelectorsConfig)
     wrapHistory('pushState');
     wrapHistory('replaceState');
     window.addEventListener('popstate', triggerRouteCheck);
+    window.addEventListener('focus', () => {
+      if (document.hidden) return;
+      const cid = extractCascadeId();
+      if (cid) {
+        try {
+          agGlobal.__ag_on_session_change?.(cid);
+        } catch {}
+      }
+      agGlobal.__ag_check_route_fn?.();
+    });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
+        const cid = extractCascadeId();
+        if (cid) {
+          try {
+            agGlobal.__ag_on_session_change?.(cid);
+          } catch {}
+        }
         agGlobal.__ag_check_route_fn?.();
       }
     });

@@ -1,3 +1,4 @@
+import { buildSessionAnalyticsEndpoint } from '../../shared/session';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../../types';
 import {
   ANALYTICS_RANGE_STORAGE_KEY,
@@ -33,6 +34,13 @@ let customEndDate = initialRangeState.customEndDate;
 let currentProjectScope: ProjectScopeMode = loadProjectScopeState();
 let activeSessionData: SessionAnalyticsData | null = null;
 let rangeListenersBound = false;
+let refreshSeq = 0;
+let activeRefreshPromise: Promise<void> | null = null;
+let pendingRefresh = false;
+
+export function getActiveSessionId(): string | null {
+  return activeSessionData?.cascadeId ?? null;
+}
 
 export async function fetchOverview(): Promise<GlobalAnalyticsOverview | null> {
   try {
@@ -46,21 +54,30 @@ export async function fetchOverview(): Promise<GlobalAnalyticsOverview | null> {
   }
 }
 
-export async function fetchActiveSession(): Promise<SessionAnalyticsData | null> {
+async function fetchActiveSessionState(): Promise<{
+  resolved: boolean;
+  data: SessionAnalyticsData | null;
+}> {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const convId = urlParams.get('conversationId') || window.sidecar?.conversationId || '';
-    const endpoint = convId
-      ? `/api/analytics/session?id=${encodeURIComponent(convId)}`
-      : '/api/analytics/session';
+    const endpoint = buildSessionAnalyticsEndpoint(convId);
     const res = await window.sidecar.fetch(endpoint, { method: 'GET' });
-    if (!res.ok) return null;
+    if (!res.ok) return { resolved: false, data: null };
     const json = (await res.json()) as { ok?: boolean; data?: SessionAnalyticsData };
-    return json.ok && json.data ? json.data : null;
+    if (json.ok && json.data) {
+      return { resolved: true, data: json.data };
+    }
+    return { resolved: json.ok === false, data: null };
   } catch (err) {
     console.error('[Aura Analytics] Failed to fetch active session:', err);
-    return null;
+    return { resolved: false, data: null };
   }
+}
+
+export async function fetchActiveSession(): Promise<SessionAnalyticsData | null> {
+  const result = await fetchActiveSessionState();
+  return result.data;
 }
 
 function syncCustomDateInputs(): void {
@@ -133,8 +150,11 @@ async function applyExternalRangeState(next: AnalyticsRangeState): Promise<void>
   syncCustomDateInputs();
   updateRangeControlUI(currentRange);
 
-  if (currentRange === 'session' && !activeSessionData) {
-    activeSessionData = await fetchActiveSession();
+  if (currentRange === 'session') {
+    const sessionRes = await fetchActiveSessionState();
+    if (sessionRes.resolved) {
+      activeSessionData = sessionRes.data;
+    }
   }
 
   if (rawOverview) {
@@ -147,8 +167,11 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
   saveAnalyticsRangeState({ range: currentRange, customStartDate, customEndDate });
   updateRangeControlUI(range);
 
-  if (!activeSessionData) {
-    activeSessionData = await fetchActiveSession();
+  if (range === 'session' || !activeSessionData) {
+    const sessionRes = await fetchActiveSessionState();
+    if (sessionRes.resolved) {
+      activeSessionData = sessionRes.data;
+    }
   }
 
   if (rawOverview) {
@@ -156,25 +179,52 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
   }
 }
 
-export async function refreshAnalytics(): Promise<void> {
+async function runRefreshPass(): Promise<void> {
   const refreshBtn = document.getElementById('btn-refresh-analytics');
   refreshBtn?.classList.add('loading');
 
   try {
-    const [overview, session] = await Promise.all([fetchOverview(), fetchActiveSession()]);
-    if (overview) rawOverview = overview;
-    if (session) activeSessionData = session;
+    do {
+      pendingRefresh = false;
+      const seq = ++refreshSeq;
+      const [overview, sessionRes] = await Promise.all([
+        fetchOverview(),
+        fetchActiveSessionState()
+      ]);
 
-    updateRangeControlUI(currentRange);
-    updateProjectScopeControlUI(currentProjectScope);
-    if (rawOverview) {
-      renderRangeDependentViews(rawOverview, currentRange);
-    }
+      if (seq !== refreshSeq || pendingRefresh) {
+        continue;
+      }
+
+      if (overview) rawOverview = overview;
+      if (sessionRes.resolved) activeSessionData = sessionRes.data;
+
+      updateRangeControlUI(currentRange);
+      updateProjectScopeControlUI(currentProjectScope);
+      if (rawOverview) {
+        renderRangeDependentViews(rawOverview, currentRange);
+      }
+    } while (pendingRefresh);
   } finally {
     if (refreshBtn) {
-      setTimeout(() => refreshBtn.classList.remove('loading'), 300);
+      setTimeout(() => {
+        if (!activeRefreshPromise) {
+          refreshBtn.classList.remove('loading');
+        }
+      }, 300);
     }
   }
+}
+
+export async function refreshAnalytics(): Promise<void> {
+  if (activeRefreshPromise) {
+    pendingRefresh = true;
+    return activeRefreshPromise;
+  }
+  activeRefreshPromise = runRefreshPass().finally(() => {
+    activeRefreshPromise = null;
+  });
+  return activeRefreshPromise;
 }
 
 function applyProjectScope(scope: ProjectScopeMode): void {

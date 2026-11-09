@@ -107,6 +107,29 @@ function populateFontSelect(
   }
 }
 
+function syncTypographyControls(config: PanelConfigDTO): void {
+  const typo = config.typography;
+  populateFontSelect('select-font-sans-primary', 'Default', systemFontsList, typo?.primarySans);
+  populateFontSelect('select-font-sans-fallback', 'Default', systemFontsList, typo?.fallbackSans);
+  populateFontSelect('select-font-mono', 'Default', systemFontsList, typo?.mono);
+
+  syncCustomFontField(
+    'select-font-sans-primary',
+    'row-custom-sans-primary',
+    'input-custom-sans-primary',
+    typo?.customPrimarySans
+  );
+  syncCustomFontField(
+    'select-font-sans-fallback',
+    'row-custom-sans-fallback',
+    'input-custom-sans-fallback',
+    typo?.customFallbackSans
+  );
+  syncCustomFontField('select-font-mono', 'row-custom-mono', 'input-custom-mono', typo?.customMono);
+
+  updateSegmentedUI('font-size-segmented', typo?.fontSize || 15);
+}
+
 export async function loadSystemFonts(): Promise<void> {
   try {
     const res = await window.sidecar.fetch('/api/system-fonts', { method: 'GET' });
@@ -114,6 +137,9 @@ export async function loadSystemFonts(): Promise<void> {
       const data = (await res.json()) as { fonts?: unknown };
       if (Array.isArray(data.fonts)) {
         systemFontsList = data.fonts.filter((f): f is string => typeof f === 'string');
+        if (currentConfig) {
+          syncTypographyControls(currentConfig);
+        }
       }
     }
   } catch (err) {
@@ -154,26 +180,7 @@ export async function loadConfig(): Promise<void> {
     const waxToggle = document.getElementById('toggle-wax-seal') as HTMLInputElement | null;
     if (waxToggle) waxToggle.checked = config.composer?.waxSeal !== false;
 
-    const typo = config.typography;
-    populateFontSelect('select-font-sans-primary', 'Default', systemFontsList, typo?.primarySans);
-    populateFontSelect('select-font-sans-fallback', 'Default', systemFontsList, typo?.fallbackSans);
-    populateFontSelect('select-font-mono', 'Default', systemFontsList, typo?.mono);
-
-    syncCustomFontField(
-      'select-font-sans-primary',
-      'row-custom-sans-primary',
-      'input-custom-sans-primary',
-      typo?.customPrimarySans
-    );
-    syncCustomFontField(
-      'select-font-sans-fallback',
-      'row-custom-sans-fallback',
-      'input-custom-sans-fallback',
-      typo?.customFallbackSans
-    );
-    syncCustomFontField('select-font-mono', 'row-custom-mono', 'input-custom-mono', typo?.customMono);
-
-    updateSegmentedUI('font-size-segmented', typo?.fontSize || 15);
+    syncTypographyControls(config);
 
     const alignVal = config.composer?.collinear !== false ? 'collinear' : 'native';
     updateSegmentedUI('composer-align-segmented', alignVal);

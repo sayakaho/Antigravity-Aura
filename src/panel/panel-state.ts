@@ -2,6 +2,7 @@ import type { TimeRangeOption } from './analytics/time-range';
 
 export type PanelTab = 'analytics' | 'settings';
 export type ProjectScopeMode = 'follow' | 'all-time';
+export type PanelThemeMode = 'light' | 'dark';
 
 export interface AnalyticsRangeState {
   range: TimeRangeOption;
@@ -15,6 +16,7 @@ export interface StorageLike {
 }
 
 export const PANEL_TAB_STORAGE_KEY = 'aura.panel.activeTab';
+export const PANEL_THEME_STORAGE_KEY = 'aura.panel.theme';
 export const ANALYTICS_RANGE_STORAGE_KEY = 'aura.analytics.rangeState';
 export const PROJECT_SCOPE_STORAGE_KEY = 'aura.analytics.projectScope';
 
@@ -146,6 +148,33 @@ export function saveProjectScopeState(
   if (!store) return;
   try {
     store.setItem(PROJECT_SCOPE_STORAGE_KEY, parseProjectScopeState(scope));
+  } catch {
+    // Restricted webview contexts may block storage writes
+  }
+}
+
+export function parsePanelTheme(raw: string | null | undefined): PanelThemeMode | null {
+  return raw === 'light' || raw === 'dark' ? raw : null;
+}
+
+export function loadPanelThemeState(storage?: StorageLike | null): PanelThemeMode | null {
+  const store = resolveStorage(storage);
+  if (!store) return null;
+  try {
+    return parsePanelTheme(store.getItem(PANEL_THEME_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function savePanelThemeState(
+  theme: PanelThemeMode,
+  storage?: StorageLike | null
+): void {
+  const store = resolveStorage(storage);
+  if (!store) return;
+  try {
+    store.setItem(PANEL_THEME_STORAGE_KEY, theme);
   } catch {
     // Restricted webview contexts may block storage writes
   }

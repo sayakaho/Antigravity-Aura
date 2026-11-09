@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { toPanelConfigDTO } from '../shared/config-schema';
+import { resolveAnalyticsSessionId } from '../shared/session';
 import type { SidecarStatusResponse } from '../types';
 import { GlobalAnalyticsEngine } from './analytics-engine';
 import { CdpManager } from './cdp-client';
@@ -128,12 +129,7 @@ app.api(
 app.api(
   '/api/analytics/session',
   (data?: Record<string, unknown>) => {
-    const rawId =
-      typeof data?.id === 'string'
-        ? data.id
-        : typeof data?.conversationId === 'string'
-          ? data.conversationId
-          : cdpManager.getLastActiveCascadeId();
+    const rawId = resolveAnalyticsSessionId(data, cdpManager.getLastActiveCascadeId());
     if (!rawId) {
       return { ok: false, error: 'No active session detected' };
     }
@@ -194,7 +190,8 @@ app.api(
       cssLength: snap.cssBytes,
       preset: snap.config.presets.light,
       modules: snap.modules,
-      metrics: cdpManager.getLatestMetrics()
+      metrics: cdpManager.getLatestMetrics(),
+      activeCascadeId: cdpManager.getLastActiveCascadeId()
     };
   },
   'GET'

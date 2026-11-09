@@ -416,9 +416,13 @@ export class CdpManager {
             ) {
               const nextId = String(msg.params.payload || '').trim();
               if (/^[0-9a-f-]{36}$/i.test(nextId)) {
+                const changed = activeCascadeId !== nextId;
                 activeCascadeId = nextId;
-                lastPushedHash = '';
-                void syncMetricsForSession(true);
+                this.lastGlobalActiveCascadeId = nextId;
+                if (changed || msg.params?.name === '__agRequestMetrics') {
+                  lastPushedHash = '';
+                  void syncMetricsForSession(true);
+                }
               }
             }
           } catch {}

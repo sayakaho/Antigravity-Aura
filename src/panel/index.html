@@ -3,6 +3,24 @@
 <head>
   <meta charset="utf-8">
   <title>Aura Dashboard</title>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      root.classList.add('aura-preload');
+      var theme = null;
+      try {
+        var cached = window.localStorage && window.localStorage.getItem('aura.panel.theme');
+        if (cached === 'light' || cached === 'dark') theme = cached;
+      } catch (e) {}
+      if (!theme && window.matchMedia) {
+        theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      if (theme) {
+        root.setAttribute('data-theme', theme);
+        root.style.colorScheme = theme;
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/styles.css?v=__AURA_VERSION__">
   <script src="/preload.js"></script>
 </head>

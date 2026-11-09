@@ -3,7 +3,7 @@
  */
 
 import type { SidecarStatusResponse } from '../types';
-import { initTimeRangeControls, refreshAnalytics } from './analytics/index';
+import { getActiveSessionId, initTimeRangeControls, refreshAnalytics } from './analytics/index';
 import {
   PANEL_TAB_STORAGE_KEY,
   loadPanelTabState,
@@ -13,6 +13,8 @@ import {
 } from './panel-state';
 import { bindSettingsControls, loadConfig, loadSystemFonts, showToast } from './settings';
 import { initThemeListener, syncTheme } from './theme-sync';
+
+let onSessionActivated: ((cascadeId: string) => void) | null = null;
 
 export async function updateStatus(): Promise<void> {
   try {
@@ -37,6 +39,16 @@ export async function updateStatus(): Promise<void> {
         sublabel.textContent = 'Detecting Antigravity CDP port...';
       }
     }
+
+    const nextCascadeId =
+      typeof data.activeCascadeId === 'string' && data.activeCascadeId
+        ? data.activeCascadeId
+        : typeof data.metrics?.cascadeId === 'string'
+          ? data.metrics.cascadeId
+          : '';
+    if (nextCascadeId) {
+      onSessionActivated?.(nextCascadeId);
+    }
   } catch (err) {
     console.error('updateStatus failed:', err);
   }
@@ -52,6 +64,8 @@ async function initApp(): Promise<void> {
   const viewSettings = document.getElementById('view-settings');
 
   let activeTab: PanelTab = loadPanelTabState();
+  let lastKnownCascadeId = '';
+  let lastWorkspaceSig: string | null = null;
 
   const applyTabUI = (tab: PanelTab) => {
     activeTab = tab;
@@ -71,6 +85,20 @@ async function initApp(): Promise<void> {
   // 首个 await 前同步还原 Tab 与时间范围控件状态，避免从默认状态闪跳
   applyTabUI(activeTab);
   initTimeRangeControls();
+  requestAnimationFrame(() => {
+    document.documentElement.classList.remove('aura-preload');
+  });
+
+  onSessionActivated = (nextCascadeId: string) => {
+    const currentRenderedId = getActiveSessionId();
+    const changed =
+      (lastKnownCascadeId !== '' && nextCascadeId !== lastKnownCascadeId) ||
+      (currentRenderedId !== null && currentRenderedId !== nextCascadeId);
+    lastKnownCascadeId = nextCascadeId;
+    if (changed && activeTab === 'analytics') {
+      void refreshAnalytics();
+    }
+  };
 
   tabAnalytics?.addEventListener('click', () => switchTab('analytics'));
   tabSettings?.addEventListener('click', () => switchTab('settings'));
@@ -97,11 +125,6 @@ async function initApp(): Promise<void> {
     if (!document.hidden) syncExternalTabState(loadPanelTabState());
   });
 
-  await loadSystemFonts();
-  await loadConfig();
-  void updateStatus();
-  setInterval(() => void updateStatus(), 3000);
-
   bindSettingsControls();
 
   const reloadBtn = document.getElementById('btn-force-reload') as HTMLButtonElement | null;
@@ -125,14 +148,35 @@ async function initApp(): Promise<void> {
   });
 
   if (typeof window.sidecar?.onWorkspaceChange === 'function') {
-    window.sidecar.onWorkspaceChange(() => {
+    let initialAnalyticsQueued = activeTab === 'analytics';
+    setTimeout(() => {
+      initialAnalyticsQueued = false;
+    }, 200);
+    window.sidecar.onWorkspaceChange((uris) => {
+      const nextSig = Array.isArray(uris) ? uris.join('|') : '';
+      if (lastWorkspaceSig === null) {
+        lastWorkspaceSig = nextSig;
+        if (initialAnalyticsQueued) {
+          initialAnalyticsQueued = false;
+          return;
+        }
+      } else if (nextSig === lastWorkspaceSig) {
+        return;
+      } else {
+        lastWorkspaceSig = nextSig;
+      }
       if (activeTab === 'analytics') void refreshAnalytics();
     });
   }
 
-  if (activeTab === 'analytics') {
-    await refreshAnalytics();
-  }
+  setInterval(() => void updateStatus(), 3000);
+
+  await Promise.allSettled([
+    loadSystemFonts(),
+    loadConfig(),
+    updateStatus(),
+    activeTab === 'analytics' ? refreshAnalytics() : Promise.resolve()
+  ]);
 }
 
 if (document.readyState === 'loading') {
