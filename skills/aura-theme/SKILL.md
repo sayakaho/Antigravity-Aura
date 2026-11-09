@@ -23,7 +23,7 @@ This skill allows agents to inspect and manipulate Antigravity interface styles,
 ### Typography & Fonts
 - **Primary Sans**: `Anthropic Sans`, `Sarasa UI SC`, `PingFang SC`, `system-ui`, or custom font family name.
 - **Code Mono**: `Anthropic Mono`, `Sarasa Mono Slab SC`, `JetBrains Mono`, `Fira Code`, or `ui-monospace`.
-- **Base Font Size**: Integer in pixels (default `16`, typical range `13`–`20`).
+- **Base Font Size**: Integer in pixels (default `15`, valid range `10`–`28`).
 
 ---
 
@@ -31,7 +31,7 @@ This skill allows agents to inspect and manipulate Antigravity interface styles,
 
 Aura Dashboard persists active settings in the plugin data directory:
 - **Location**: `~/.gemini/antigravity/plugin_data/aura-dashboard/config.json` (or `process.env.PLUGIN_DATA/config.json`)
-- **Fallback Template**: `<plugin_root>/user/config.json`
+- **Fallback Template**: `<plugin_root>/sidecars/dashboard/user/config.json`
 
 ### Direct API Control (Preferred when Sidecar is Running)
 
@@ -68,6 +68,5 @@ curl -s -X POST http://127.0.0.1:${ANTIGRAVITY_SIDECAR_WEB_PORT:-51980}/api/relo
 ## 3. Telemetry & Analytics Inspection
 
 When the user asks about token consumption, generation speed, or session history:
-- **Global Overview**: `GET /api/analytics/overview` (totals, cache hit rates, daily breakdown)
-- **Active Session Details**: `GET /api/analytics/session?id=<conversation_id>` (step-by-step TPS, TTFT, token counts)
-- **Recent Sessions**: `GET /api/analytics/conversations`
+- **Global Overview**: `GET /api/analytics/overview` (totals, cache hit rates, hourly & daily breakdown, model & tool distributions)
+- **Active Session Details**: `GET /api/analytics/session?id=<conversation_id>` (step-by-step TPS, TTFT, turn latency, token counts, and model/tool breakdown)

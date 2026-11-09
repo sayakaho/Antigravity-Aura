@@ -1,19 +1,45 @@
-name: Release Plugin
+name: Build & Release Plugin
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release 标签或版本号（如 v6.0.0；留空则自动使用 v<package.json version>）'
+        required: false
+        default: ''
+        type: string
+      publish_release:
+        description: '创建或更新 GitHub Release（取消勾选则仅构建并上传 Actions Artifact）'
+        required: false
+        default: true
+        type: boolean
+      prerelease:
+        description: '标记为 Pre-release 预发布版本'
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: '保存为草稿 Release（不在发布页立即公开）'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    name: Build & Publish Release
+    name: Build, Verify & Release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Bun
@@ -21,22 +47,189 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: bun install
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-      - name: Build Plugin Distribution
+      - name: Resolve release metadata & align manifest version
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+          INPUT_DRAFT: ${{ inputs.draft }}
+        run: |
+          set -eu
+          PKG_VERSION="$(jq -r '.version' package.json)"
+          if [ "${EVENT_NAME}" = "push" ]; then
+            TAG="${REF_NAME}"
+          else
+            TRIMMED="$(printf '%s' "${INPUT_TAG}" | tr -d '[:space:]')"
+            if [ -z "${TRIMMED}" ]; then
+              TAG="v${PKG_VERSION}"
+            elif printf '%s' "${TRIMMED}" | grep -qE '^[0-9]'; then
+              TAG="v${TRIMMED}"
+            else
+              TAG="${TRIMMED}"
+            fi
+          fi
+
+          if ! printf '%s' "${TAG}" | grep -qE '^[A-Za-z0-9._+-]+$'; then
+            echo "Invalid release tag: ${TAG}" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          IS_PRERELEASE="${INPUT_PRERELEASE:-false}"
+          IS_DRAFT="${INPUT_DRAFT:-false}"
+          if [ "${EVENT_NAME}" = "push" ] && printf '%s' "${VERSION}" | grep -q '-'; then
+            IS_PRERELEASE="true"
+          fi
+
+          # Sync ephemeral CI manifests when tag encodes a valid SemVer string
+          if printf '%s' "${VERSION}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'; then
+            node -e '
+              const fs = require("node:fs");
+              const nextVer = process.argv[1];
+              for (const file of ["package.json", "plugin.json"]) {
+                const json = JSON.parse(fs.readFileSync(file, "utf8"));
+                if (json.version !== nextVer) {
+                  json.version = nextVer;
+                  fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n", "utf8");
+                }
+              }
+            ' "${VERSION}"
+          fi
+
+          ARCHIVE="aura-dashboard-${TAG}.zip"
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "archive=${ARCHIVE}"
+            echo "prerelease=${IS_PRERELEASE}"
+            echo "draft=${IS_DRAFT}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck & run unit tests
+        run: |
+          bun run typecheck
+          bun test
+
+      - name: Build plugin distribution
         run: bun run build
 
-      - name: Package Distribution Zip
+      - name: Verify Node 22 runtime & dist/ /plugin layout
+        env:
+          EXPECTED_VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          cd dist
-          zip -r ../aura-dashboard-${{ github.ref_name }}.zip ./*
-          cd ..
+          set -eu
+          node -e 'const { DatabaseSync } = require("node:sqlite"); if (typeof DatabaseSync !== "function") process.exit(1); console.log("Node:", process.version, "node:sqlite OK");'
+          node --check dist/sidecars/dashboard/main.mjs
+          node -e '
+            const fs = require("node:fs");
+            const required = [
+              "dist/plugin.json",
+              "dist/README.md",
+              "dist/assets/logo.svg",
+              "dist/skills/aura-theme/SKILL.md",
+              "dist/sidecars/dashboard/main.mjs",
+              "dist/sidecars/dashboard/package.json",
+              "dist/sidecars/dashboard/sidecar.json",
+              "dist/sidecars/dashboard/user/config.json",
+              "dist/sidecars/dashboard/user/custom.css",
+              "dist/sidecars/dashboard/user/custom.js",
+              "dist/sidecars/dashboard/user/i18n.override.json"
+            ];
+            for (const f of required) {
+              if (!fs.existsSync(f)) throw new Error("Missing required dist artifact: " + f);
+            }
+            const plugin = JSON.parse(fs.readFileSync("dist/plugin.json", "utf8"));
+            if (plugin.version !== process.env.EXPECTED_VERSION) {
+              throw new Error(`plugin.json version mismatch: ${plugin.version} !== ${process.env.EXPECTED_VERSION}`);
+            }
+            if (!Array.isArray(plugin.suggestedPrompts) || plugin.suggestedPrompts.length === 0) {
+              throw new Error("plugin.json missing suggestedPrompts");
+            }
+            if ("keywords" in plugin) {
+              throw new Error("plugin.json contains unsupported keywords field");
+            }
+          '
+          if find dist \( -name '*.map' -o -name 'preview-*' -o -name 'node_modules' -o -name 'core' \) | grep -q .; then
+            echo "Unexpected bloat entries found in dist/:" >&2
+            find dist >&2
+            exit 1
+          fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Package distribution zip & SHA256 checksum
+        env:
+          ARCHIVE: ${{ steps.meta.outputs.archive }}
+        run: |
+          set -eu
+          mkdir -p release
+          (cd dist && zip -qr "../release/${ARCHIVE}" .)
+          (cd release && sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256")
+          unzip -l "release/${ARCHIVE}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: aura-dashboard-${{ github.ref_name }}.zip
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+          name: aura-dashboard-${{ steps.meta.outputs.tag }}
+          path: |
+            release/${{ steps.meta.outputs.archive }}
+            release/${{ steps.meta.outputs.archive }}.sha256
+          retention-days: 30
+
+      - name: Create or update GitHub Release
+        if: ${{ github.event_name == 'push' || inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          ARCHIVE: ${{ steps.meta.outputs.archive }}
+          IS_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          IS_DRAFT: ${{ steps.meta.outputs.draft }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -eu
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; uploading replacement assets..."
+            gh release upload "${TAG}" "release/${ARCHIVE}" "release/${ARCHIVE}.sha256" --clobber
+          else
+            ARGS=(
+              "${TAG}"
+              "release/${ARCHIVE}"
+              "release/${ARCHIVE}.sha256"
+              --title "Aura Dashboard ${TAG}"
+              --generate-notes
+            )
+            if [ "${EVENT_NAME}" != "push" ]; then
+              ARGS+=(--target "${GITHUB_SHA}")
+            fi
+            if [ "${IS_PRERELEASE}" = "true" ]; then
+              ARGS+=(--prerelease)
+            fi
+            if [ "${IS_DRAFT}" = "true" ]; then
+              ARGS+=(--draft)
+            fi
+            gh release create "${ARGS[@]}"
+          fi
+
+      - name: Write job summary
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          ARCHIVE: ${{ steps.meta.outputs.archive }}
+          PUBLISHED: ${{ github.event_name == 'push' || inputs.publish_release }}
+        run: |
+          {
+            echo "### Aura Dashboard Release Package"
+            echo "- **Tag**: \`${TAG}\`"
+            echo "- **Version**: \`${VERSION}\`"
+            echo "- **Archive**: \`${ARCHIVE}\` ($(du -h "release/${ARCHIVE}" | cut -f1))"
+            echo "- **SHA256**: \`$(cut -d' ' -f1 "release/${ARCHIVE}.sha256")\`"
+            echo "- **GitHub Release Published**: \`${PUBLISHED}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

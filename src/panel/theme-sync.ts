@@ -13,10 +13,12 @@ export function getLuminance(r: number, g: number, b: number): number {
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
 
-export function parseColor(colorStr: string): { r: number; g: number; b: number; alpha: number } | null {
+export function parseColor(
+  colorStr: string
+): { r: number; g: number; b: number; alpha: number } | null {
   if (!colorStr) return null;
   const str = colorStr.trim();
-  // 1. Hex 格式 (#RRGGBB 或 #RGB)
+
   if (str.startsWith('#')) {
     const hex = str.slice(1);
     if (hex.length === 3) {
@@ -26,7 +28,8 @@ export function parseColor(colorStr: string): { r: number; g: number; b: number;
         b: parseInt(hex[2] + hex[2], 16),
         alpha: 1
       };
-    } else if (hex.length >= 6) {
+    }
+    if (hex.length >= 6) {
       return {
         r: parseInt(hex.slice(0, 2), 16),
         g: parseInt(hex.slice(2, 4), 16),
@@ -35,7 +38,7 @@ export function parseColor(colorStr: string): { r: number; g: number; b: number;
       };
     }
   }
-  // 2. RGB/RGBA 格式
+
   const match = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
   if (match) {
     return {
@@ -46,10 +49,6 @@ export function parseColor(colorStr: string): { r: number; g: number; b: number;
     };
   }
   return null;
-}
-
-export function parseRgb(colorStr: string): { r: number; g: number; b: number; alpha: number } | null {
-  return parseColor(colorStr);
 }
 
 export function detectEffectiveTheme(): 'dark' | 'light' {
@@ -68,17 +67,18 @@ export function detectEffectiveTheme(): 'dark' | 'light' {
   (document.body || document.documentElement).appendChild(probe);
   try {
     const computedBg = window.getComputedStyle(probe).backgroundColor;
-    const parsed = parseRgb(computedBg);
+    const parsed = parseColor(computedBg);
     if (parsed && parsed.alpha > 0) {
       const lum = getLuminance(parsed.r, parsed.g, parsed.b);
       return lum > 0.179 ? 'light' : 'dark';
     }
-  } catch (e) {
+  } catch {
+    // Ignore restricted style probe
   } finally {
     probe.remove();
   }
 
-  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
     return 'dark';
   }
   return 'light';
@@ -97,15 +97,17 @@ export function syncTheme(forcedTheme?: 'dark' | 'light'): void {
 
 export function initThemeListener(): void {
   window.addEventListener('message', (event) => {
-    if (event.data?.type === 'ag-theme-sync') {
-      const payload = event.data.payload || {};
+    const msg = event.data as { type?: string; payload?: Record<string, unknown> } | undefined;
+    if (!msg) return;
+
+    if (msg.type === 'ag-theme-sync') {
+      const payload = msg.payload || {};
       if (payload.scheme === 'light' || payload.scheme === 'dark') {
         hostColorMode = payload.scheme;
-        syncTheme(hostColorMode || undefined);
+        syncTheme(hostColorMode);
       }
-    } else if (event.data?.type === 'theme-change') {
-      const payload = event.data?.payload || {};
-      // 1. 显式字段优先探测
+    } else if (msg.type === 'theme-change') {
+      const payload = msg.payload || {};
       if (payload.scheme === 'light' || payload.scheme === 'dark') {
         hostColorMode = payload.scheme;
       } else if (payload.colorScheme === 'light' || payload.colorScheme === 'dark') {
@@ -113,9 +115,9 @@ export function initThemeListener(): void {
       } else if (typeof payload.isDark === 'boolean') {
         hostColorMode = payload.isDark ? 'dark' : 'light';
       } else {
-        // 2. 从宿主背景色变量中计算亮度
-        const vars = payload.cssVariables || {};
-        const bgCandidate = vars['--background'] || vars['--vscode-editor-background'] || vars['--sidebar-background'];
+        const vars = (payload.cssVariables as Record<string, string> | undefined) || {};
+        const bgCandidate =
+          vars['--background'] || vars['--vscode-editor-background'] || vars['--sidebar-background'];
         if (typeof bgCandidate === 'string') {
           const parsed = parseColor(bgCandidate);
           if (parsed) {
@@ -132,8 +134,8 @@ export function initThemeListener(): void {
     const onMediaChange = () => syncTheme();
     if (typeof media.addEventListener === 'function') {
       media.addEventListener('change', onMediaChange);
-    } else if (typeof (media as any).addListener === 'function') {
-      (media as any).addListener(onMediaChange);
+    } else if (typeof media.addListener === 'function') {
+      media.addListener(onMediaChange);
     }
   }
 

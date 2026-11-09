@@ -1,18 +1,17 @@
 {
   "name": "aura-dashboard",
   "displayName": "Aura Dashboard",
-  "version": "6.0.0",
+  "version": "0.1.0",
   "description": "Antigravity deep performance analytics, Claude-inspired typography, and interface design suite",
   "logo": "assets/logo.svg",
+  "homepage": "https://github.com/sayakaho/Antigravity-Aura",
+  "repository": "https://github.com/sayakaho/Antigravity-Aura",
   "author": {
     "name": "Aura Team"
   },
-  "keywords": [
-    "analytics",
-    "telemetry",
-    "dashboard",
-    "theme",
-    "aura",
-    "ui-extension"
+  "suggestedPrompts": [
+    "查看当前会话的生成速率（TPS）、首字延迟与 Token 消耗详情",
+    "将 Antigravity 切换为 Claude 暖白 / 暗黑高对比主题并配置 Anthropic 字体排版",
+    "分析最近 7 天各模型速率分布与工具调用统计并热重载样式"
   ]
 }

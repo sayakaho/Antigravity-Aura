@@ -2,9 +2,20 @@
  * Aura Dashboard · Core Contract Types
  */
 
+export type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends Array<infer U>
+    ? Array<U>
+    : T[K] extends Record<string, any>
+      ? DeepPartial<T[K]>
+      : T[K];
+};
+
+export type LightPreset = 'high-contrast' | 'claude-desktop-purewhite' | 'default' | string;
+export type DarkPreset = 'claude-dark' | 'vintage-dark' | 'default' | string;
+
 export interface PresetConfig {
-  light: 'high-contrast' | 'claude-desktop-purewhite' | 'default' | string;
-  dark: 'claude-dark' | 'vintage-dark' | 'default' | string;
+  light: LightPreset;
+  dark: DarkPreset;
 }
 
 export interface ComposerConfig {
@@ -15,11 +26,11 @@ export interface ComposerConfig {
 
 export interface TypographyConfig {
   primarySans: string;
-  customPrimarySans?: string;
+  customPrimarySans: string;
   fallbackSans: string;
-  customFallbackSans?: string;
+  customFallbackSans: string;
   mono: string;
-  customMono?: string;
+  customMono: string;
   fontSize: number;
 }
 
@@ -28,20 +39,57 @@ export interface TelemetryConfig {
   interval: number;
 }
 
+export interface ModulesConfig {
+  deadlockHealer: boolean;
+  customCss: boolean;
+  customJs: boolean;
+}
+
+export interface ResolvedRuntimeModules extends ModulesConfig {
+  i18n: boolean;
+  metrics: boolean;
+  composerWaxSeal: boolean;
+  composerCollinear: boolean;
+  composerHideArrows: boolean;
+}
+
 export interface AdvancedConfig {
-  labsDeveloperMode?: boolean;
-  contextWindowSelector?: boolean;
-  defaultContextWindow?: '256k' | '512k';
-  experimentalFlags?: Record<string, boolean>;
+  labsDeveloperMode: boolean;
+  experimentalFlags: Record<string, boolean>;
+}
+
+export interface SelectorsConfig {
+  inputBoxId: string;
+  branchPillInBox: string;
+  homeGreeting: string;
+  excludeI18n: string;
 }
 
 export interface AuraConfig {
+  enabled: boolean;
+  channel: 'auto' | 'light' | 'dark';
   language: 'default' | 'zh-CN';
   presets: PresetConfig;
   composer: ComposerConfig;
   typography: TypographyConfig;
   telemetry: TelemetryConfig;
-  advanced?: AdvancedConfig;
+  modules: ModulesConfig;
+  advanced: AdvancedConfig;
+  themeVars: Record<string, string>;
+  selectors: SelectorsConfig;
+  allowedOrigins: string[];
+  /** Optional explicit context token limit override (defaults to 256,000) */
+  contextLimit?: number;
+}
+
+export interface PanelConfigDTO {
+  language: AuraConfig['language'];
+  presets: PresetConfig;
+  typography: TypographyConfig;
+  composer: ComposerConfig;
+  telemetry: TelemetryConfig;
+  modules: ModulesConfig;
+  advanced: AdvancedConfig;
 }
 
 export interface ConversationStepMetric {
@@ -77,6 +125,19 @@ export interface ToolStatItem {
   percentage: number;
 }
 
+export interface ModelTokenStat {
+  modelId: string;
+  modelName: string;
+  totalTokens: number;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
+  avgTps: number;
+  avgTtft: number;
+}
+
 export interface SessionAnalyticsData {
   cascadeId: string;
   totalTokens: {
@@ -98,19 +159,6 @@ export interface SessionAnalyticsData {
   tools?: ToolStatItem[];
 }
 
-export interface ModelTokenStat {
-  modelId: string;
-  modelName: string;
-  totalTokens: number;
-  inputTok: number;
-  outTok: number;
-  cacheRead: number;
-  thinkTok: number;
-  requests: number;
-  avgTps: number;
-  avgTtft: number;
-}
-
 export interface ModelDailyStat {
   modelId?: string;
   inTok: number;
@@ -119,6 +167,34 @@ export interface ModelDailyStat {
   thinkTok: number;
   streamSec: number;
   ttftSec: number;
+  effOutTok?: number;
+  effSec?: number;
+  requests: number;
+}
+
+export interface RangePerfFields {
+  effOutTok?: number;
+  effSec?: number;
+  ttftSum?: number;
+  ttftCount?: number;
+  turnDurSum?: number;
+  validTurnCount?: number;
+  tpsHist?: Record<string, number>;
+}
+
+export interface DailySeriesPoint extends RangePerfFields {
+  date: string;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  requests: number;
+}
+
+export interface HourlySeriesPoint extends RangePerfFields {
+  hourKey: string; // YYYY-MM-DD HH:00
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
   requests: number;
 }
 
@@ -134,30 +210,70 @@ export interface GlobalAnalyticsOverview {
   };
   cacheEfficiency: number; // 0 - 100 percentage
   avgTtft: number; // in seconds
-  avgTokPerSec: number; // tokens/second (weighted average)
-  p50TokPerSec?: number; // tokens/second (P50 median)
-  e2eTokPerSec?: number; // tokens/second (P50 median end-to-end throughput)
+  avgTokPerSec: number; // tokens/second (weighted unified capsule speed)
+  p50TokPerSec?: number; // tokens/second (P50 median unified capsule speed)
+  e2eTokPerSec?: number; // legacy alias mirroring p50TokPerSec
   avgTurnLatency?: number; // in seconds (average turn duration)
   topProjects: Array<{ projectId: string; conversationCount: number; tokenCount: number }>;
-  timeRangeSeries: Array<{
-    date: string;
-    inputTok: number;
-    outTok: number;
-    cacheRead: number;
-    requests: number;
-  }>;
-  hourlySeries?: Array<{
-    hourKey: string; // YYYY-MM-DD HH:00
-    inputTok: number;
-    outTok: number;
-    cacheRead: number;
-    requests: number;
-  }>;
+  timeRangeSeries: DailySeriesPoint[];
+  hourlySeries?: HourlySeriesPoint[];
   modelDistribution: ModelTokenStat[];
   dailyModelStats: Record<string, Record<string, ModelDailyStat>>;
   hourlyModelStats?: Record<string, Record<string, ModelDailyStat>>;
   toolDistribution: ToolStatItem[];
   dailyToolStats: Record<string, Record<string, number>>;
+}
+
+export interface LiveMetricsPayload {
+  cascadeId: string;
+  hasData: boolean;
+  sig?: string;
+  displayTps?: number;
+  ttft?: number;
+  ctxTok?: number;
+  ctxPct?: number;
+  outTok?: number;
+  inlineHtml?: string;
+  tooltipHtml?: string;
+}
+
+export interface BootPayload {
+  version: string;
+  platform: string;
+  enabled: boolean;
+  language: AuraConfig['language'];
+  themeMode?: 'light' | 'dark' | 'auto';
+  preset: string;
+  presets: PresetConfig;
+  cssText: string;
+  customCss: string;
+  themeVars: Record<string, string>;
+  advanced: AdvancedConfig;
+  i18nDict: Record<string, string>;
+  modules: ResolvedRuntimeModules;
+  selectors: SelectorsConfig;
+  config: AuraConfig;
+  customJs: string;
+}
+
+export interface EmbeddedAssets {
+  panelHtml: string;
+  panelCss: string;
+  panelJs: string;
+  coreThemeCss: string;
+  coreRuntimeJs: string;
+  coreI18n: Record<string, string>;
+}
+
+export interface SidecarStatusResponse {
+  connected: boolean;
+  targetCount: number;
+  cdpPort: number | null;
+  patchVersion: string;
+  cssLength: number;
+  preset: string;
+  modules: ResolvedRuntimeModules;
+  metrics: LiveMetricsPayload | null;
 }
 
 export interface SidecarBridge {
@@ -168,7 +284,7 @@ export interface SidecarBridge {
   agent?: {
     sendMessage?: (message: string, conversationId?: string) => Promise<void>;
     startConversation?: (message: string) => Promise<string>;
-    getConversationMetadata?: (conversationId: string) => Promise<any>;
+    getConversationMetadata?: (conversationId: string) => Promise<unknown>;
   };
   ui?: {
     toggleAuxPane?: (options?: { open?: boolean }) => void;

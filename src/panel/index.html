@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>Aura Dashboard</title>
-  <link rel="stylesheet" href="/styles.css?v=7.3.0">
+  <link rel="stylesheet" href="/styles.css?v=__AURA_VERSION__">
   <script src="/preload.js"></script>
 </head>
 <body>
@@ -370,7 +370,7 @@
         </div>
       </div>
 
-      <!-- Advanced Settings (1:1 with Antigravity Native hQ Component) -->
+      <!-- Advanced Settings -->
       <div class="advanced-settings-wrapper">
         <button type="button" class="advanced-settings-trigger" id="btn-toggle-advanced-settings" aria-expanded="false">
           <span>Advanced Settings</span>
@@ -381,18 +381,6 @@
         
         <div class="advanced-settings-body" id="advanced-settings-content" style="display: none;">
           <div class="settings-card">
-            <div class="settings-row">
-              <div class="settings-meta">
-                <div class="settings-label">256k / 512k Context Window Selector</div>
-                <div class="settings-sublabel">Unlock the 256k / 512k context window selector in the Model Selector.</div>
-              </div>
-              <div class="settings-control">
-                <label class="switch-toggle">
-                  <input type="checkbox" id="toggle-context-window-selector" checked>
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-            </div>
             <div class="settings-row">
               <div class="settings-meta">
                 <div class="settings-label">Enable Labs & Developer Mode</div>
@@ -414,6 +402,6 @@
     <div id="toast" class="toast">Configuration applied in real-time</div>
   </div>
 
-  <script src="/app.js?v=7.3.0"></script>
+  <script src="/app.js?v=__AURA_VERSION__"></script>
 </body>
 </html>

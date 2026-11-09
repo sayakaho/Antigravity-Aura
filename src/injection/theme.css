@@ -39,7 +39,7 @@
 }
 
 :root {
-  /* 恢复标准字重级阶，对齐稳定版（彻底消除 Insiders 强制引入的 250/350/450 细字重缺陷） */
+  /* 恢复标准字重级阶，对齐稳定版（消除 Insiders 引入的 250/350/450 细字重缺陷） */
   --font-weight-light: 300 !important;
   --font-weight-normal: 400 !important;
   --font-weight-medium: 500 !important;
@@ -47,10 +47,24 @@
   --font-weight-bold: 700 !important;
   --font-weight-black: 900 !important;
   --agy-gsf-bold-wght: 600 !important;
+
+  --ag-chat-font-size: var(--ag-cfg-chat-font-size, 15px);
+  --ag-wax-seal-hover: #74221A;
+  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
+  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
+  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
 }
 
-/* 基础全局字重与平滑度：保证无衬线体基底扎实、对齐稳定版 400 */
-body, body[data-agy-font], body[data-agy-font="google-sans"] {
+/* Windows ClearType 亚像素抗锯齿适配：O(1) 根变量级关闭微墨晕，避免低分屏字体发虚 */
+html[data-ag-os="win32"] {
+  --ag-ink-shadow-xs: none;
+  --ag-ink-shadow-sm: none;
+  --ag-ink-shadow-md: none;
+}
+
+body,
+body[data-agy-font],
+body[data-agy-font="google-sans"] {
   font-weight: 400 !important;
   -webkit-font-smoothing: antialiased;
 }
@@ -59,7 +73,7 @@ body, body[data-agy-font], body[data-agy-font="google-sans"] {
   line-height: 1.62;
 }
 
-/* 1. 自定义无衬线字体：当用户在配置中选择了具体字体时生效，精确作用于主界面与模型输出普通文本（段落/列表/标题等，绝不侵入代码块） */
+/* 1. 自定义无衬线字体（隔离代码块与等宽文本） */
 html[data-ag-custom-font="true"] {
   --vscode-font-family: var(--ag-cfg-font-sans) !important;
   --font-sans: var(--ag-cfg-font-sans) !important;
@@ -74,7 +88,7 @@ html[data-ag-custom-font="true"] select,
 html[data-ag-custom-font="true"] nav,
 html[data-ag-custom-font="true"] header,
 html[data-ag-custom-font="true"] aside,
-html[data-ag-custom-font="true"] [id="antigravity.agentSidePanelInputBox"],
+html[data-ag-custom-font="true"] #antigravity\.agentSidePanelInputBox,
 html[data-ag-custom-font="true"] div[contenteditable="true"],
 html[data-ag-custom-font="true"] textarea,
 html[data-ag-custom-font="true"] .select-text,
@@ -86,7 +100,7 @@ html[data-ag-custom-font="true"] .select-text :is(p, li, blockquote, h1, h2, h3,
   letter-spacing: -0.003em;
 }
 
-/* 2. 自定义等宽代码字体：精确锁定于代码块行内容 (.line-content)、行内代码 (code)、终端与 Monaco 编辑器代码行，绝不侵入代码块顶部标题、侧栏、思考块、普通文本或遥测文字 */
+/* 2. 自定义等宽代码字体 */
 html[data-ag-custom-mono="true"] :is(
   .code-block .line-content,
   .code-block .line-content *,
@@ -105,26 +119,20 @@ html[data-ag-custom-mono="true"] :is(
   font-family: var(--ag-cfg-font-mono, ui-monospace, monospace) !important;
 }
 
-/* 5. 配色版本 3: 复古深色 (absoulutely-chuanban) - 浅色通道 */
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="absoulutely-chuanban"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="vintage-deep"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="absoulutely-chuanban"] body.theme-light, html:not([data-ag-color-scheme="dark"])[data-ag-preset="vintage-deep"] body.theme-light {
-  --background: #FBF9F5 !important;
-  --sidebar: #F1E8DC !important;
-  --sidebar-secondary: #E6DCCE !important;
-  --sidebar-muted: #E8DFD1 !important;
-  --sidebar-border: #E0D4C3 !important;
-  --vscode-sideBar-background: #F1E8DC !important;
+html[data-ag-custom-font-size="true"] .select-text,
+html[data-ag-custom-font-size="true"] .select-text :is(p, li, blockquote, dd, dt),
+html[data-ag-custom-font-size="true"] .prose,
+html[data-ag-custom-font-size="true"] .prose :is(p, li, blockquote),
+html[data-ag-custom-font-size="true"] .markdown,
+html[data-ag-custom-font-size="true"] .markdown :is(p, li, blockquote),
+html[data-ag-custom-font-size="true"] [class*="chat-message"],
+html[data-ag-custom-font-size="true"] [class*="chat-message"] :is(p, li, blockquote) {
+  font-size: var(--ag-chat-font-size) !important;
 }
 
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="absoulutely-chuanban"] .bg-sidebar, html:not([data-ag-color-scheme="dark"])[data-ag-preset="vintage-deep"] .bg-sidebar {
-  background-color: var(--sidebar) !important;
-}
-
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="absoulutely-chuanban"] body, html:not([data-ag-color-scheme="dark"])[data-ag-preset="vintage-deep"] body {
-  background-color: var(--background) !important;
-}
-
-/* 6. 配色版本 2: ClaudeDesktop 净白 (claude-desktop-official / claude-desktop-purewhite) - 浅色通道 */
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-official"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-official"] body.theme-light, html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] body.theme-light {
+/* 3. 浅色通道预设：Claude Desktop 净白 (claude-desktop-purewhite) */
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"],
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] body.theme-light {
   --background: #FCFCFB !important;
   --foreground: #1F1E1D !important;
   --sidebar: #FBFBF9 !important;
@@ -136,17 +144,18 @@ html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-official"
   --card-border: color-mix(in srgb, #2C2B29 12%, color-mix(in srgb, #FBF9F5 70%, #ffffff)) !important;
 }
 
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-official"] .bg-sidebar, html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] .bg-sidebar {
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] .bg-sidebar {
   background-color: var(--sidebar) !important;
 }
 
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-official"] body, html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] body {
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] body {
   background-color: var(--background) !important;
   color: var(--foreground) !important;
 }
 
-/* 7. 配色版本 1 (默认首选): 高对比版 (chuanban-warm-white / high-contrast) - 浅色通道 */
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] body.theme-light, html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] body.theme-light {
+/* 4. 浅色通道预设：高对比暖纸 (high-contrast) */
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"],
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] body.theme-light {
   --background: #FCFCFB !important;
   --foreground: #1F1E1D !important;
   --sidebar: #F7F5F0 !important;
@@ -163,42 +172,35 @@ html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"], h
   --muted-foreground: #1A1A1A !important;
 }
 
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] .bg-sidebar, html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar {
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar {
   background-color: var(--sidebar) !important;
 }
 
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] body, html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] body {
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] body {
   background-color: var(--background) !important;
   color: var(--foreground) !important;
 }
 
-/* 7.5 右侧交互页面外框线：对齐稳定版高清晰度黑度 (rgba(0, 0, 0, 0.35)) */
+/* 右侧交互页面外框线与中缝分割线（浅色默认） */
 .agy-inset-shell {
   --card-edge: rgba(0, 0, 0, 0.35) !important;
   --sash-line: rgba(0, 0, 0, 0.35) !important;
 }
 
-.agy-sheet[data-sheet-inset] [data-main-content-body]::after, .agy-inset-shell [data-side-panel-body]::after, [data-main-content-body]::after {
+.agy-sheet[data-sheet-inset] [data-main-content-body]::after,
+.agy-inset-shell [data-side-panel-body]::after,
+[data-main-content-body]::after {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
 }
 
-/* 侧栏与主交互页面中缝分割线对齐稳定版 */
-.relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-[1px] {
+.relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\] {
   background-color: rgba(0, 0, 0, 0.35) !important;
 }
 
 /* ----------------------------------------------------------------------
- * 【输入框与元数据控制栏分离架构 (Claude Desktop Layout)】
- * 架构原理：
- * 仅在 html[data-ag-collinear="on"] 开启时生效！
- * 1. 外层容器降级为透明布局流骨架 (border: none; background: transparent;)
- * 2. 内部打字卡片 (.surface-composer-card) 升级为独立圆角矩形 (border-radius: 16px)
- * 3. 底部工具栏 (.agy-composer-footer) 彻底脱壳至矩形卡片下方外部，靠左依次排开 (模型 -> 模式 -> 遥测)
- * 4. 加号按钮、打字文本光标与发送组像素级垂直中轴对齐
+ * 5. 输入框与元数据控制栏共线分离架构 (data-ag-collinear="on")
  * ---------------------------------------------------------------------- */
 
-/* 1. 最外层容器：透明化骨架流 (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox,
 html[data-ag-collinear="on"] .surface-composer.bg-card-border {
   background: transparent !important;
@@ -211,8 +213,6 @@ html[data-ag-collinear="on"] .surface-composer.bg-card-border {
   outline: none !important;
 }
 
-/* 2. 内部打字卡片：独立圆角矩形卡片 (16px) (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card,
 html[data-ag-collinear="on"] .surface-composer-card.bg-card {
   position: relative !important;
@@ -226,27 +226,31 @@ html[data-ag-collinear="on"] .surface-composer-card.bg-card {
   transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* 2.1 浅色通道：日常具体会话与首页新建对话常态（蜡封暗红轻边框与微阴影） */
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+/* 5.1 浅色共线卡片底色与边框（默认中性边框；开启蜡封时切换暗红微浮雕） */
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .surface-composer-card {
   background-color: #FFFFFF !important;
+  border: 1px solid rgba(31, 30, 29, 0.18) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+  border: 1px solid rgba(31, 30, 29, 0.38) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
-  border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
 }
 
-/* 2.2 浅色通道：鼠标移上 / 聚焦激活（实色蜡封暗红 + 拟物微浮雕光晕） */
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:hover .surface-composer-card,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
   border: 1.5px solid var(--ag-wax-seal-hover, #74221A) !important;
-  border-color: var(--ag-wax-seal-hover, #74221A) !important;
   box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12), 0 6px 18px -3px rgba(60, 20, 15, 0.07) !important;
 }
 
-/* 3. 打字文本区域：左右留出加号与发送组的安全区 (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child,
+/* 打字文本区域与左右按钮安全区 */
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card > div:first-child {
   padding-left: 40px !important;
   padding-right: 110px !important;
@@ -259,7 +263,6 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-compo
   justify-content: flex-start !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child [contenteditable="true"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card > div:first-child [contenteditable="true"] {
   min-height: 28px !important;
   line-height: 24px !important;
@@ -268,22 +271,17 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-compo
   display: block !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card > div:first-child [contenteditable="true"] > p,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card > div:first-child [contenteditable="true"] > p {
   margin: 0 !important;
   line-height: 24px !important;
   width: 100% !important;
 }
 
-/* 3.1 占位文本 (Placeholder) (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card p.pointer-events-none,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card p.pointer-events-none {
   top: 50% !important;
   transform: translateY(-50%) !important;
 }
 
-/* 4. 加号按钮 (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] button[aria-label="Add context"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[aria-label="Add context"] {
   position: absolute !important;
   left: 4px !important;
@@ -299,8 +297,6 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[aria-la
   justify-content: center !important;
 }
 
-/* 5. 发送与录音操作组 (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer > .shrink-0 > div:last-child,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer > .shrink-0 > div:last-child {
   position: absolute !important;
   right: 16px !important;
@@ -313,8 +309,7 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-
   gap: 4px !important;
 }
 
-/* 6. 外部元数据控制栏整体 (仅 collinear 模式) */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer,
+/* 外部元数据控制栏 */
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer {
   position: absolute !important;
   top: calc(100% + 8px) !important;
@@ -333,16 +328,12 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-
   margin: 0 !important;
 }
 
-/* 6.1 两个中间分组穿透为 contents */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer > div.flex-1,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer > div.flex-1,
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer > div.shrink-0,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer > div.shrink-0 {
   display: contents !important;
 }
 
-/* 6.2 外部元数据项按序靠右排列：① 实时指标遥测 -> ② 模型 -> ③ 模式 -> ④ 上下文指示器 */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] #ag-live-metrics-pill,
+/* 右侧顺序：① 实时指标遥测 -> ② 模型 -> ③ 模式 -> ④ 上下文指示器 */
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill {
   order: 1 !important;
   margin: 0 !important;
@@ -356,34 +347,25 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox #ag-live-metri
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer > div.flex-1 > div:has([data-testid="model-selector-trigger"]),
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer > div.flex-1 > div:has([data-testid="model-selector-trigger"]),
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer div:has(> [data-testid="model-selector-trigger"]),
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer div:has(> [data-testid="model-selector-trigger"]),
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="model-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-testid="model-selector-trigger"] {
   order: 2 !important;
   margin: 0 !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="permissions-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-testid="permissions-selector-trigger"] {
   order: 3 !important;
   margin: 0 !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="context-usage-indicator"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-testid="context-usage-indicator"] {
   order: 4 !important;
   margin: 0 !important;
 }
 
-/* 外部元素样式微调：小巧精致、靠左无符号分隔纯间距 */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"],
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"],
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="context-usage-indicator"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="context-usage-indicator"] {
   height: 24px !important;
   font-size: 12px !important;
@@ -398,35 +380,22 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
-/* 6.2.1 模型选择器内部推理等级（如 " High" / " Low" / " Minimal" 等 .opacity-70 标）：保持轻盈淡雅，与主模型名清晰区分 */
 #antigravity\.agentSidePanelInputBox button[data-testid="model-selector-trigger"] .opacity-70,
-#antigravity\.agentSidePanelInputBox button[data-testid="model-selector-trigger"] [class*="opacity-"],
-[id="antigravity.agentSidePanelInputBox"] button[data-testid="model-selector-trigger"] .opacity-70,
-[id="antigravity.agentSidePanelInputBox"] button[data-testid="model-selector-trigger"] [class*="opacity-"] {
+#antigravity\.agentSidePanelInputBox button[data-testid="model-selector-trigger"] [class*="opacity-"] {
   opacity: 0.65 !important;
   font-weight: 450 !important;
 }
 
-/* 模型选择器作为锚点 */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"] {
   anchor-name: --ag-model-anchor !important;
 }
 
-/* 6.3 去掉模型与模式右侧冗余的上拉小箭头 */
-html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"] > svg:last-child,
 html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"] > svg:last-child,
-html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"] > svg:last-child,
 html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"] > svg:last-child {
   display: none !important;
 }
 
-/* 6.4 鼠标悬停 (Hover) 时优雅圆角矩形背景微浮雕反馈 */
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] #ag-live-metrics-pill:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill:hover,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="context-usage-indicator"]:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="context-usage-indicator"]:hover {
@@ -434,11 +403,7 @@ html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.ag
   color: #1F1E1D !important;
 }
 
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] #ag-live-metrics-pill:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill:hover,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="context-usage-indicator"]:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="context-usage-indicator"]:hover {
@@ -446,8 +411,7 @@ html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSid
   color: #FFFFFF !important;
 }
 
-/* 7. 新建会话上方工具栏（项目选择、检出方式、分支配置等）下移至卡片下方左对齐 */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]),
+/* 新建会话上方工具栏下移至卡片下方左对齐 */
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) {
   position: absolute !important;
   top: calc(100% + 6.5px) !important;
@@ -460,9 +424,6 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([dat
   margin: 0 !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div,
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div,
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div > div,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div > div {
@@ -473,12 +434,10 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([dat
   margin: 0 !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) div[class*="gap-"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) div[class*="gap-"] {
   gap: 6px !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button {
   height: 24px !important;
   padding: 0 6px !important;
@@ -492,19 +451,14 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:not(:hover),
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:not(:hover) {
   background-color: transparent !important;
 }
 
-/* 7.1 去掉按钮尾部的冗余下拉小箭头 */
-html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button > svg:last-child:not(:first-child),
 html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button > svg:last-child:not(:first-child) {
   display: none !important;
 }
 
-/* 7.2 运行环境按钮（小电脑）脱壳右对齐自适应锚定在模型左侧 6px 处 */
-html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"] {
   position: fixed !important;
   position-anchor: --ag-model-anchor !important;
@@ -522,111 +476,111 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-te
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
-/* 工具栏按钮文字与小图标 - 浅色通道 */
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg {
   color: #383431 !important;
   fill: #383431 !important;
 }
 
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"]:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
   background-color: rgba(0, 0, 0, 0.06) !important;
   color: #1F1E1D !important;
 }
 
-/* 工具栏按钮文字与小图标 - 深色通道 */
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg {
   color: #C4BEB3 !important;
   fill: #C4BEB3 !important;
 }
 
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"]:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
   color: #FFFFFF !important;
 }
 
-/* 7.3 针对 Tailwind v4 @layer utilities 内 hover:!bg-transparent 的层级特异度覆盖 */
+/* 覆盖 Tailwind v4 @layer utilities 内 hover:!bg-transparent */
 @layer utilities {
-  html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
   html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
-  html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"]:hover,
   html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
     background-color: rgba(0, 0, 0, 0.06) !important;
     color: #1F1E1D !important;
   }
 
-  html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
   html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
-  html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="location-selector-trigger"]:hover,
   html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
     background-color: rgba(255, 255, 255, 0.08) !important;
     color: #FFFFFF !important;
   }
 }
 
-/* ======================================================================
- * 【官方原生排版模式 (Native Layout)】
- * 当选择 native 时 (html:not([data-ag-collinear="on"]))：
- * 绝不改动任何布局结构、位置、内边距或流向！
- * 仅保留主题卡片背景与蜡封边框微浮雕。
- * ====================================================================== */
-html:not([data-ag-collinear="on"]) [id="antigravity.agentSidePanelInputBox"],
+/* 6. 官方原生排版模式 (Native Layout) */
 html:not([data-ag-collinear="on"]) #antigravity\.agentSidePanelInputBox {
   transition: border-color 220ms ease, box-shadow 220ms ease !important;
 }
 
-html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] [id="antigravity.agentSidePanelInputBox"],
 html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
 }
 
-html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] [id="antigravity.agentSidePanelInputBox"]:hover,
-html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
 html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:hover,
 html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:focus-within {
   border-color: var(--ag-wax-seal-hover, #74221A) !important;
   box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12), 0 6px 18px -3px rgba(60, 20, 15, 0.07) !important;
 }
 
-/* 搜索栏聚焦优化（消除双层同心圈）：激活时外圈橙色轮廓彻底隐去，原位内圈灰线直接平滑切换为品牌橙色粗线 (方案三) */
-input[placeholder*="Search"], input[class*="focus:border-ring"] {
+html:not([data-ag-collinear="on"])[data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox {
+  border: 1.5px solid rgba(196, 68, 58, 0.45) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+}
+
+html:not([data-ag-collinear="on"])[data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:hover,
+html:not([data-ag-collinear="on"])[data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:focus-within {
+  border-color: var(--ag-wax-seal-hover, #C4443A) !important;
+  box-shadow: 0 0 12px rgba(196, 68, 58, 0.25), inset 0 0 4px rgba(196, 68, 58, 0.15) !important;
+}
+
+html:not([data-ag-collinear="on"]):not([data-ag-color-scheme="dark"])[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox {
+  border: 1px solid rgba(31, 30, 29, 0.15) !important;
+  box-shadow: none !important;
+}
+
+html:not([data-ag-collinear="on"])[data-ag-color-scheme="dark"][data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: none !important;
+}
+
+/* 搜索栏聚焦单圈优化 */
+input[placeholder*="Search"],
+input[class*="focus:border-ring"] {
   --nux-focus-ring: transparent !important;
 }
 
-input[placeholder*="Search"]:focus, input[placeholder*="Search"]:focus-visible, input[class*="focus:border-ring"]:focus, input[class*="focus:border-ring"]:focus-visible {
+input[placeholder*="Search"]:focus,
+input[placeholder*="Search"]:focus-visible,
+input[class*="focus:border-ring"]:focus,
+input[class*="focus:border-ring"]:focus-visible {
   outline: none !important;
   outline-offset: 0 !important;
   border-color: #D97757 !important;
   box-shadow: 0 0 0 1px #D97757 !important;
 }
 
-/* 高对比主轮廓线：新建对话、历史对话及操作胶囊 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] a[class*="inline-flex items-center"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"], html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] .bg-sidebar a, html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar a, html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] .bg-sidebar button, html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar button {
+/* 高对比轮廓线与中缝（浅色通道） */
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"],
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar a,
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar button {
   border-color: rgba(0, 0, 0, 0.32) !important;
 }
 
-/* 高对比竖线中缝：正文与左右栏边界 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"])[data-ag-preset="chuanban-warm-white"] .bg-border, html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-border {
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-border {
   background-color: rgba(0, 0, 0, 0.28) !important;
 }
 
-/* 高对比输入框底部：模型名称与主控件深色近乎纯黑（推理等级 .opacity-70 标排除在外，保持淡雅） - 浅色通道 */
 html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not([class*="opacity-"]):not(.opacity-70),
 html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
 html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not([class*="opacity-"]):not(.opacity-70),
@@ -635,40 +589,64 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox svg
   opacity: 1 !important;
 }
 
-/* 发送按钮与操作胶囊：Claude 陶土暖橙与暗金质感 (#D97757)，高对比纯白图标 */
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"], html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"], html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button, [data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button {
+/* 发送按钮：Claude 暖橙 (#D97757) */
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"],
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"],
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button,
+[data-testid="voice-live-pill"],
+button[data-testid="send-button"],
+.agy-send-button {
   background-color: #D97757 !important;
   color: #FFFFFF !important;
   border: 1px solid #C45F40 !important;
   box-shadow: 0 1px 2px rgba(217, 119, 87, 0.25) !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"]:hover, html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"]:hover, html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button:hover, [data-testid="voice-live-pill"]:hover, button[data-testid="send-button"]:hover, .agy-send-button:hover {
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"]:hover,
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"]:hover,
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button:hover,
+[data-testid="voice-live-pill"]:hover,
+button[data-testid="send-button"]:hover,
+.agy-send-button:hover {
   background-color: #C86646 !important;
   opacity: 1 !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] *, html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"] *, html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button * {
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] *,
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"] *,
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button * {
   color: #FFFFFF !important;
   fill: #FFFFFF !important;
 }
 
-/* 严格保护 voice-live-pill 内部状态显隐 (消除默认态声波星芒与取消态 X 图标的双重重叠) */
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-0, html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"], html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"] *, [data-testid="voice-live-pill"] .opacity-0, [data-testid="voice-live-pill"] [class*="opacity-0"], [data-testid="voice-live-pill"] [class*="opacity-0"] * {
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-0,
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"],
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"] *,
+[data-testid="voice-live-pill"] .opacity-0,
+[data-testid="voice-live-pill"] [class*="opacity-0"],
+[data-testid="voice-live-pill"] [class*="opacity-0"] * {
   opacity: 0 !important;
   visibility: hidden !important;
   display: none !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-100, html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-100"], [data-testid="voice-live-pill"] .opacity-100, [data-testid="voice-live-pill"] [class*="opacity-100"] {
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-100,
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-100"],
+[data-testid="voice-live-pill"] .opacity-100,
+[data-testid="voice-live-pill"] [class*="opacity-100"] {
   opacity: 1 !important;
   visibility: visible !important;
   display: flex !important;
 }
 
-/* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变，通过 --ag-ink-shadow-* 变量 O(1) 兼容 Windows ClearType） - 浅色通道 */
-/* 侧边栏常规列表：字重450微收敛、微负字距凝聚、深暖炭墨色、0.2px微润墨柔化硬切角 */
-html:not([data-ag-color-scheme="dark"]) .bg-sidebar a, html:not([data-ag-color-scheme="dark"]) .bg-sidebar button, html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="truncate"], html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-sm"], html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-xs"], html:not([data-ag-color-scheme="dark"]) aside a, html:not([data-ag-color-scheme="dark"]) aside button {
+/* 7. 浅色通道字体墨感与侧栏排版 */
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar a,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar button,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-sm"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-xs"],
+html:not([data-ag-color-scheme="dark"]) aside a,
+html:not([data-ag-color-scheme="dark"]) aside button {
   font-weight: 450 !important;
   letter-spacing: -0.012em !important;
   color: #262422 !important;
@@ -676,92 +654,130 @@ html:not([data-ag-color-scheme="dark"]) .bg-sidebar a, html:not([data-ag-color-s
   text-shadow: var(--ag-ink-shadow-sm);
 }
 
-/* 侧边栏任务清单/对话列表标题：微量减轻一个层级至 400，消除墨晕阴影，西文恢复清爽秀气 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span.truncate, html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"], html:not([data-ag-color-scheme="dark"]) .agy-sidebar-row:not([data-selected="true"]) span.truncate, html:not([data-ag-color-scheme="dark"]) aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
+html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span.truncate,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) .agy-sidebar-row:not([data-selected="true"]) span.truncate,
+html:not([data-ag-color-scheme="dark"]) aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
   font-weight: 400 !important;
   letter-spacing: -0.005em !important;
   color: #262422 !important;
   text-shadow: none !important;
 }
 
-/* 项目目录文件夹标题 (Root / Storydesk 等展开按钮及子标签)：轻削粗度与墨晕，避免误伤 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) button[data-testid="project-header"], html:not([data-ag-color-scheme="dark"]) button[data-project-card="true"], html:not([data-ag-color-scheme="dark"]) [data-project-label], html:not([data-ag-color-scheme="dark"]) [data-subtext] span[class*="text-muted"], html:not([data-ag-color-scheme="dark"]) span:has(> svg) + span {
+html:not([data-ag-color-scheme="dark"]) button[data-testid="project-header"],
+html:not([data-ag-color-scheme="dark"]) button[data-project-card="true"],
+html:not([data-ag-color-scheme="dark"]) [data-project-label],
+html:not([data-ag-color-scheme="dark"]) [data-subtext] span[class*="text-muted"],
+html:not([data-ag-color-scheme="dark"]) span:has(> svg) + span {
   font-weight: 450 !important;
   color: #383533 !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
 }
 
-html:not([data-ag-color-scheme="dark"]) button[data-testid="project-header"] span, html:not([data-ag-color-scheme="dark"]) button[data-project-card="true"] span {
+html:not([data-ag-color-scheme="dark"]) button[data-testid="project-header"] span,
+html:not([data-ag-color-scheme="dark"]) button[data-project-card="true"] span {
   font-weight: 450 !important;
   color: #2C2B29 !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
   letter-spacing: -0.01em !important;
 }
 
-/* 侧栏选中态与激活项：精准限定激活对话，深墨纯黑、轮廓扎实 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"][data-selected="true"], html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"][data-selected="true"] span, html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"], html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-active="true"], html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-active="true"] span, html:not([data-ag-color-scheme="dark"]) .bg-sidebar [aria-selected="true"] {
+html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"][data-selected="true"],
+html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"][data-selected="true"] span,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-active="true"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-active="true"] span,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [aria-selected="true"] {
   font-weight: 520 !important;
   color: #0A0A0A !important;
   text-shadow: var(--ag-ink-shadow-md) !important;
 }
 
-/* 侧栏分类小标题（如置顶对话、项目管理） - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-muted"], html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-[11px]"], html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="uppercase"] {
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-muted"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-[11px]"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="uppercase"] {
   font-weight: 500 !important;
   letter-spacing: -0.005em !important;
   color: #7A7670 !important;
 }
 
-/* 界面按钮与全局操作控件：微负字距增加紧实感 */
-button, [role="button"], select {
+button,
+[role="button"],
+select {
   letter-spacing: -0.012em;
 }
 
-/* 输入框底部模型控制栏：深墨色与扎实字重 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button, html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox span {
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"],
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox span {
   font-weight: 500 !important;
   letter-spacing: -0.012em !important;
   text-shadow: var(--ag-ink-shadow-md);
 }
 
-/* 8.5 菜单、弹出层与设置项目字重全面对齐稳定版 (Solid Ink Optimization) */
-[role="menu"], [role="menuitem"], .agy-overlay, .agy-overlay-item, [data-radix-menu-content], [data-radix-popper-content-wrapper], [data-side] {
+/* 菜单、弹出层与设置弹窗 */
+[role="menu"],
+[role="menuitem"],
+.agy-overlay,
+.agy-overlay-item,
+[data-radix-menu-content],
+[data-radix-popper-content-wrapper],
+[data-side] {
   font-family: var(--font-sans) !important;
 }
 
-/* 下拉菜单项、二级子菜单项（如 View Usage / 子项）与模型名称：扎实字重与微字距 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"], html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item, html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item, html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="truncate"], html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-xs"], html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-[13px]"], html:not([data-ag-color-scheme="dark"]) [role="menu"] span {
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-xs"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-[13px]"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] span {
   font-weight: 400 !important;
   letter-spacing: -0.01em !important;
   color: #1F1E1D !important;
 }
 
-/* 菜单主项目、动作按钮与模型名称统一扎实字重 450 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] > span, html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] span[class*="flex-1"], html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] span.truncate, html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item > span, html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item span[class*="flex-1"], html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item span.truncate, html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item > span, html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item span[class*="flex-1"], html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item span.truncate {
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] > span,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] span[class*="flex-1"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] span.truncate,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item > span,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item span[class*="flex-1"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item span.truncate,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item > span,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item span[class*="flex-1"],
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item span.truncate {
   font-weight: 450 !important;
   letter-spacing: -0.01em !important;
   color: #1F1E1D !important;
 }
 
-/* 菜单与弹窗小标题、头部 - 浅色通道 */
-html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="font-medium"], html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-muted-foreground"], html:not([data-ag-color-scheme="dark"]) [role="menu"] h2, html:not([data-ag-color-scheme="dark"]) [role="menu"] h3, html:not([data-ag-color-scheme="dark"]) [role="menu"] h4, html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="font-medium"], html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="text-muted-foreground"] {
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="font-medium"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-muted-foreground"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] h2,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] h3,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] h4,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="font-medium"],
+html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="text-muted-foreground"] {
   font-weight: 500 !important;
   letter-spacing: -0.01em !important;
   color: #1A1A1A !important;
 }
 
-/* 系统设置主菜单右侧二级菜单/配置卡片项目 (Settings Dialog Items) */
 [role="dialog"] {
   font-family: var(--font-sans) !important;
 }
 
-html:not([data-ag-color-scheme="dark"]) [role="dialog"] h2, html:not([data-ag-color-scheme="dark"]) [role="dialog"] h3 {
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] h2,
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] h3 {
   font-weight: 500 !important;
   letter-spacing: -0.01em !important;
   color: #1F1E1D !important;
 }
 
-html:not([data-ag-color-scheme="dark"]) [role="dialog"] .agy-card span.text-sm, html:not([data-ag-color-scheme="dark"]) [role="dialog"] [class*="agy-card"] span.text-sm, html:not([data-ag-color-scheme="dark"]) [role="dialog"] [class*="divide-border"] span.text-sm {
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] .agy-card span.text-sm,
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] [class*="agy-card"] span.text-sm,
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] [class*="divide-border"] span.text-sm {
   font-weight: 450 !important;
   letter-spacing: -0.01em !important;
   color: #1F1E1D !important;
@@ -769,8 +785,7 @@ html:not([data-ag-color-scheme="dark"]) [role="dialog"] .agy-card span.text-sm, 
 }
 
 /* ============================================================================
- * 策略 B：Anthropic Claude 官方暗曜石深色体系 (Dark Channel)
- * 当系统处于 Dark 模式或 data-ag-color-scheme="dark" 时全量接管生效
+ * 8. 深色通道体系 (Dark Channel: claude-dark 默认 / vintage-dark 预设)
  * ============================================================================ */
 html[data-ag-color-scheme="dark"] {
   --background: #1F1E1D !important;
@@ -789,7 +804,6 @@ html[data-ag-color-scheme="dark"] {
   --muted-foreground: #948F85 !important;
 }
 
-/* 深色预设 2: 复古暗墨羊皮纸 (vintage-dark) */
 html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] {
   --background: #171512 !important;
   --foreground: #E5DEC9 !important;
@@ -806,17 +820,6 @@ html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] {
   --ag-wax-seal-hover: #A63C32 !important;
 }
 
-html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] .surface-composer.bg-card-border {
-  background-color: #1F1C18 !important;
-}
-
-html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] .surface-composer-card.bg-card,
-html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card {
-  background-color: #171512 !important;
-}
-
 html[data-ag-color-scheme="dark"] body {
   background-color: var(--background) !important;
   color: var(--foreground) !important;
@@ -826,62 +829,62 @@ html[data-ag-color-scheme="dark"] .bg-sidebar {
   background-color: var(--sidebar) !important;
 }
 
-/* 深色模式下的右侧外框与分割线 */
 html[data-ag-color-scheme="dark"] .agy-inset-shell {
   --card-edge: rgba(255, 255, 255, 0.12) !important;
   --sash-line: rgba(255, 255, 255, 0.14) !important;
 }
+
 html[data-ag-color-scheme="dark"] .agy-sheet[data-sheet-inset] [data-main-content-body]::after,
 html[data-ag-color-scheme="dark"] .agy-inset-shell [data-side-panel-body]::after,
 html[data-ag-color-scheme="dark"] [data-main-content-body]::after {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
 }
-html[data-ag-color-scheme="dark"] .relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-[1px] {
+
+html[data-ag-color-scheme="dark"] .relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\] {
   background-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-/* 深色输入框：单行胶囊暗黑底色与蜡封边框转移 */
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-color-scheme="dark"] .surface-composer.bg-card-border {
-  background: transparent !important;
-  background-color: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* 深色模式输入框常态 */
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
+/* 深色共线输入框卡片底色、默认边框与蜡封边框 */
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
   background-color: #1F1E1D !important;
-  border: 1.5px solid rgba(196, 68, 58, 0.45) !important;
-  border-color: rgba(196, 68, 58, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
 }
 
-/* 深色模式输入框移上 / 聚焦 */
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"]:hover .surface-composer-card,
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card,
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
-html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
+  border: 1.5px solid rgba(196, 68, 58, 0.45) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
   border: 1.5px solid var(--ag-wax-seal-hover, #C4443A) !important;
-  border-color: var(--ag-wax-seal-hover, #C4443A) !important;
   box-shadow: 0 0 12px rgba(196, 68, 58, 0.25), inset 0 0 4px rgba(196, 68, 58, 0.15) !important;
 }
 
-/* 深色模式顶部小按钮与文字 */
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:first-child button,
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:first-child span,
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:first-child svg {
+/* vintage-dark 预设独立卡片底色（置于深色基线之后以确保在共线模式正确生效） */
+html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] #antigravity\.agentSidePanelInputBox .surface-composer-card,
+html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] .surface-composer-card.bg-card {
+  background-color: #171512 !important;
+}
+
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child button,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child span,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child svg {
   color: #C4BEB3 !important;
 }
 
-html[data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child button:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
   color: #ECE6D8 !important;
 }
 
-/* 深色模式输入框底部控件文字与图标（推理等级 .opacity-70 标排除在外，保持淡雅） */
 html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not([class*="opacity-"]):not(.opacity-70),
 html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
 html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not([class*="opacity-"]):not(.opacity-70),
@@ -890,7 +893,6 @@ html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox svg:not([
   text-shadow: none !important;
 }
 
-/* 深色模式侧边栏文字与高亮 */
 html[data-ag-color-scheme="dark"] .bg-sidebar a,
 html[data-ag-color-scheme="dark"] .bg-sidebar button,
 html[data-ag-color-scheme="dark"] .bg-sidebar [class*="truncate"],
@@ -900,13 +902,11 @@ html[data-ag-color-scheme="dark"] aside button {
   text-shadow: none !important;
 }
 
-/* 侧边栏行内部元素（span、div、svg）背景彻底透明化，杜绝文字局部贴膏药杂斑 */
 html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"] *,
 html[data-ag-color-scheme="dark"] .agy-sidebar-row * {
   background-color: transparent !important;
 }
 
-/* 侧栏选中态：整卡统一微暖柔光背景，文字无多余底色 */
 html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"],
 html[data-ag-color-scheme="dark"] .bg-sidebar [data-active="true"] {
   background-color: rgba(255, 255, 255, 0.08) !important;
@@ -925,7 +925,6 @@ html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-
   color: #948F85 !important;
 }
 
-/* 侧栏 hover 态平滑微光浮现 */
 html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"]:not([data-selected="true"]):hover {
   background-color: rgba(255, 255, 255, 0.04) !important;
   border-radius: 8px !important;
@@ -936,7 +935,6 @@ html[data-ag-color-scheme="dark"] .bg-sidebar [class*="text-[11px]"] {
   color: #8C867D !important;
 }
 
-/* 深色模式菜单、弹窗与设置 */
 html[data-ag-color-scheme="dark"] [role="menu"],
 html[data-ag-color-scheme="dark"] [role="dialog"],
 html[data-ag-color-scheme="dark"] .agy-overlay,
@@ -953,48 +951,52 @@ html[data-ag-color-scheme="dark"] [role="dialog"] span {
   color: #ECE6D8 !important;
 }
 
-/* 深色模式指标胶囊与悬浮详情卡 */
 html[data-ag-color-scheme="dark"] #ag-live-metrics-pill {
   border-left-color: rgba(255, 255, 255, 0.18) !important;
   color: #C4BEB3 !important;
 }
+
 html[data-ag-color-scheme="dark"] #ag-live-metrics-pill:hover {
   color: #FFFFFF !important;
 }
+
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip {
   background-color: #262523 !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   color: #ECE6D8 !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
 }
+
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-hdr {
   color: #FFFFFF !important;
   border-bottom-color: rgba(255, 255, 255, 0.12) !important;
 }
+
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-lbl {
   color: #948F85 !important;
 }
+
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-val {
   color: #FFFFFF !important;
 }
+
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   color: #E05D52 !important;
 }
 
-/* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out) 布局铁律： - 常态 (data-ag-row-mode="middle")：严格处于「左：+ 与模型选择」和「右：模式选择与发送按钮」正中间，随宽度自动 ellipsis 缩略； - 极窄 (data-ag-row-mode="bottom")：当中间可用宽度 < 150px (损失过多信息) 时，物理挂载至 bottomRow 正下方作为独立第二行，绝不改变第一行左右布局。 */
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child,
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child {
+/* ============================================================================
+ * 9. 实时指标遥测胶囊与悬浮详情卡（Flexbox 单行弹性省略）
+ * ============================================================================ */
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child {
   overflow: hidden !important;
   min-width: 0 !important;
 }
 
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child > *:not(#ag-live-metrics-pill),
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child > *:not(#ag-live-metrics-pill) {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child > *:not(#ag-live-metrics-pill) {
   flex-shrink: 0 !important;
 }
 
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:last-child,
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:last-child {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:last-child {
   flex-shrink: 0 !important;
   margin-left: auto !important;
 }
@@ -1034,20 +1036,7 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   background-color: rgba(0, 0, 0, 0.06);
 }
 
-#ag-live-metrics-pill[data-ag-row-mode="bottom"],
-#ag-live-metrics-pill.ag-pill-wrapped {
-  flex: 0 0 100% !important;
-  width: calc(100% - 8px) !important;
-  max-width: calc(100% - 8px) !important;
-  height: 20px !important;
-  margin: 2px 4px 2px 4px !important;
-  padding: 2px 4px 0 6px !important;
-  border-left: none !important;
-  border-top: 1px dashed rgba(0, 0, 0, 0.14) !important;
-}
-
-#ag-live-metrics-pill #ag-live-metrics-text,
-#ag-live-metrics-pill .ag-m-item {
+#ag-live-metrics-pill #ag-live-metrics-text {
   font-family: var(--ag-cfg-font-sans, var(--font-sans, system-ui)) !important;
   font-size: 11px !important;
   font-weight: 500 !important;
@@ -1060,20 +1049,17 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   color: #0A0A0A !important;
 }
 
-#ag-live-metrics-pill .ag-sep,
-#ag-live-metrics-pill .ag-m-sep {
+#ag-live-metrics-pill .ag-sep {
   margin: 0 3.5px;
   opacity: 0.45 !important;
 }
 
-#ag-live-metrics-pill .ag-ctx-warn,
-#ag-live-metrics-pill[data-ctx-warn="high"] .ag-m-ctx {
+#ag-live-metrics-pill .ag-ctx-warn {
   color: #B45309 !important;
   font-weight: 600 !important;
 }
 
-#ag-live-metrics-pill .ag-ctx-crit,
-#ag-live-metrics-pill[data-ctx-warn="crit"] .ag-m-ctx {
+#ag-live-metrics-pill .ag-ctx-crit {
   color: #DC2626 !important;
   font-weight: 700 !important;
 }
@@ -1102,15 +1088,13 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
 }
 
-#ag-live-metrics-tooltip[data-visible="1"],
-#ag-live-metrics-tooltip.ag-tt-visible {
+#ag-live-metrics-tooltip[data-visible="1"] {
   opacity: 1 !important;
   visibility: visible !important;
   transform: translateY(0);
 }
 
-#ag-live-metrics-tooltip .ag-tt-hdr,
-#ag-live-metrics-tooltip .ag-tt-title {
+#ag-live-metrics-tooltip .ag-tt-hdr {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1126,12 +1110,6 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   margin-top: 8px;
 }
 
-#ag-live-metrics-tooltip .ag-tt-div {
-  height: 1px;
-  background: rgba(0, 0, 0, 0.1);
-  margin: 6px 0;
-}
-
 #ag-live-metrics-tooltip .ag-tt-row {
   display: flex;
   justify-content: space-between;
@@ -1140,8 +1118,7 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   font-weight: 450 !important;
 }
 
-#ag-live-metrics-tooltip .ag-tt-lbl,
-#ag-live-metrics-tooltip .ag-tt-label {
+#ag-live-metrics-tooltip .ag-tt-lbl {
   color: #57534E !important;
   flex-shrink: 0;
 }
@@ -1157,43 +1134,6 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   font-weight: 600 !important;
 }
 
-/* === v5.0.0 User Theme Variables, Windows ClearType & Feature Switches === */
-:root {
-  --ag-chat-font-size: var(--ag-cfg-chat-font-size, 16px);
-  --ag-wax-seal-hover: #74221A;
-  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
-  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
-  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
-}
-
-/* Windows ClearType 亚像素抗锯齿适配：O(1) 根变量级移除微墨晕 text-shadow 防止低分屏发毛，杜绝通配符 * 遍历 */
-html[data-ag-os="win32"] {
-  --ag-ink-shadow-xs: none;
-  --ag-ink-shadow-sm: none;
-  --ag-ink-shadow-md: none;
-}
-
-html[data-ag-custom-font-size="true"] .select-text,
-html[data-ag-custom-font-size="true"] .select-text :is(p, li, blockquote, dd, dt),
-html[data-ag-custom-font-size="true"] .prose,
-html[data-ag-custom-font-size="true"] .prose :is(p, li, blockquote),
-html[data-ag-custom-font-size="true"] .markdown,
-html[data-ag-custom-font-size="true"] .markdown :is(p, li, blockquote),
-html[data-ag-custom-font-size="true"] [class*="chat-message"],
-html[data-ag-custom-font-size="true"] [class*="chat-message"] :is(p, li, blockquote) {
-  font-size: var(--ag-chat-font-size) !important;
-}
-
-html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"] {
-  border-width: 1px !important;
-  border-color: rgba(31, 30, 29, 0.15) !important;
-  box-shadow: none !important;
-}
-
-html[data-ag-hide-arrows="off"] [id="antigravity.agentSidePanelInputBox"] button > svg:last-child {
+html[data-ag-hide-arrows="off"] #antigravity\.agentSidePanelInputBox button > svg:last-child {
   display: inline-block !important;
 }
-
-
-

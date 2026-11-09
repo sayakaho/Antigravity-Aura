@@ -1,16 +1,15 @@
 {
   "enabled": true,
-  "language": "default",
   "channel": "auto",
-  "preset": "high-contrast",
+  "language": "default",
   "presets": {
     "light": "high-contrast",
     "dark": "claude-dark"
   },
   "typography": {
     "primarySans": "Anthropic Serif Web",
-    "fallbackSans": "LXGW WenKai Medium",
     "customPrimarySans": "",
+    "fallbackSans": "LXGW WenKai Medium",
     "customFallbackSans": "",
     "mono": "Anthropic Mono",
     "customMono": "",
@@ -25,28 +24,41 @@
     "enabled": true,
     "interval": 2000
   },
+  "modules": {
+    "deadlockHealer": true,
+    "customCss": true,
+    "customJs": true
+  },
   "advanced": {
     "labsDeveloperMode": true,
-    "contextWindowSelector": true,
-    "defaultContextWindow": "256k",
     "experimentalFlags": {
       "enable-developer-mode": true,
       "enable-context-usage-indicator": true,
       "enable-resource-manager": true,
       "enable-split-view": true,
       "enable-code-search-palette": true,
-      "enable-trajectory-debug-tools": true
+      "enable-trajectory-debug-tools": true,
+      "labs-autonomous-mode": true,
+      "labs-inline-actions": true,
+      "configure-artifact-width": true,
+      "enable-bottom-terminal-panel": true,
+      "enable-file-explorer-tab": true,
+      "enable-pane-selection-actions": true,
+      "enable-input-autocomplete": true,
+      "enable-file-viewer-keyboard-navigation": true,
+      "enable-conversation-groups": true,
+      "enable-conversation-forking": true,
+      "enable-fork-at-historical-step": true,
+      "enable-fork-in-new-worktree": true,
+      "enable-conversation-scoped-permissions": true,
+      "enable-auto-permission-preset": true,
+      "enable-github-decorator": true,
+      "enable-browser-subagent-webview": true,
+      "enable-browser-subagent-webview-script": true,
+      "enable-browser-subagent-webview-ux": true,
+      "enable-battle-mode": true,
+      "enable-battle-contrib-variants": true
     }
-  },
-  "modules": {
-    "i18n": false,
-    "metrics": true,
-    "composerWaxSeal": true,
-    "composerCollinear": true,
-    "composerHideArrows": true,
-    "deadlockHealer": true,
-    "customCss": true,
-    "customJs": true
   },
   "themeVars": {},
   "selectors": {
