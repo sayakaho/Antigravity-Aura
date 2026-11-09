@@ -40,57 +40,32 @@ export function canonicalizeTool(raw: string): CanonicalToolInfo {
 
 export function canonicalModelName(id: string, name?: string): string {
   if (name && name.trim() && name.trim().toLowerCase() !== 'unknown') return name.trim();
-  if (!id || id === 'unknown') return 'Unknown Model';
-  const cleanId = id.trim().toLowerCase();
-  if (cleanId === 'gemini-3.8-flash') return 'Gemini 3.8 Flash';
-  if (cleanId === 'gemini-3.8-flash-n') return 'Gemini 3.8 Flash (High)';
-  if (cleanId === 'gemini-3.8-flash-exp-a') return 'Gemini 3.8 Flash (Exp)';
-  if (cleanId === 'gemini-3.8-flash-tiered') return 'Gemini 3.8 Flash (Tiered)';
-  if (cleanId === 'gemini-3.7-flash') return 'Gemini 3.7 Flash';
-  if (cleanId === 'gemini-3.7-flash-n') return 'Gemini 3.7 Flash (High)';
-  if (cleanId === 'gemini-3.1-pro-low' || cleanId === 'gemini-3.1-pro') return 'Gemini 3.1 Pro';
-  if (cleanId.includes('claude-opus-4-6-thinking')) return 'Claude Opus 4.6 Thinking';
-  if (cleanId.includes('claude-opus')) return 'Claude Opus';
-  if (cleanId.includes('claude-sonnet')) return 'Claude Sonnet';
-  if (cleanId === 'gemini-4-argon-m' || cleanId.includes('gemini-4-argon')) return 'Gemini 4 Argon (Medium)';
-  if (cleanId.startsWith('gemini-')) {
-    return cleanId
-      .split('-')
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  }
-  return id;
+  const trimmed = (id || '').trim();
+  if (!trimmed || trimmed.toLowerCase() === 'unknown') return 'Unknown Model';
+  return trimmed
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
-export function getDefaultModelId(modelName: string): string {
-  switch (modelName) {
-    case 'Gemini 3.8 Flash': return 'gemini-3.8-flash';
-    case 'Gemini 3.8 Flash (High)': return 'gemini-3.8-flash-n';
-    case 'Gemini 3.8 Flash (Exp)': return 'gemini-3.8-flash-exp-a';
-    case 'Gemini 3.8 Flash (Tiered)': return 'gemini-3.8-flash-tiered';
-    case 'Gemini 3.7 Flash': return 'gemini-3.7-flash';
-    case 'Gemini 3.7 Flash (High)': return 'gemini-3.7-flash-n';
-    case 'Gemini 4 Argon (Medium)': return 'gemini-4-argon-m';
-    case 'Gemini 3.1 Pro': return 'gemini-3.1-pro-low';
-    case 'Claude Opus 4.6 Thinking': return 'claude-opus-4-6-thinking';
-    default: return modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+export function resolveCanonicalModelId(rawId: string, modelName?: string): string {
+  const trimmed = (rawId || '').trim();
+  if (trimmed && trimmed.toLowerCase() !== 'unknown') {
+    return trimmed;
   }
+  const resolvedName = (modelName || '').trim();
+  if (resolvedName && resolvedName.toLowerCase() !== 'unknown' && resolvedName !== 'Unknown Model') {
+    const slug = resolvedName
+      .toLowerCase()
+      .replace(/[^a-z0-9.]+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (slug) return slug;
+  }
+  return 'unknown';
 }
 
-export const MODEL_COLORS: Record<string, string> = {
-  'Gemini 3.8 Flash': '#00A67E',
-  'Gemini 3.8 Flash (High)': '#8B5CF6',
-  'Gemini 3.8 Flash (Exp)': '#3B82F6',
-  'Gemini 3.7 Flash': '#EC4899',
-  'Claude Opus 4.6 Thinking': '#D97706',
-  'Gemini 4 Argon (Medium)': '#06B6D4',
-  'Gemini 3.1 Pro': '#10B981',
-  'Gemini 3.8 Flash (Tiered)': '#6366F1',
-  'Gemini 3 Flash B': '#F59E0B',
-  'Gemini 3.7 Flash (High)': '#A855F7'
-};
-
-const FALLBACK_COLORS = [
+const MODEL_PALETTE = [
   '#00A67E',
   '#8B5CF6',
   '#3B82F6',
@@ -99,12 +74,35 @@ const FALLBACK_COLORS = [
   '#06B6D4',
   '#10B981',
   '#6366F1',
-  '#F43F5E'
+  '#F43F5E',
+  '#F59E0B',
+  '#A855F7'
 ];
 
-export function getModelColor(modelName: string, index = 0): string {
-  if (MODEL_COLORS[modelName]) return MODEL_COLORS[modelName];
-  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+function hashModelKey(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function getModelColor(modelKey: string, index = 0, usedColors?: Set<string>): string {
+  const trimmed = (modelKey || '').trim();
+  const start = (trimmed ? hashModelKey(trimmed) : Math.max(0, index)) % MODEL_PALETTE.length;
+  if (usedColors) {
+    for (let i = 0; i < MODEL_PALETTE.length; i++) {
+      const candidate = MODEL_PALETTE[(start + i) % MODEL_PALETTE.length];
+      if (!usedColors.has(candidate)) {
+        usedColors.add(candidate);
+        return candidate;
+      }
+    }
+  }
+  const color = MODEL_PALETTE[start];
+  usedColors?.add(color);
+  return color;
 }
 
 export interface ModelPricingRates {

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalizeTool } from '../shared/catalog';
+import { canonicalizeTool, canonicalModelName, resolveCanonicalModelId } from '../shared/catalog';
 import { formatLocalDateAndHourKeys } from '../shared/format';
 import { computeStepTps, computeWeightedTps } from '../shared/tps';
 import type {
@@ -73,7 +73,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v9.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v10.json';
 const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache.json',
   'aura_analytics_cache_v1.json',
@@ -83,7 +83,8 @@ const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache_v5.json',
   'aura_analytics_cache_v6.json',
   'aura_analytics_cache_v7.json',
-  'aura_analytics_cache_v8.json'
+  'aura_analytics_cache_v8.json',
+  'aura_analytics_cache_v9.json'
 ];
 
 function createEmptyBreakdown(): TokenBreakdown {
@@ -102,9 +103,10 @@ function createEmptyBreakdown(): TokenBreakdown {
   };
 }
 
-function createEmptyModelDailyStat(modelId: string): ModelDailyStat {
+function createEmptyModelDailyStat(modelId: string, modelName = ''): ModelDailyStat {
   return {
     modelId,
+    modelName: modelName || undefined,
     inTok: 0,
     outTok: 0,
     cacheRead: 0,
@@ -168,8 +170,9 @@ function mergeBreakdownPerf(target: RangePerfFields, src: RangePerfFields): void
 function accumulateModelDailyStat(
   targetMap: Record<string, Record<string, ModelDailyStat>>,
   key: string,
-  modelName: string,
+  modelKey: string,
   modelId: string,
+  modelName: string,
   inTok: number,
   outTok: number,
   cacheRead: number,
@@ -181,10 +184,13 @@ function accumulateModelDailyStat(
   requests: number
 ): void {
   if (!targetMap[key]) targetMap[key] = {};
-  if (!targetMap[key][modelName]) {
-    targetMap[key][modelName] = createEmptyModelDailyStat(modelId);
+  if (!targetMap[key][modelKey]) {
+    targetMap[key][modelKey] = createEmptyModelDailyStat(modelId, modelName);
   }
-  const st = targetMap[key][modelName];
+  const st = targetMap[key][modelKey];
+  if ((!st.modelName || st.modelName === 'Unknown Model') && modelName) {
+    st.modelName = modelName;
+  }
   st.inTok += inTok;
   st.outTok += outTok;
   st.cacheRead += cacheRead;
@@ -514,11 +520,14 @@ export class GlobalAnalyticsEngine {
       }
 
       if (entry.models) {
-        for (const [mName, m] of Object.entries(entry.models)) {
-          if (!globalModelMap[mName]) {
-            globalModelMap[mName] = { ...m };
+        for (const [mKey, m] of Object.entries(entry.models)) {
+          if (!globalModelMap[mKey]) {
+            globalModelMap[mKey] = { ...m };
           } else {
-            const g = globalModelMap[mName];
+            const g = globalModelMap[mKey];
+            if ((!g.modelName || g.modelName === 'Unknown Model') && m.modelName) {
+              g.modelName = m.modelName;
+            }
             g.inTok += m.inTok;
             g.outTok += m.outTok;
             g.cacheRead += m.cacheRead;
@@ -534,12 +543,15 @@ export class GlobalAnalyticsEngine {
 
       if (entry.dailyModelStats) {
         for (const [dKey, dModels] of Object.entries(entry.dailyModelStats)) {
-          for (const [mName, dm] of Object.entries(dModels)) {
+          for (const [mKey, dm] of Object.entries(dModels)) {
+            const effectiveId = dm.modelId || mKey;
+            const effectiveName = dm.modelName || canonicalModelName(effectiveId);
             accumulateModelDailyStat(
               globalDailyModelStats,
               dKey,
-              mName,
-              dm.modelId || '',
+              mKey,
+              effectiveId,
+              effectiveName,
               dm.inTok,
               dm.outTok,
               dm.cacheRead,
@@ -556,12 +568,15 @@ export class GlobalAnalyticsEngine {
 
       if (entry.hourlyModelStats) {
         for (const [hKey, hModels] of Object.entries(entry.hourlyModelStats)) {
-          for (const [mName, hm] of Object.entries(hModels)) {
+          for (const [mKey, hm] of Object.entries(hModels)) {
+            const effectiveId = hm.modelId || mKey;
+            const effectiveName = hm.modelName || canonicalModelName(effectiveId);
             accumulateModelDailyStat(
               globalHourlyModelStats,
               hKey,
-              mName,
-              hm.modelId || '',
+              mKey,
+              effectiveId,
+              effectiveName,
               hm.inTok,
               hm.outTok,
               hm.cacheRead,
@@ -629,7 +644,10 @@ export class GlobalAnalyticsEngine {
 
     const modelDistribution = Object.values(globalModelMap)
       .filter(
-        (m) => (m.inTok + m.outTok + m.cacheRead > 0 || m.count > 0) && m.modelName !== 'Unknown Model'
+        (m) =>
+          (m.inTok + m.outTok + m.cacheRead > 0 || m.count > 0) &&
+          m.modelId !== 'unknown' &&
+          !m.modelName.toLowerCase().includes('unknown')
       )
       .map((m) => ({
         modelId: m.modelId,
@@ -807,9 +825,10 @@ export class GlobalAnalyticsEngine {
           tpsRes.totDur
         );
 
-        if (!models[parsed.modelName]) {
-          models[parsed.modelName] = {
-            modelId: parsed.rawModelId,
+        const modelKey = resolveCanonicalModelId(parsed.rawModelId, parsed.modelName);
+        if (!models[modelKey]) {
+          models[modelKey] = {
+            modelId: modelKey,
             modelName: parsed.modelName,
             inTok: 0,
             outTok: 0,
@@ -822,7 +841,7 @@ export class GlobalAnalyticsEngine {
             count: 0
           };
         }
-        const mb = models[parsed.modelName];
+        const mb = models[modelKey];
         mb.inTok += parsed.inTok;
         mb.outTok += parsed.outTok;
         mb.cacheRead += parsed.cacheRead;
@@ -836,8 +855,9 @@ export class GlobalAnalyticsEngine {
         accumulateModelDailyStat(
           dailyModelStats,
           dateKey,
+          modelKey,
+          modelKey,
           parsed.modelName,
-          parsed.rawModelId,
           parsed.inTok,
           parsed.outTok,
           parsed.cacheRead,
@@ -851,8 +871,9 @@ export class GlobalAnalyticsEngine {
         accumulateModelDailyStat(
           hourlyModelStats,
           hourKey,
+          modelKey,
+          modelKey,
           parsed.modelName,
-          parsed.rawModelId,
           parsed.inTok,
           parsed.outTok,
           parsed.cacheRead,
@@ -931,9 +952,10 @@ export class GlobalAnalyticsEngine {
         const stepEffOut = parsed.outTok > 0 && tpsRes.effectiveSec > 0 ? parsed.outTok : 0;
         const stepEffSec = stepEffOut > 0 ? tpsRes.effectiveSec : 0;
 
-        if (!sessionModelsMap[parsed.modelName]) {
-          sessionModelsMap[parsed.modelName] = {
-            modelId: parsed.rawModelId,
+        const modelKey = resolveCanonicalModelId(parsed.rawModelId, parsed.modelName);
+        if (!sessionModelsMap[modelKey]) {
+          sessionModelsMap[modelKey] = {
+            modelId: modelKey,
             modelName: parsed.modelName,
             inTok: 0,
             outTok: 0,
@@ -946,7 +968,7 @@ export class GlobalAnalyticsEngine {
             count: 0
           };
         }
-        const sm = sessionModelsMap[parsed.modelName];
+        const sm = sessionModelsMap[modelKey];
         sm.inTok += parsed.inTok;
         sm.outTok += parsed.outTok;
         sm.cacheRead += parsed.cacheRead;
@@ -1007,6 +1029,7 @@ export class GlobalAnalyticsEngine {
         .filter(
           (m) =>
             m.inTok + m.outTok + m.cacheRead > 0 &&
+            m.modelId !== 'unknown' &&
             !m.modelName.toLowerCase().includes('unknown')
         )
         .map((m) => ({

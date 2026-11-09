@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   computeApiCostAndSavings,
   computeProcessedColumns,
-  computeRangePerf
+  computeRangePerf,
+  renderModelDistribution
 } from '../src/panel/analytics/metrics';
 import { computeBucketTps, computeStepTps, computeWeightedTps } from '../src/shared/tps';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../src/types';
@@ -207,5 +208,68 @@ describe('Unified TPS & Analytics Metrics', () => {
       new Date('2026-11-09T12:00:00')
     );
     expect(emptyCustom.columns.length).toBe(30);
+  });
+
+  test('renderModelDistribution keeps distinct modelIds separate and renders plain-text footer without lightning bolt or chip dots', () => {
+    const overview = makeOverviewFixture();
+    overview.dailyModelStats['2026-11-09'] = {
+      'gemini-3.8-flash-s': {
+        modelId: 'gemini-3.8-flash-s',
+        modelName: 'Gemini 3.8 Flash (High)',
+        inTok: 14000,
+        outTok: 581,
+        cacheRead: 0,
+        thinkTok: 482,
+        streamSec: 4.76,
+        ttftSec: 1.0,
+        effOutTok: 581,
+        effSec: 4.76,
+        requests: 1
+      },
+      'gemini-3.8-flash-n': {
+        modelId: 'gemini-3.8-flash-n',
+        modelName: 'Gemini 3.8 Flash (High)',
+        inTok: 8000,
+        outTok: 300,
+        cacheRead: 4000,
+        thinkTok: 0,
+        streamSec: 3.0,
+        ttftSec: 1.0,
+        effOutTok: 300,
+        effSec: 3.0,
+        requests: 2
+      }
+    };
+
+    const fakeContainer = { innerHTML: '' };
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) => (id === 'analytics-models-list' ? fakeContainer : null)
+    };
+
+    try {
+      renderModelDistribution(overview, 'custom', null, '2026-11-09', '2026-11-09');
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
+
+    const html = fakeContainer.innerHTML;
+    expect(html).toContain('gemini-3.8-flash-s');
+    expect(html).toContain('gemini-3.8-flash-n');
+    expect(html.match(/class="model-stat-row"/g)?.length).toBe(2);
+    expect(html).not.toContain('⚡');
+    expect(html).not.toContain('chip-dot');
+    expect(html).toContain('class="model-token-summary">Cache: 0% (0) · Out: 581 · In: 14k · Think: 482</span>');
+    expect(html).toContain('<span class="model-speed-badge">122 tok/s</span>');
+
+    const firstRow = html.split('class="model-stat-row"')[1] || '';
+    const titleSection = firstRow.split('class="model-bar-track"')[0] || '';
+    const footerSection = firstRow.split('class="model-chips"')[1] || '';
+    expect(titleSection).not.toContain('model-speed-badge');
+    expect(footerSection).toContain('model-speed-badge');
   });
 });

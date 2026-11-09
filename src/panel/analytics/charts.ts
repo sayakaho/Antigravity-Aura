@@ -1,4 +1,4 @@
-import { getModelColor } from '../../shared/catalog';
+import { canonicalModelName, getModelColor } from '../../shared/catalog';
 import {
   escapeHtml,
   formatCompactNumber,
@@ -11,6 +11,7 @@ import { computeBucketTps, computeStepTps } from '../../shared/tps';
 import type {
   ConversationStepMetric,
   GlobalAnalyticsOverview,
+  ModelDailyStat,
   SessionAnalyticsData
 } from '../../types';
 import {
@@ -645,6 +646,42 @@ function attachStandardTimelineTooltipListeners(
   });
 }
 
+function resolveChartSeriesMeta(
+  statsBySlot: Record<string, Record<string, ModelDailyStat>> | undefined,
+  slotKeys: string[]
+): Array<{ key: string; label: string; color: string }> {
+  const displayNameByKey = new Map<string, string>();
+  for (const sKey of slotKeys) {
+    const bucket = statsBySlot?.[sKey];
+    if (!bucket) continue;
+    for (const [mKey, st] of Object.entries(bucket)) {
+      const resolvedName = st.modelName || (mKey === st.modelId ? canonicalModelName(mKey) : mKey);
+      if (
+        !mKey ||
+        mKey.toLowerCase().includes('unknown') ||
+        resolvedName.toLowerCase().includes('unknown')
+      ) {
+        continue;
+      }
+      if (computeBucketTps(st) > 0 && !displayNameByKey.has(mKey)) {
+        displayNameByKey.set(mKey, resolvedName);
+      }
+    }
+  }
+
+  const nameCounts = new Map<string, number>();
+  for (const name of displayNameByKey.values()) {
+    nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+  }
+
+  const usedColors = new Set<string>();
+  return Array.from(displayNameByKey.entries()).map(([key, displayName], idx) => {
+    const label = (nameCounts.get(displayName) || 0) > 1 ? `${displayName} (${key})` : displayName;
+    const color = getModelColor(key || displayName, idx, usedColors);
+    return { key, label, color };
+  });
+}
+
 export function renderModelTpsChart(
   overview: GlobalAnalyticsOverview,
   range: TimeRangeOption,
@@ -719,19 +756,8 @@ export function renderModelTpsChart(
         : formatLocalDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
     const hourKeys = Array.from({ length: 24 }, (_, h) => `${targetDate} ${String(h).padStart(2, '0')}:00`);
 
-    const activeModelsSet = new Set<string>();
-    for (const hKey of hourKeys) {
-      const hModels = overview.hourlyModelStats?.[hKey];
-      if (!hModels) continue;
-      for (const [mName, st] of Object.entries(hModels)) {
-        if (!mName.toLowerCase().includes('unknown') && computeBucketTps(st) > 0) {
-          activeModelsSet.add(mName);
-        }
-      }
-    }
-
-    const activeModelNames = Array.from(activeModelsSet);
-    if (activeModelNames.length === 0) {
+    const activeModels = resolveChartSeriesMeta(overview.hourlyModelStats, hourKeys);
+    if (activeModels.length === 0) {
       renderEmptyChartCard(
         chartWrapper,
         title,
@@ -742,9 +768,9 @@ export function renderModelTpsChart(
     }
 
     let rawMaxTps = 0;
-    for (const mName of activeModelNames) {
+    for (const m of activeModels) {
       for (const hKey of hourKeys) {
-        const st = overview.hourlyModelStats?.[hKey]?.[mName];
+        const st = overview.hourlyModelStats?.[hKey]?.[m.key];
         if (st) {
           const tps = computeBucketTps(st);
           if (tps > rawMaxTps) rawMaxTps = tps;
@@ -756,28 +782,27 @@ export function renderModelTpsChart(
     totalSlots = hourKeys.length;
     const stepX = chartWidth / (hourKeys.length - 1);
 
-    activeModelNames.forEach((mName, mIdx) => {
-      const color = getModelColor(mName, mIdx);
+    activeModels.forEach((m) => {
       const pts: Array<TpsPoint | null> = hourKeys.map((hKey, idx) => {
-        const st = overview.hourlyModelStats?.[hKey]?.[mName];
+        const st = overview.hourlyModelStats?.[hKey]?.[m.key];
         const tps = st ? computeBucketTps(st) : 0;
         if (tps <= 0) return null;
         const x = paddingLeft + idx * stepX;
         const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
         return { x, y, tps };
       });
-      series.push({ name: mName, color, points: pts });
+      series.push({ name: m.label, color: m.color, points: pts });
     });
 
     hourKeys.forEach((hKey, idx) => {
       const x = paddingLeft + idx * stepX;
       const items: TpsSlotEntry[] = [];
-      activeModelNames.forEach((mName, mIdx) => {
-        const st = overview.hourlyModelStats?.[hKey]?.[mName];
+      activeModels.forEach((m) => {
+        const st = overview.hourlyModelStats?.[hKey]?.[m.key];
         if (st) {
           const tps = computeBucketTps(st);
           if (tps > 0) {
-            items.push({ model: mName, color: getModelColor(mName, mIdx), tps, reqs: st.requests });
+            items.push({ model: m.label, color: m.color, tps, reqs: st.requests });
           }
         }
       });
@@ -788,27 +813,16 @@ export function renderModelTpsChart(
     });
   } else {
     const dateList = getFilterDatesForRange(range, customStart, customEnd, now);
-    const activeModelsSet = new Set<string>();
-    for (const d of dateList) {
-      const dayStats = overview.dailyModelStats?.[d];
-      if (!dayStats) continue;
-      for (const [mName, st] of Object.entries(dayStats)) {
-        if (!mName.toLowerCase().includes('unknown') && computeBucketTps(st) > 0) {
-          activeModelsSet.add(mName);
-        }
-      }
-    }
-
-    const activeModelNames = Array.from(activeModelsSet);
-    if (activeModelNames.length === 0) {
+    const activeModels = resolveChartSeriesMeta(overview.dailyModelStats, dateList);
+    if (activeModels.length === 0) {
       renderEmptyChartCard(chartWrapper, title, 'No throughput data recorded in this period', subtitle);
       return;
     }
 
     let rawMaxTps = 0;
-    for (const mName of activeModelNames) {
+    for (const m of activeModels) {
       for (const dStr of dateList) {
-        const st = overview.dailyModelStats?.[dStr]?.[mName];
+        const st = overview.dailyModelStats?.[dStr]?.[m.key];
         if (st) {
           const tps = computeBucketTps(st);
           if (tps > rawMaxTps) rawMaxTps = tps;
@@ -820,17 +834,16 @@ export function renderModelTpsChart(
     totalSlots = dateList.length;
     const stepX = chartWidth / Math.max(1, dateList.length - 1);
 
-    activeModelNames.forEach((mName, mIdx) => {
-      const color = getModelColor(mName, mIdx);
+    activeModels.forEach((m) => {
       const pts: Array<TpsPoint | null> = dateList.map((dStr, idx) => {
-        const st = overview.dailyModelStats?.[dStr]?.[mName];
+        const st = overview.dailyModelStats?.[dStr]?.[m.key];
         const tps = st ? computeBucketTps(st) : 0;
         if (tps <= 0) return null;
         const x = paddingLeft + (dateList.length > 1 ? idx * stepX : chartWidth / 2);
         const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
         return { x, y, tps };
       });
-      series.push({ name: mName, color, points: pts });
+      series.push({ name: m.label, color: m.color, points: pts });
     });
 
     const labelInterval = Math.max(2, Math.floor(dateList.length / 6));
@@ -839,12 +852,12 @@ export function renderModelTpsChart(
     dateList.forEach((dStr, idx) => {
       const x = paddingLeft + (dateList.length > 1 ? idx * stepX : chartWidth / 2);
       const items: TpsSlotEntry[] = [];
-      activeModelNames.forEach((mName, mIdx) => {
-        const st = overview.dailyModelStats?.[dStr]?.[mName];
+      activeModels.forEach((m) => {
+        const st = overview.dailyModelStats?.[dStr]?.[m.key];
         if (st) {
           const tps = computeBucketTps(st);
           if (tps > 0) {
-            items.push({ model: mName, color: getModelColor(mName, mIdx), tps, reqs: st.requests });
+            items.push({ model: m.label, color: m.color, tps, reqs: st.requests });
           }
         }
       });

@@ -1237,13 +1237,16 @@ html[data-theme="dark"] .chart-shared-hover-band {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   font-size: 13px;
 }
 
 .model-title-line {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .model-dot {
@@ -1266,12 +1269,15 @@ html[data-theme="dark"] .chart-shared-hover-band {
   color: var(--aura-fg-muted);
   font-family: var(--aura-font-mono, monospace);
   font-weight: 500;
+  flex-shrink: 0;
+  margin-inline-start: auto;
 }
 
 .model-token-count {
   color: var(--aura-fg-muted);
   font-size: 11px;
   font-family: inherit;
+  flex-shrink: 0;
 }
 
 .model-tokens-strong {
@@ -1302,25 +1308,17 @@ html[data-theme="dark"] .chart-shared-hover-band {
 .model-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
   margin-top: 2px;
 }
 
-.model-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.model-token-summary {
   font-size: 11px;
   color: var(--aura-fg-muted);
-  background: var(--aura-control-bg);
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-
-.chip-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+  line-height: 1.4;
+  min-width: 0;
 }
 
 .tps-hover-slot {
@@ -1331,8 +1329,9 @@ html[data-theme="dark"] .chart-shared-hover-band {
 .model-id-badge {
   font-family: var(--aura-font-mono, monospace);
   font-size: 10.5px;
-  padding: 1px 6px;
-  border-radius: 4px;
+  line-height: 1.3;
+  padding: 2px 8px;
+  border-radius: 9999px;
   background: var(--aura-control-bg, rgba(255, 255, 255, 0.06));
   color: var(--aura-fg-muted);
   border: 1px solid var(--aura-border);

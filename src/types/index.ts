@@ -161,6 +161,7 @@ export interface SessionAnalyticsData {
 
 export interface ModelDailyStat {
   modelId?: string;
+  modelName?: string;
   inTok: number;
   outTok: number;
   cacheRead: number;

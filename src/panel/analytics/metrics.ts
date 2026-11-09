@@ -1,8 +1,9 @@
 import {
   canonicalizeTool,
-  getDefaultModelId,
+  canonicalModelName,
   getModelColor,
-  getModelPricingRates
+  getModelPricingRates,
+  resolveCanonicalModelId
 } from '../../shared/catalog';
 import {
   escapeHtml,
@@ -392,8 +393,15 @@ export function computeApiCostAndSavings(
     for (const d of dates) {
       const dayModels = overview.dailyModelStats[d];
       if (!dayModels) continue;
-      for (const [mName, st] of Object.entries(dayModels)) {
-        if (!mName || mName.toLowerCase().includes('unknown')) continue;
+      for (const [mKey, st] of Object.entries(dayModels)) {
+        const mName = st.modelName || (mKey === st.modelId ? canonicalModelName(mKey) : mKey);
+        if (
+          !mKey ||
+          mKey.toLowerCase().includes('unknown') ||
+          mName.toLowerCase().includes('unknown')
+        ) {
+          continue;
+        }
         const rates = getModelPricingRates(st.modelId || mName);
         actualCost +=
           (st.inTok * rates.inputRate +
@@ -638,6 +646,7 @@ export function renderModelDistribution(
       string,
       {
         modelId: string;
+        modelName: string;
         inTok: number;
         outTok: number;
         cacheRead: number;
@@ -653,15 +662,21 @@ export function renderModelDistribution(
     for (const d of dates) {
       const dayModels = overview.dailyModelStats?.[d];
       if (!dayModels) continue;
-      for (const [mName, st] of Object.entries(dayModels)) {
-        if (!mName || mName.toLowerCase().includes('unknown') || st.inTok + st.outTok + st.cacheRead === 0) {
+      for (const [mKey, st] of Object.entries(dayModels)) {
+        const effectiveName = st.modelName || (mKey === st.modelId ? canonicalModelName(mKey) : mKey);
+        const effectiveId = resolveCanonicalModelId(st.modelId || mKey, effectiveName);
+        if (
+          effectiveId === 'unknown' ||
+          !effectiveName ||
+          effectiveName.toLowerCase().includes('unknown') ||
+          st.inTok + st.outTok + st.cacheRead === 0
+        ) {
           continue;
         }
-        if (!statsMap[mName]) {
-          const rawId = st.modelId;
-          const validId = rawId && rawId !== 'unknown' && rawId !== mName ? rawId : getDefaultModelId(mName);
-          statsMap[mName] = {
-            modelId: validId,
+        if (!statsMap[effectiveId]) {
+          statsMap[effectiveId] = {
+            modelId: effectiveId,
+            modelName: effectiveName,
             inTok: 0,
             outTok: 0,
             cacheRead: 0,
@@ -673,22 +688,22 @@ export function renderModelDistribution(
             requests: 0
           };
         }
-        statsMap[mName].inTok += st.inTok;
-        statsMap[mName].outTok += st.outTok;
-        statsMap[mName].cacheRead += st.cacheRead;
-        statsMap[mName].thinkTok += st.thinkTok;
-        statsMap[mName].streamSec += st.streamSec;
-        statsMap[mName].ttftSec += st.ttftSec;
-        statsMap[mName].effOutTok += st.effOutTok || 0;
-        statsMap[mName].effSec += st.effSec || 0;
-        statsMap[mName].requests += st.requests;
+        statsMap[effectiveId].inTok += st.inTok;
+        statsMap[effectiveId].outTok += st.outTok;
+        statsMap[effectiveId].cacheRead += st.cacheRead;
+        statsMap[effectiveId].thinkTok += st.thinkTok;
+        statsMap[effectiveId].streamSec += st.streamSec;
+        statsMap[effectiveId].ttftSec += st.ttftSec;
+        statsMap[effectiveId].effOutTok += st.effOutTok || 0;
+        statsMap[effectiveId].effSec += st.effSec || 0;
+        statsMap[effectiveId].requests += st.requests;
       }
     }
 
-    models = Object.entries(statsMap)
-      .map(([mName, st]) => ({
+    models = Object.values(statsMap)
+      .map((st) => ({
         modelId: st.modelId,
-        modelName: mName,
+        modelName: st.modelName,
         totalTokens: st.inTok + st.outTok + st.cacheRead,
         inputTok: st.inTok,
         outTok: st.outTok,
@@ -701,7 +716,12 @@ export function renderModelDistribution(
       .sort((a, b) => b.totalTokens - a.totalTokens);
   }
 
-  models = models.filter((m) => m.totalTokens > 0 && !m.modelName.toLowerCase().includes('unknown'));
+  models = models.filter(
+    (m) =>
+      m.totalTokens > 0 &&
+      m.modelId !== 'unknown' &&
+      !m.modelName.toLowerCase().includes('unknown')
+  );
 
   if (models.length === 0) {
     container.innerHTML = '<div class="chart-empty">No model usage recorded in this range</div>';
@@ -709,14 +729,23 @@ export function renderModelDistribution(
   }
 
   const maxTokens = Math.max(...models.map((m) => m.totalTokens), 1);
+  const usedColors = new Set<string>();
 
   container.innerHTML = models
     .map((m, idx) => {
       const pct = Math.max(3, Math.round((m.totalTokens / maxTokens) * 100));
-      const color = getModelColor(m.modelName, idx);
-      const speedBadge = m.avgTps > 0 ? `<span class="model-speed-badge">⚡ ${m.avgTps} tok/s</span>` : '';
+      const color = getModelColor(m.modelId || m.modelName, idx, usedColors);
+      const speedBadge = m.avgTps > 0 ? `<span class="model-speed-badge">${m.avgTps} tok/s</span>` : '';
       const rawTotal = m.inputTok + m.cacheRead;
       const cacheRate = rawTotal > 0 ? Math.round((m.cacheRead / rawTotal) * 100) : 0;
+      const tokenParts = [
+        `Cache: ${cacheRate}% (${formatCompactNumber(m.cacheRead)})`,
+        `Out: ${formatCompactNumber(m.outTok)}`,
+        `In: ${formatCompactNumber(m.inputTok)}`
+      ];
+      if (m.thinkTok > 0) {
+        tokenParts.push(`Think: ${formatCompactNumber(m.thinkTok)}`);
+      }
 
       return `
         <div class="model-stat-row">
@@ -725,7 +754,6 @@ export function renderModelDistribution(
               <span class="model-dot" style="background: ${color}"></span>
               <span class="model-name">${escapeHtml(m.modelName)}</span>
               <span class="model-id-badge" title="API Endpoint ID: ${escapeHtml(m.modelId)}">${escapeHtml(m.modelId)}</span>
-              ${speedBadge}
             </div>
             <div class="model-token-count">
               <span class="model-tokens-strong">${formatCompactNumber(m.totalTokens)}</span> tokens
@@ -736,10 +764,8 @@ export function renderModelDistribution(
             <div class="model-bar-fill" style="width: ${pct}%; background: ${color}"></div>
           </div>
           <div class="model-chips">
-            <span class="model-chip"><span class="chip-dot" style="background: #00A67E"></span>Cache: ${cacheRate}% (${formatCompactNumber(m.cacheRead)})</span>
-            <span class="model-chip"><span class="chip-dot" style="background: var(--aura-primary)"></span>Out: ${formatCompactNumber(m.outTok)}</span>
-            <span class="model-chip"><span class="chip-dot" style="background: #6366F1"></span>In: ${formatCompactNumber(m.inputTok)}</span>
-            ${m.thinkTok > 0 ? `<span class="model-chip"><span class="chip-dot" style="background: #A855F7"></span>Think: ${formatCompactNumber(m.thinkTok)}</span>` : ''}
+            <span class="model-token-summary">${tokenParts.join(' · ')}</span>
+            ${speedBadge}
           </div>
         </div>
       `;

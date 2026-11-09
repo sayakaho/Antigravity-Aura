@@ -3,6 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  canonicalModelName,
+  getModelColor,
+  resolveCanonicalModelId
+} from '../src/shared/catalog';
+import {
   extractGenMetadataStep,
   extractTimestampFromStepMeta,
   extractToolInfo,
@@ -94,8 +99,40 @@ describe('sqlite-proto protobuf & WAL signature', () => {
     expect(step.streamSec).toBeCloseTo(4.25, 6);
     expect(step.totDur).toBeCloseTo(6.75, 6);
     expect(step.rawModelId).toBe('gemini-3.8-flash-n');
-    expect(step.modelName).toBe('Gemini 3.8 Flash (High)');
+    expect(step.modelName).toBe('Gemini 3.8 Flash N');
     expect(step.stepIdx).toBe(7);
+
+    const namedRoot = encodeFieldBytes(
+      1,
+      Buffer.concat([
+        encodeFieldBytes(19, 'gemini-3.8-flash-s'),
+        encodeFieldBytes(21, 'Gemini 3.8 Flash (High)')
+      ])
+    );
+    const namedStep = extractGenMetadataStep(namedRoot);
+    expect(namedStep.rawModelId).toBe('gemini-3.8-flash-s');
+    expect(namedStep.modelName).toBe('Gemini 3.8 Flash (High)');
+  });
+
+  test('catalog resolves model names/IDs generically without hardcoded lists and deduplicates colors', () => {
+    expect(canonicalModelName('gemini-3.8-flash-s')).toBe('Gemini 3.8 Flash S');
+    expect(canonicalModelName('gemini-3.8-flash-s', 'Gemini 3.8 Flash (High)')).toBe(
+      'Gemini 3.8 Flash (High)'
+    );
+    expect(resolveCanonicalModelId('gemini-3.8-flash-s', 'Gemini 3.8 Flash (High)')).toBe(
+      'gemini-3.8-flash-s'
+    );
+    expect(resolveCanonicalModelId('gemini-3.8-flash-n', 'Gemini 3.8 Flash (High)')).toBe(
+      'gemini-3.8-flash-n'
+    );
+    expect(resolveCanonicalModelId('unknown', 'Gemini 3.8 Flash (High)')).toBe(
+      'gemini-3.8-flash-high'
+    );
+
+    const used = new Set<string>();
+    const c1 = getModelColor('gemini-3.8-flash-s', 0, used);
+    const c2 = getModelColor('gemini-3.8-flash-n', 1, used);
+    expect(c1).not.toBe(c2);
   });
 
   test('extractToolInfo extracts nested tool name at 5 -> 4 -> 2', () => {
