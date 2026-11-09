@@ -568,6 +568,39 @@
     if (pill && (pill.getAttribute('data-v') !== '3' || pill.classList.contains('ag-pill-middle') || pill.classList.contains('ag-pill-wrapped'))) {
       pill.classList.remove('ag-pill-middle', 'ag-pill-wrapped');
     }
+    function toggleAuraSidecar() {
+      try {
+        const toggleBtn = document.querySelector('button[aria-label="Toggle Side Panel"]');
+        const auxTabs = Array.from(document.querySelectorAll('.agy-aux-tab, button.agy-aux-tab'));
+        const auraTab = auxTabs.find(t =>
+          t.getAttribute('data-tab-id')?.includes('aura-dashboard') ||
+          t.innerText.includes('Aura Dashboard') ||
+          t.getAttribute('title')?.includes('Aura Dashboard')
+        );
+        const iframe = document.querySelector('iframe[src*="aura-dashboard"]');
+        const sidePanel = document.querySelector('[class*="aux-pane"], [class*="side-panel"], aside, [class*="auxiliary"]');
+        const isPanelOpen = (sidePanel && sidePanel.offsetWidth > 0) || (iframe && iframe.offsetParent !== null && iframe.offsetWidth > 0);
+
+        if (isPanelOpen) {
+          const isAuraActive = auraTab && (
+            auraTab.classList.contains('bg-secondary') ||
+            auraTab.getAttribute('aria-selected') === 'true' ||
+            (iframe && iframe.offsetParent !== null)
+          );
+          if (isAuraActive) {
+            if (toggleBtn) toggleBtn.click();
+          } else if (auraTab) {
+            auraTab.click();
+          } else if (toggleBtn) {
+            toggleBtn.click();
+          }
+        } else {
+          if (toggleBtn) toggleBtn.click();
+          if (auraTab) auraTab.click();
+        }
+      } catch (err) {}
+    }
+
     let isNewPill = false;
     if (!pill) {
       isNewPill = true;
@@ -576,12 +609,12 @@
       pill.setAttribute('data-v', '3');
       pill.setAttribute('title', '点击展开 / 折叠 Aura Dashboard 侧边栏');
       pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
-      pill.addEventListener('click', (e) => {
+      pill.onclick = (e) => {
         e.stopPropagation();
         const tt = document.getElementById('ag-live-metrics-tooltip');
         if (tt) tt.removeAttribute('data-visible');
-        window.postMessage({ type: 'toggle-aux-pane' }, '*');
-      });
+        toggleAuraSidecar();
+      };
       pill.addEventListener('mouseenter', () => {
         const tt = ensureMetricsTooltip();
         if (!tt || !tt.innerHTML) return;
@@ -597,6 +630,13 @@
         const tt = document.getElementById('ag-live-metrics-tooltip');
         if (tt) tt.removeAttribute('data-visible');
       });
+    } else {
+      pill.onclick = (e) => {
+        e.stopPropagation();
+        const tt = document.getElementById('ag-live-metrics-tooltip');
+        if (tt) tt.removeAttribute('data-visible');
+        toggleAuraSidecar();
+      };
     }
 
     if (
@@ -1129,6 +1169,212 @@
     }
     restoreAllTranslations(document.body);
   }
+
+  // ============================================================================
+  // 4.5 实验特性与上下文窗口选择器注入 (Option A: Context Window Selector)
+  // ============================================================================
+  const ADVANCED = boot.advanced || {};
+  const CW_ENABLED = ADVANCED.contextWindowSelector !== false;
+  const DEFAULT_CW = ADVANCED.defaultContextWindow || '256k';
+
+  function setupContextWindowPatch() {
+    if (!CW_ENABLED) {
+      if (window.__ag_cw_bindings && window.__ag_cw_bindings.contextWindow) {
+        delete window.__ag_cw_bindings.contextWindow;
+      }
+      const existingBar = document.getElementById('ag-cw-selector-bar');
+      if (existingBar) existingBar.remove();
+      return;
+    }
+
+    const REACT_ELEMENT = Symbol.for('react.element');
+    function h(type, props, ...children) {
+      return {
+        $$typeof: REACT_ELEMENT,
+        type,
+        key: props && props.key !== undefined ? String(props.key) : null,
+        ref: props?.ref || null,
+        props: {
+          ...props,
+          children: children.length === 1 ? children[0] : (children.length > 1 ? children : props?.children)
+        }
+      };
+    }
+
+    const N4 = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra', max: 'Max' };
+
+    function CustomEffortRow({ option, effort, selected, contextWindow }) {
+      const effortLabel = N4[effort] || effort;
+      const isSelected = selected;
+      const curCw = contextWindow?.selected || DEFAULT_CW;
+
+      return h('div', {
+        key: effort,
+        className: 'flex items-center justify-between p-1.5 rounded hover:bg-accent/40 text-xs transition-colors'
+      },
+        h('span', { className: 'font-medium truncate' }, effortLabel),
+        h('div', { className: 'flex items-center gap-1 shrink-0' },
+          (option.contextWindowOptions || [
+            { name: '256k', description: '256K' },
+            { name: '512k', description: '512K' }
+          ]).map(cw => {
+            const active = isSelected && (curCw === cw.name || (!curCw && cw.name === DEFAULT_CW));
+            return h('button', {
+              key: cw.name,
+              type: 'button',
+              className: 'text-[11px] px-1.5 py-0.5 rounded border transition-colors ' +
+                (active
+                  ? 'border-primary bg-primary/20 text-primary font-bold'
+                  : 'border-border/60 hover:bg-muted/80 text-muted-foreground'),
+              onClick: (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                contextWindow?.select?.(option, cw.name);
+              }
+            }, cw.name);
+          })
+        )
+      );
+    }
+
+    function hookFiberAndRedux() {
+      const btn = document.querySelector('[data-testid="model-selector-trigger"]');
+      if (!btn) return null;
+      const key = Object.keys(btn).find(k => k.startsWith('__reactFiber'));
+      if (!key) return null;
+
+      let cur = btn[key];
+      let bindings = null;
+      let reduxStore = null;
+
+      while (cur) {
+        const val = cur.memoizedProps?.value;
+        if (val && typeof val === 'object' && ('cider' in val || 'internalModalsOnboarding' in val)) {
+          bindings = val;
+        }
+        if (val && typeof val === 'object' && val.store && typeof val.store.dispatch === 'function') {
+          reduxStore = val.store;
+        }
+        cur = cur.return;
+      }
+
+      if (bindings) {
+        window.__ag_cw_bindings = bindings;
+        if (!bindings.contextWindow || !bindings.contextWindow.EffortRow) {
+          bindings.contextWindow = {
+            EffortRow: CustomEffortRow
+          };
+        }
+      }
+
+      if (reduxStore) {
+        window.__ag_redux_store = reduxStore;
+        try {
+          const state = reduxStore.getState();
+          const cascadeData = state?.userStatus?.cascadeModelConfigData;
+          if (cascadeData && Array.isArray(cascadeData.clientModelConfigs)) {
+            let needsPatch = false;
+            for (let i = 0; i < cascadeData.clientModelConfigs.length; i++) {
+              const m = cascadeData.clientModelConfigs[i];
+              if (!m.contextWindowOptions || m.contextWindowOptions.length === 0) {
+                needsPatch = true;
+                break;
+              }
+            }
+            if (needsPatch) {
+              const newConfigs = cascadeData.clientModelConfigs.map(m => ({
+                ...m,
+                contextWindowOptions: [
+                  { name: '256k', description: '256,000 tokens', expensive: false },
+                  { name: '512k', description: '512,000 tokens', expensive: true }
+                ]
+              }));
+              state.userStatus = {
+                ...state.userStatus,
+                cascadeModelConfigData: {
+                  ...cascadeData,
+                  clientModelConfigs: newConfigs
+                }
+              };
+              reduxStore.dispatch({ type: 'userStatus/userStatusObserved', payload: state.userStatus });
+            }
+          }
+        } catch (e) {}
+      }
+
+      return { bindings, reduxStore };
+    }
+
+    function enhanceDropdownPanel() {
+      const panel = document.querySelector('[data-testid="model-selector-panel"]');
+      if (!panel) return;
+      if (panel.querySelector('#ag-cw-selector-bar')) return;
+
+      const triggerBtn = document.querySelector('[data-testid="model-selector-trigger"]');
+      let curSelectedCw = triggerBtn?.getAttribute('data-context-window');
+      if (!curSelectedCw || curSelectedCw === 'Default') curSelectedCw = DEFAULT_CW;
+
+      const bar = document.createElement('div');
+      bar.id = 'ag-cw-selector-bar';
+      bar.className = 'ag-cw-bar';
+      bar.innerHTML = `
+        <span class="ag-cw-title">Context Window</span>
+        <div class="ag-cw-tabs">
+          <button type="button" class="ag-cw-tab ${curSelectedCw === '256k' ? 'active' : ''}" data-cw="256k">256k</button>
+          <button type="button" class="ag-cw-tab ${curSelectedCw === '512k' ? 'active' : ''}" data-cw="512k">512k</button>
+        </div>
+      `;
+
+      bar.querySelectorAll('.ag-cw-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const targetCw = tab.getAttribute('data-cw');
+          bar.querySelectorAll('.ag-cw-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+
+          const store = window.__ag_redux_store;
+          if (store) {
+            try {
+              const state = store.getState();
+              const convId = Object.keys(state.modelSelection?.byConversation || {})[0];
+              const curModel = state.modelSelection?.byConversation?.[convId]?.model ||
+                state.userStatus?.cascadeModelConfigData?.clientModelConfigs?.[0]?.value;
+
+              store.dispatch({
+                type: 'modelSelection/modelPicked',
+                payload: {
+                  conversationId: convId,
+                  model: curModel,
+                  contextWindow: targetCw
+                }
+              });
+
+              if (triggerBtn) {
+                triggerBtn.setAttribute('data-context-window', targetCw);
+              }
+            } catch (err) {
+              console.error('[Aura] Failed to select context window:', err);
+            }
+          }
+        });
+      });
+
+      panel.insertBefore(bar, panel.firstChild);
+    }
+
+    hookFiberAndRedux();
+    enhanceDropdownPanel();
+
+    if (!window.__ag_cw_watcher) {
+      window.__ag_cw_watcher = setInterval(() => {
+        hookFiberAndRedux();
+        enhanceDropdownPanel();
+      }, 1500);
+    }
+  }
+
+  setupContextWindowPatch();
 
   // ============================================================================
   // 5. 开放用户自定义前端脚本钩子 (user/custom.js，沙箱异常隔离，同时提供 ctx 与 boot)
