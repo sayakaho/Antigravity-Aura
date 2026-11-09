@@ -538,7 +538,7 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
       `<span class="ag-sep">·</span>`,
       `<span>TTFT ${last.ttft.toFixed(1)}s</span>`,
       `<span class="ag-sep">·</span>`,
-      `<span>Ctx ${fmtTok(last.ctx)}/${limitKStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
+      `<span class="${ctxClass}">Ctx ${fmtTok(last.ctx)}/${limitKStr}</span>`,
       `<span class="ag-sep">·</span>`,
       `<span>Out ${fmtTok(last.outTok)}</span>`
     ].join('');
