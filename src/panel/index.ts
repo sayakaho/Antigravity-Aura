@@ -201,6 +201,12 @@ export async function updateStatus(): Promise<void> {
 }
 
 async function initApp(): Promise<void> {
+  // Ensure styles are freshly evaluated without stale Chromium disk cache
+  const styleLink = document.querySelector('link[rel="stylesheet"]') as HTMLLinkElement | null;
+  if (styleLink && !styleLink.href.includes('?t=')) {
+    styleLink.href = `/styles.css?t=${Date.now()}`;
+  }
+
   initThemeListener();
   syncTheme();
 

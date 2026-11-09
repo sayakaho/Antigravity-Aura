@@ -69,8 +69,10 @@ export async function runBuild() {
     process.exit(1);
   }
 
-  // Copy Panel Static Assets
-  copyFileSafe(path.join(SRC_DIR, 'panel', 'index.html'), path.join(SIDECAR_DIST_DIR, 'index.html'));
+  // Copy Panel Static Assets with Cache-Busting Version
+  const rawHtml = fs.readFileSync(path.join(SRC_DIR, 'panel', 'index.html'), 'utf8');
+  const cacheBustedHtml = rawHtml.replace(/\/styles\.css\?v=[^"']*/g, `/styles.css?t=${startTime}`);
+  fs.writeFileSync(path.join(SIDECAR_DIST_DIR, 'index.html'), cacheBustedHtml, 'utf8');
   copyFileSafe(path.join(SRC_DIR, 'panel', 'styles.css'), path.join(SIDECAR_DIST_DIR, 'styles.css'));
 
   // 3. Build Server Aggregator Module (Node ESM)
