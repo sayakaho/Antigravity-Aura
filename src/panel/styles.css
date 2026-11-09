@@ -542,10 +542,10 @@ html, body {
   background: color-mix(in srgb, var(--aura-card-bg) 93%, var(--aura-primary) 7%);
   border: 1px solid color-mix(in srgb, var(--aura-border) 70%, var(--aura-primary) 30%);
   border-radius: 12px;
-  padding: 18px 22px;
+  padding: 18px 24px;
   display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 32px;
+  grid-template-columns: 1fr auto;
+  gap: 36px;
   align-items: center;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -593,11 +593,13 @@ html, body {
 .kpi-ratio-seg-input { background: #818CF8; }
 .kpi-ratio-seg-output { background: var(--aura-primary); }
 
-/* Key-Value Breakdown List (Strictly Left Label, Right Pure Number, No Border Line) */
+/* Key-Value Breakdown List (Compact, Right-aligned, No Excess Gap) */
 .kpi-breakdown-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 216px;
+  justify-self: end;
 }
 
 .kpi-breakdown-row {
