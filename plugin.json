@@ -1,7 +1,7 @@
 {
   "name": "aura-dashboard",
   "displayName": "Aura Dashboard",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Antigravity deep performance analytics, Claude-inspired typography, and interface design suite",
   "logo": "assets/logo.png",
   "homepage": "https://github.com/sayakaho/Antigravity-Aura",

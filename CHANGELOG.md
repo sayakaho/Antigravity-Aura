@@ -2,6 +2,15 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.2.1] - 2026-11-10
+
+### Changed
+- **Parallel Panel Startup & Theme Preload**: Parallelized initial config, telemetry, and analytics requests on panel boot, added an immediate loading skeleton before first paint, and cached panel theme variables in local storage to reduce startup flash.
+
+### Fixed
+- **Live Session Sync Across Switches**: Prioritized live CDP cascade IDs over stale iframe query fallbacks in `/api/analytics/session`, pushed session changes on `focus` and `visibilitychange`, and cleanly reset stale session context when switching conversations.
+- **Telemetry Capsule Sidecar Toggle & Rebinding**: Prevented the left `<aside>` sidebar from being misdetected as an open Aux Pane, switched to explicit host selectors (`toggle-aux-sidebar`, `data-aux-pane-open`, `data-tab-id`), handled i18n-translated toggle buttons via `data-ag-orig-aria-label`, added SPA `popstate` route targeting and bounded async activation, and rebound `#ag-live-metrics-pill` handlers during hot re-injection.
+
 ## [0.2.0] - 2026-11-10
 
 ### Added
