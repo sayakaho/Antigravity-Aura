@@ -557,10 +557,10 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
 
     <!-- Row 2: Dual Core Cards -->
     <div class="kpi-grid-dual">
-      <!-- Card 1: Throughput & Generation Speed (Scheme B: End-to-End Speed as primary) -->
+      <!-- Card 1: Throughput & Latency (Scheme B: End-to-End Speed as primary) -->
       <div class="kpi-card">
         <div class="kpi-label-row">
-          <span>Throughput & Generation Speed</span>
+          <span>Throughput & Latency</span>
         </div>
         <div>
           <span class="kpi-value-lg">${e2eSpeed}</span>
@@ -578,10 +578,10 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
         </div>
       </div>
 
-      <!-- Card 2: Interaction Volume & Cadence -->
+      <!-- Card 2: Requests & Turns -->
       <div class="kpi-card">
         <div class="kpi-label-row">
-          <span>Interaction Volume & Cadence</span>
+          <span>Requests & Turns</span>
         </div>
         <div>
           <span class="kpi-value-lg">${formatFullNumber(totalReq)}</span>
@@ -606,14 +606,12 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
       <div class="kpi-card kpi-card-compact">
         <div class="kpi-label-row">Cache Cost Efficiency</div>
         <div class="kpi-value-md">${metrics.cacheEfficiency.toFixed(1)}%</div>
-        <div class="kpi-subtext">避免了 ~${formatCompactNumber(cacheTok)} 重复 Token 计算</div>
       </div>
 
       <!-- Card 2: Avg Time to First Token -->
       <div class="kpi-card kpi-card-compact">
         <div class="kpi-label-row">Avg Time to First Token</div>
         <div class="kpi-value-md">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
-        <div class="kpi-subtext">首响应分块等待时延</div>
       </div>
 
       <!-- Card 3: Est. Commercial Cost (Clean without secondary text) -->
