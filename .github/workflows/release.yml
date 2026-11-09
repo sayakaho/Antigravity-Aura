@@ -41,6 +41,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -185,6 +187,57 @@ jobs:
             release/${{ steps.meta.outputs.archive }}.sha256
           retention-days: 30
 
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        if: ${{ github.event_name == 'push' || inputs.publish_release }}
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          NOTES_FILE="${RUNNER_TEMP}/release-notes-${TAG}.md"
+          PREV_TAG="$(git tag -l 'v*' --merged HEAD --sort=-v:refname | awk -v cur="${TAG}" '$0 != cur { print; exit }')"
+
+          HAS_NOTES="$(node -e '
+            const fs = require("node:fs");
+            const [version, tag, prevTag, repo, outFile] = process.argv.slice(1);
+            if (!fs.existsSync("CHANGELOG.md")) {
+              process.stdout.write("false");
+              process.exit(0);
+            }
+            const lines = fs.readFileSync("CHANGELOG.md", "utf8").split(/\r?\n/);
+            const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const startRe = new RegExp(`^##\\s+(?:\\[v?${escaped}\\]|v?${escaped})(?:\\s|$)`, "i");
+            let capturing = false;
+            const collected = [];
+            for (const line of lines) {
+              if (!capturing) {
+                if (startRe.test(line)) capturing = true;
+                continue;
+              }
+              if (/^##\s+/.test(line) || /^\[[^\]]+\]:\s+https?:\/\//.test(line)) {
+                break;
+              }
+              collected.push(line);
+            }
+            const body = collected.join("\n").trim();
+            if (!body) {
+              process.stdout.write("false");
+              process.exit(0);
+            }
+            const footer = prevTag
+              ? `\n\n**Full Changelog**: https://github.com/${repo}/compare/${prevTag}...${tag}`
+              : "";
+            fs.writeFileSync(outFile, `${body}${footer}\n`, "utf8");
+            process.stdout.write("true");
+          ' "${VERSION}" "${TAG}" "${PREV_TAG}" "${REPO}" "${NOTES_FILE}")"
+
+          {
+            echo "has_notes=${HAS_NOTES}"
+            echo "file=${NOTES_FILE}"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Create or update GitHub Release
         if: ${{ github.event_name == 'push' || inputs.publish_release }}
         env:
@@ -194,6 +247,8 @@ jobs:
           IS_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
           IS_DRAFT: ${{ steps.meta.outputs.draft }}
           EVENT_NAME: ${{ github.event_name }}
+          HAS_NOTES: ${{ steps.notes.outputs.has_notes }}
+          NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
           set -eu
           if gh release view "${TAG}" >/dev/null 2>&1; then
@@ -205,8 +260,12 @@ jobs:
               "release/${ARCHIVE}"
               "release/${ARCHIVE}.sha256"
               --title "Aura Dashboard ${TAG}"
-              --generate-notes
             )
+            if [ "${HAS_NOTES}" = "true" ] && [ -s "${NOTES_FILE}" ]; then
+              ARGS+=(--notes-file "${NOTES_FILE}")
+            else
+              ARGS+=(--generate-notes)
+            fi
             if [ "${EVENT_NAME}" != "push" ]; then
               ARGS+=(--target "${GITHUB_SHA}")
             fi

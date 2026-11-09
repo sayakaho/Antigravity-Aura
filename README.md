@@ -6,7 +6,7 @@
 
 **Theme presets, custom font stacks, and local SQLite performance analytics for Google Antigravity, built on the native Plugin + Sidecar API.**
 
-[![Version](https://img.shields.io/badge/version-0.1.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.13.0%20(node%3Asqlite)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
@@ -47,18 +47,14 @@ English | [简体中文](README.zh-CN.md)
 
 ## Features
 
-- **Light & Dark Theme Presets**: Independent light and dark mode themes, including Claude-inspired warm paper, pure white, vintage dark, and native defaults.
-- **Custom Font Stacks**: Enumerates locally installed fonts with separate configuration for Latin, CJK fallback, monospace code blocks, and chat reading size.
-- **Composer & UI Refinements**:
-  - Horizontal baseline alignment for the bottom composer toolbar, with an option to hide dropdown chevrons.
-  - Optional wax-seal composer focus border and hover background fixes on the new-session toolbar.
-  - Live English / Simplified Chinese UI switching backed by a `WeakMap`, with support for custom dictionary overrides.
-- **Inline Telemetry Capsule**: Displays throughput, TTFT, context usage, and output tokens from the latest turn directly in the composer bar. Click the capsule to toggle the side panel.
-- **Local Performance Analytics**:
-  - Aggregates metrics by active session or custom date ranges.
-  - Tracks token usage, weighted and P50 throughput, turn latency, cache hit rate, average TTFT, and estimated API cost per model.
-  - Includes session timeline charts, a turn latency vs. TTFT scatter plot with P50/P95 reference lines, and breakdowns by model, tool call, and workspace.
-- **Host Fixes & Live Reload**: Resolves settings routing deadlocks and broken zoom shortcuts, syncs filtered experimental flags across windows, and supports instant cross-window style reload.
+- **Real-Time Telemetry & Local Analytics**: Track live generation metrics and historical usage directly from your local Antigravity conversations.
+  - **Inline Telemetry Capsule**: Displays the latest response's speed (`tok/s`), TTFT, context usage, and output tokens on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
+  - **Analytics Dashboard**: Filter by the active session or time range (`Today`, `Last 7 Days`, `Last 30 Days`, `Custom`) to track token efficiency, estimated API cost, per-model speed and latency trends, and tool or workspace breakdowns.
+- **Claude-Inspired Themes & Typography**: Cohesive light and dark palettes paired with clean multilingual text rendering.
+  - **Independent Light & Dark Presets**: Configure separate themes for light (`Claude Light`, `Pure Light`, `Native Default`) and dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances that follow your OS theme automatically.
+  - **Dedicated Font Stacks**: Enumerates locally installed fonts with separate controls for Latin UI sans, CJK fallback, monospace code blocks, and chat reading size.
+- **Localization, Composer Polish & Live Reload**: Switch the host UI cleanly between English and Simplified Chinese (with custom dictionary overrides), refine bottom composer toolbar alignment and optional wax-seal focus styling, and apply panel changes or `custom.css` / `custom.js` hooks live across open windows without restarting.
+- **Host Fixes & Experimental Flags**: Resolves stuck settings dialogs, restores broken window zoom shortcuts, and safely enables Antigravity's built-in Labs and Developer Mode flags across windows.
 
 ## Requirements
 
@@ -123,8 +119,6 @@ On first launch, Antigravity initializes a persistent data directory at `~/.gemi
 | `custom.css` | User stylesheet appended when `modules.customCss` is enabled |
 | `custom.js` | Top-level window script executed when `modules.customJs` is enabled |
 | `i18n.override.json` | Custom key-value overrides merged over the built-in `zh-CN` dictionary |
-
-> Recommended fonts: `Anthropic Sans`, `Anthropic Serif`, `Anthropic Mono`, `Sarasa Gothic`, or `LXGW WenKai`.
 
 ## Architecture
 

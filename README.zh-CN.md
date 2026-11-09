@@ -6,7 +6,7 @@
 
 **Anthropic 风格的明暗主题、字体混排与本地性能监控插件，基于 Google Antigravity 原生 Plugin + Sidecar 机制实现。**
 
-[![Version](https://img.shields.io/badge/version-0.1.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.13.0%20(node%3Asqlite)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
@@ -47,18 +47,14 @@
 
 ## 功能特性
 
-- **明暗主题预设**：支持亮色与暗色模式独立配置，内置 Claude 暖纸色、纯白、复古深色及原生默认主题。
-- **字体栈独立配置**：自动枚举本机已安装字体，支持分别指定西文、中日韩回退、等宽代码字体及正文阅读字号。
-- **界面与输入框细节**：
-  - 底部工具栏水平对齐，支持隐藏下拉箭头。
-  - 提供暗红蜡封风格的输入框聚焦边框，修复新建对话页工具栏的悬停样式异常。
-  - 基于 `WeakMap` 实现中英界面无损切换，支持自定义词典覆盖。
-- **输入框实时指标**：在输入框左侧展示最近一轮回复的生成速率、首字延迟、上下文占用与输出长度，点击即可切换侧边栏面板。
-- **本地性能看板**：
-  - 支持按当前会话或指定时间范围聚合统计。
-  - 统计 Token 用量、加权平均与 P50 生成速率、轮次延迟、缓存命中率、平均 TTFT 及模型 API 成本估算。
-  - 提供会话时间线、延迟与首字耗时散点分布，以及按模型、工具调用和工作区的占比明细。
-- **稳定性修复与热重载**：修复设置页路由死锁与缩放快捷键失效问题，提供经安全过滤的实验性特性开关，支持跨窗口配置即时重载。
+- **实时遥测与本地性能看板**：基于本地对话记录提供从即时状态到历史复盘的全链路监控。
+  - **输入框指标胶囊**：在输入框底部常驻展示最近一次响应的生成速率（`tok/s`）、TTFT、上下文占用与输出量；悬停可查看思考链与正文拆解、缓存命中率及距上下文压缩的剩余空间，点击即可切换侧边栏。
+  - **多维度性能看板**：支持按当前会话或指定时间范围（今日、近 7/30 天、自定义日期等）聚合统计，覆盖 Token 构成与缓存效率、API 等价成本、各模型实测速率与延迟分布，以及工具调用和工作区占比。
+- **Claude 风格主题与字体混排**：统一明暗视觉观感，解决原版界面中英混排的割裂问题。
+  - **双模式独立预设**：为亮色（`Claude Light`、`Pure Light`、`Native Default`）与暗色（`Claude Dark`、`Vintage Deep`、`Native Default`）分别指定独立方案，随系统外观自动切换。
+  - **三轨字体独立配置**：自动识别本机已安装字体，支持西文主字体、CJK 中文回退、等宽代码字体与对话阅读字号分别设置。
+- **无损双语、细节打磨与跨窗口热重载**：支持英文与简体中文界面无损切换及自定义词典覆盖，提供输入框工具栏水平对齐与可选暗红蜡封聚焦边框；所有面板设置与 `custom.css` / `custom.js` 扩展均跨窗口即时生效，免改包、无需重启。
+- **宿主兼容修复与实验开关**：修复设置弹窗偶发无法打开的问题并恢复窗口缩放快捷键，同时支持跨窗口安全开启 Antigravity 内置 Labs 与开发者实验特性。
 
 ## 环境要求
 
@@ -123,8 +119,6 @@ agy plugin disable aura-dashboard
 | `custom.css` | 启用 `modules.customCss` 后追加加载的自定义样式表 |
 | `custom.js` | 启用 `modules.customJs` 后在顶层窗口执行的扩展脚本 |
 | `i18n.override.json` | 覆盖内置中文词典的自定义词条 |
-
-> 推荐搭配 `Anthropic Sans`、`Anthropic Serif`、`Anthropic Mono`、`Sarasa Gothic` 或 `LXGW WenKai` 字体使用。
 
 ## 架构
 
