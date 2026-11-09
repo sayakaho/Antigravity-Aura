@@ -452,28 +452,53 @@ html, body {
   gap: 10px;
   padding: 10px 28px 12px 28px;
   margin: 0 -28px 16px -28px;
-  background: color-mix(in srgb, var(--aura-bg) 84%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--aura-bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--aura-border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .timerange-segmented {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  background: var(--aura-control-bg);
-  border: 1px solid var(--aura-border);
-  border-radius: 9999px;
-  padding: 3px;
+  background: color-mix(in srgb, var(--aura-fg) 3.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--aura-fg) 7%, transparent);
+  border-radius: 8px;
+  padding: 2.5px;
   gap: 2px;
 }
 
 .timerange-segmented .segment-btn {
-  padding: 3.5px 10px;
+  padding: 4px 10px;
   font-size: 11px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--aura-fg-muted);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.timerange-segmented .segment-btn:hover {
+  color: var(--aura-fg);
+  background: color-mix(in srgb, var(--aura-fg) 5%, transparent);
+}
+
+.timerange-segmented .segment-btn.active {
+  background: var(--aura-card-bg, #FFFFFF);
+  color: var(--aura-fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+body.dark .timerange-segmented .segment-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .custom-range-inputs {
@@ -1452,17 +1477,20 @@ body.dark .chart-shared-hover-band {
 .tool-distribution-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .tool-stat-row {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 14px;
-  background: var(--aura-control-bg, rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--aura-border);
-  border-radius: 8px;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--aura-border);
+}
+
+.tool-stat-row:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
 }
 
 .tool-meta {
@@ -1544,4 +1572,52 @@ body.dark .chart-shared-hover-band {
   height: 100%;
   border-radius: 3px;
   transition: width 0.3s ease;
+}
+
+/* Latency vs TTFT Scatter Chart */
+.latency-scatter-pt {
+  transition: r 0.12s ease, fill-opacity 0.12s ease;
+  cursor: pointer;
+}
+
+.latency-scatter-pt:hover {
+  r: 4.5;
+  fill-opacity: 0.95;
+}
+
+.chart-ref-line {
+  pointer-events: none;
+}
+
+.chart-ref-tag {
+  pointer-events: none;
+  user-select: none;
+}
+
+.scatter-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.scatter-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--aura-fg-muted);
+}
+
+.scatter-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.scatter-legend-line {
+  width: 14px;
+  height: 0;
+  border-top: 1.5px dashed;
+  display: inline-block;
 }

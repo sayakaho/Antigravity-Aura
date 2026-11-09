@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>Aura Dashboard</title>
-  <link rel="stylesheet" href="/styles.css?v=6.4.0">
+  <link rel="stylesheet" href="/styles.css?v=7.2.0">
   <script src="/preload.js"></script>
 </head>
 <body>
@@ -80,6 +80,13 @@
       <div class="settings-section">
         <div class="chart-card" id="analytics-model-tps-chart">
           <div class="chart-loading">Rendering model speed trends...</div>
+        </div>
+      </div>
+
+      <!-- Latency vs. TTFT Distribution -->
+      <div class="settings-section">
+        <div class="chart-card" id="analytics-latency-ttft-chart">
+          <div class="chart-loading">Rendering latency distribution...</div>
         </div>
       </div>
 
@@ -368,6 +375,6 @@
     <div id="toast" class="toast">Configuration applied in real-time</div>
   </div>
 
-  <script src="/app.js?v=7.0.0"></script>
+  <script src="/app.js?v=7.2.0"></script>
 </body>
 </html>

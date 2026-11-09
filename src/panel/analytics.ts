@@ -1645,24 +1645,19 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
 
-  // 1. Session Mode: Turn-by-Turn TPS
+  // 1. Session Mode: Turn-by-Turn E2E Throughput
   if (isSession) {
     const steps = activeSessionData!.steps;
     const totalTurns = steps.length;
     let rawMaxTps = 0;
 
     steps.forEach((st) => {
-      const isRealStream = st.stream >= 0.25 && st.outTok >= 20 && (st.outTok / st.stream) <= 600;
-      let tps = 0;
-      if (isRealStream) {
-        tps = Math.round(st.outTok / st.stream);
-      } else if (st.outTok > 0 && st.totDur > 0) {
-        tps = Math.round(st.outTok / st.totDur);
-      }
+      const dur = st.totDur > 0 ? st.totDur : (st.ttft + st.stream);
+      const tps = (st.outTok > 0 && dur > 0) ? Math.round(st.outTok / dur) : 0;
       if (tps <= 600 && tps > rawMaxTps) rawMaxTps = tps;
     });
 
-    const rawMax = Math.min(600, Math.max(rawMaxTps, 300));
+    const rawMax = Math.max(rawMaxTps, 60);
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
     const normalized = rawMax / magnitude;
     let tickStep = magnitude;
@@ -1670,23 +1665,18 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     else if (normalized <= 5) tickStep = 1 * magnitude;
     else tickStep = 2 * magnitude;
 
-    const maxTps = Math.min(600, Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4)) || 400;
+    const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 80;
     const yTicks = [0, maxTps * 0.25, maxTps * 0.5, maxTps * 0.75, maxTps];
     const stepX = chartWidth / Math.max(1, totalTurns - 1);
 
-    const points: Array<{ x: number; y: number; tps: number; isStream: boolean; stepIdx: number }> = [];
+    const points: Array<{ x: number; y: number; tps: number; stepIdx: number }> = [];
     steps.forEach((st, idx) => {
-      const isRealStream = st.stream >= 0.25 && st.outTok >= 20 && (st.outTok / st.stream) <= 600;
-      let tps = 0;
-      if (isRealStream) {
-        tps = Math.round(st.outTok / st.stream);
-      } else if (st.outTok > 0 && st.totDur > 0) {
-        tps = Math.round(st.outTok / st.totDur);
-      }
+      const dur = st.totDur > 0 ? st.totDur : (st.ttft + st.stream);
+      let tps = (st.outTok > 0 && dur > 0) ? Math.round(st.outTok / dur) : 0;
       tps = Math.min(maxTps, tps);
       const x = paddingLeft + (totalTurns > 1 ? idx * stepX : chartWidth / 2);
       const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
-      points.push({ x, y, tps, isStream: isRealStream, stepIdx: st.idx + 1 });
+      points.push({ x, y, tps, stepIdx: st.idx + 1 });
     });
 
     let yAxisLinesSvg = '';
@@ -1720,15 +1710,15 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
       if (i === 0) pathD = `M ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
       else pathD += ` L ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
       if (totalTurns <= 50) {
-        dotsSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="#8B5CF6" stroke="var(--aura-bg-elevated, #1e1e1e)" stroke-width="1.5" />`;
+        dotsSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="#3B82F6" stroke="var(--aura-bg-elevated, #1e1e1e)" stroke-width="1.5" />`;
       }
     });
 
     let hoverBandsSvg = '';
-    points.forEach((p, idx) => {
+    points.forEach((p) => {
       const bandW = stepX;
       const bandX = Math.max(paddingLeft, p.x - bandW / 2);
-      const dataPayload = JSON.stringify([{ model: (p.isStream ? 'Stream Speed #' : 'E2E Throughput #') + p.stepIdx, color: p.isStream ? '#8B5CF6' : '#3B82F6', tps: p.tps, reqs: 1 }]);
+      const dataPayload = JSON.stringify([{ model: 'E2E Throughput #' + p.stepIdx, color: '#3B82F6', tps: p.tps, reqs: 1 }]);
       hoverBandsSvg += `
         <rect class="tps-hover-slot"
               x="${bandX.toFixed(1)}" y="${paddingTop}" width="${bandW.toFixed(1)}" height="${chartHeight}"
@@ -1742,7 +1732,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     chartWrapper.innerHTML = `
       <div class="chart-header">
         <div class="chart-header-left">
-          <h3 class="chart-title">Model Speed Trends</h3>
+          <h3 class="chart-title">Model Speed Trends <span style="font-size: 11px; font-weight: normal; color: var(--aura-fg-muted); margin-left: 6px;">(E2E Throughput)</span></h3>
         </div>
       </div>
       <div class="chart-body" style="position: relative;">
@@ -1750,7 +1740,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
           ${yAxisLinesSvg}
           ${yAxisTextsSvg}
           ${xLabelsSvg}
-          <path d="${pathD}" fill="none" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="${pathD}" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           ${dotsSvg}
           <line id="tps-scrubber-line" x1="0" y1="${paddingTop}" x2="0" y2="${paddingTop + chartHeight}" stroke="var(--aura-border-focus, #3B82F6)" stroke-width="1.5" stroke-dasharray="2 2" style="display: none; pointer-events: none;" />
           ${hoverBandsSvg}
@@ -1779,7 +1769,8 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
       const hModels = overview.hourlyModelStats?.[hKey];
       if (hModels) {
         for (const [mName, st] of Object.entries(hModels)) {
-          if (st.streamSec > 0 && st.outTok > 0 && !mName.toLowerCase().includes('unknown')) {
+          const dur = st.streamSec + st.ttftSec;
+          if (dur > 0 && st.outTok > 0 && !mName.toLowerCase().includes('unknown')) {
             activeModelsSet.add(mName);
           }
         }
@@ -1791,10 +1782,10 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
       chartWrapper.innerHTML = `
         <div class="chart-header">
           <div class="chart-header-left">
-            <h3 class="chart-title">Model Speed Trends</h3>
+            <h3 class="chart-title">Model Speed Trends <span style="font-size: 11px; font-weight: normal; color: var(--aura-fg-muted); margin-left: 6px;">(E2E Throughput)</span></h3>
           </div>
         </div>
-        <div class="chart-empty">No streaming latency data recorded for ${range === 'today' ? 'today' : 'yesterday'}</div>
+        <div class="chart-empty">No throughput data recorded for ${range === 'today' ? 'today' : 'yesterday'}</div>
       `;
       return;
     }
@@ -1806,14 +1797,17 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     for (const mName of activeModelNames) {
       hourKeys.forEach(hKey => {
         const st = overview.hourlyModelStats?.[hKey]?.[mName];
-        if (st && st.streamSec > 0 && st.outTok > 0) {
-          const tps = Math.round(st.outTok / st.streamSec);
-          if (tps > rawMaxTps) rawMaxTps = tps;
+        if (st) {
+          const dur = st.streamSec + st.ttftSec;
+          if (dur > 0 && st.outTok > 0) {
+            const tps = Math.round(st.outTok / dur);
+            if (tps > rawMaxTps) rawMaxTps = tps;
+          }
         }
       });
     }
 
-    const rawMax = Math.max(rawMaxTps, 300);
+    const rawMax = Math.max(rawMaxTps, 60);
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
     const normalized = rawMax / magnitude;
     let tickStep = magnitude;
@@ -1821,7 +1815,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     else if (normalized <= 5) tickStep = 1 * magnitude;
     else tickStep = 2 * magnitude;
 
-    const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 400;
+    const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 80;
 
     for (const mName of activeModelNames) {
       seriesByModel[mName] = [];
@@ -1829,10 +1823,15 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
         const st = overview.hourlyModelStats?.[hKey]?.[mName];
         const x = paddingLeft + idx * stepX;
         const hh = hKey.slice(11, 16);
-        if (st && st.streamSec > 0 && st.outTok > 0) {
-          const tps = Math.round(st.outTok / st.streamSec);
-          const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
-          seriesByModel[mName].push({ x, y, tps, hourLabel: hh, reqs: st.requests });
+        if (st) {
+          const dur = st.streamSec + st.ttftSec;
+          if (dur > 0 && st.outTok > 0) {
+            const tps = Math.round(st.outTok / dur);
+            const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+            seriesByModel[mName].push({ x, y, tps, hourLabel: hh, reqs: st.requests });
+          } else {
+            seriesByModel[mName].push(null);
+          }
         } else {
           seriesByModel[mName].push(null);
         }
@@ -1850,7 +1849,6 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
 
     let xLabelsSvg = '';
     hourKeys.forEach((hKey, idx) => {
-      // Explicitly show only 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00; NEVER show 23:00
       if (idx % 3 === 0 && idx < 23) {
         const x = paddingLeft + idx * stepX;
         const hh = hKey.slice(11, 16);
@@ -1895,13 +1893,16 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
 
       activeModelNames.forEach((mName, mIdx) => {
         const st = overview.hourlyModelStats?.[hKey]?.[mName];
-        if (st && st.streamSec > 0 && st.outTok > 0) {
-          dayData.push({
-            model: mName,
-            color: getModelColor(mName, mIdx),
-            tps: Math.round(st.outTok / st.streamSec),
-            reqs: st.requests
-          });
+        if (st) {
+          const dur = st.streamSec + st.ttftSec;
+          if (dur > 0 && st.outTok > 0) {
+            dayData.push({
+              model: mName,
+              color: getModelColor(mName, mIdx),
+              tps: Math.round(st.outTok / dur),
+              reqs: st.requests
+            });
+          }
         }
       });
 
@@ -1918,7 +1919,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     chartWrapper.innerHTML = `
       <div class="chart-header">
         <div class="chart-header-left">
-          <h3 class="chart-title">Model Speed Trends</h3>
+          <h3 class="chart-title">Model Speed Trends <span style="font-size: 11px; font-weight: normal; color: var(--aura-fg-muted); margin-left: 6px;">(E2E Throughput)</span></h3>
         </div>
       </div>
       <div class="chart-body" style="position: relative;">
@@ -1941,15 +1942,16 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
 
   // 3. Multi-day Granularity: Daily Avg TPS
   const dateList = getFilterDatesForRange(range);
-  const activeModelsMap: Record<string, { totalOut: number; totalStream: number; daysCount: number }> = {};
+  const activeModelsMap: Record<string, { totalOut: number; totalDur: number; daysCount: number }> = {};
   for (const d of dateList) {
     const dayStats = overview.dailyModelStats?.[d];
     if (dayStats) {
       for (const [mName, st] of Object.entries(dayStats)) {
-        if (st.streamSec > 0 && st.outTok > 0) {
-          if (!activeModelsMap[mName]) activeModelsMap[mName] = { totalOut: 0, totalStream: 0, daysCount: 0 };
+        const dur = st.streamSec + st.ttftSec;
+        if (dur > 0 && st.outTok > 0) {
+          if (!activeModelsMap[mName]) activeModelsMap[mName] = { totalOut: 0, totalDur: 0, daysCount: 0 };
           activeModelsMap[mName].totalOut += st.outTok;
-          activeModelsMap[mName].totalStream += st.streamSec;
+          activeModelsMap[mName].totalDur += dur;
           activeModelsMap[mName].daysCount += 1;
         }
       }
@@ -1962,10 +1964,10 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     chartWrapper.innerHTML = `
       <div class="chart-header">
         <div class="chart-header-left">
-          <h3 class="chart-title">Model Speed Trends</h3>
+          <h3 class="chart-title">Model Speed Trends <span style="font-size: 11px; font-weight: normal; color: var(--aura-fg-muted); margin-left: 6px;">(E2E Throughput)</span></h3>
         </div>
       </div>
-      <div class="chart-empty">No streaming latency data recorded in this period</div>
+      <div class="chart-empty">No throughput data recorded in this period</div>
     `;
     return;
   }
@@ -1977,14 +1979,17 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     seriesByModel[mName] = [];
     dateList.forEach((dStr) => {
       const st = overview.dailyModelStats?.[dStr]?.[mName];
-      if (st && st.streamSec > 0 && st.outTok > 0) {
-        const tps = Math.round(st.outTok / st.streamSec);
-        if (tps > rawMaxTps) rawMaxTps = tps;
+      if (st) {
+        const dur = st.streamSec + st.ttftSec;
+        if (dur > 0 && st.outTok > 0) {
+          const tps = Math.round(st.outTok / dur);
+          if (tps > rawMaxTps) rawMaxTps = tps;
+        }
       }
     });
   }
 
-  const rawMax = Math.max(rawMaxTps, 300);
+  const rawMax = Math.max(rawMaxTps, 60);
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
   const normalized = rawMax / magnitude;
   let tickStep = magnitude;
@@ -1992,17 +1997,22 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   else if (normalized <= 5) tickStep = 1 * magnitude;
   else tickStep = 2 * magnitude;
 
-  const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 400;
+  const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 80;
   const stepX = chartWidth / Math.max(1, dateList.length - 1);
 
   for (const mName of activeModelNames) {
     dateList.forEach((dStr, idx) => {
       const st = overview.dailyModelStats?.[dStr]?.[mName];
       const x = paddingLeft + idx * stepX;
-      if (st && st.streamSec > 0 && st.outTok > 0) {
-        const tps = Math.round(st.outTok / st.streamSec);
-        const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
-        seriesByModel[mName].push({ x, y, tps, date: dStr, reqs: st.requests });
+      if (st) {
+        const dur = st.streamSec + st.ttftSec;
+        if (dur > 0 && st.outTok > 0) {
+          const tps = Math.round(st.outTok / dur);
+          const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+          seriesByModel[mName].push({ x, y, tps, date: dStr, reqs: st.requests });
+        } else {
+          seriesByModel[mName].push(null);
+        }
       } else {
         seriesByModel[mName].push(null);
       }
@@ -2076,13 +2086,16 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     const dayData: Array<{ model: string; color: string; tps: number; reqs: number }> = [];
     activeModelNames.forEach((mName, mIdx) => {
       const st = overview.dailyModelStats?.[dStr]?.[mName];
-      if (st && st.streamSec > 0 && st.outTok > 0) {
-        dayData.push({
-          model: mName,
-          color: getModelColor(mName, mIdx),
-          tps: Math.round(st.outTok / st.streamSec),
-          reqs: st.requests
-        });
+      if (st) {
+        const dur = st.streamSec + st.ttftSec;
+        if (dur > 0 && st.outTok > 0) {
+          dayData.push({
+            model: mName,
+            color: getModelColor(mName, mIdx),
+            tps: Math.round(st.outTok / dur),
+            reqs: st.requests
+          });
+        }
       }
     });
 
@@ -2099,7 +2112,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   chartWrapper.innerHTML = `
     <div class="chart-header">
       <div class="chart-header-left">
-        <h3 class="chart-title">Model Speed Trends</h3>
+        <h3 class="chart-title">Model Speed Trends <span style="font-size: 11px; font-weight: normal; color: var(--aura-fg-muted); margin-left: 6px;">(E2E Throughput)</span></h3>
       </div>
     </div>
     <div class="chart-body" style="position: relative;">
@@ -2181,6 +2194,284 @@ function attachTpsTooltipListeners(chartWrapper: HTMLElement, svgWidth: number):
   });
 }
 
+function computePercentile(arr: number[], p: number): number {
+  if (!arr || arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const index = (sorted.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  const weight = index - lower;
+  if (upper >= sorted.length) return sorted[lower];
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+export function renderLatencyTtftDistributionChart(overview: GlobalAnalyticsOverview, range: TimeRangeOption): void {
+  const chartWrapper = document.getElementById('analytics-latency-ttft-chart');
+  if (!chartWrapper) return;
+
+  const steps = activeSessionData?.steps || [];
+  if (!steps || steps.length === 0) {
+    chartWrapper.innerHTML = `
+      <div class="chart-header">
+        <div class="chart-header-left">
+          <h3 class="chart-title">Turn Latency vs. TTFT Distribution</h3>
+        </div>
+      </div>
+      <div class="chart-empty">No interaction turn latency metrics available</div>
+    `;
+    return;
+  }
+
+  // Extract valid points (ttft > 0 && latency > 0)
+  const validPoints: Array<{
+    idx: number;
+    ttft: number;
+    totDur: number;
+    stream: number;
+    outTok: number;
+  }> = [];
+  const ttftList: number[] = [];
+  const latList: number[] = [];
+
+  steps.forEach(st => {
+    const dur = st.totDur > 0 ? st.totDur : (st.ttft + st.stream);
+    if (st.ttft > 0 && dur > 0) {
+      validPoints.push({
+        idx: st.idx + 1,
+        ttft: st.ttft,
+        totDur: dur,
+        stream: st.stream,
+        outTok: st.outTok
+      });
+      ttftList.push(st.ttft);
+      latList.push(dur);
+    }
+  });
+
+  if (validPoints.length === 0) {
+    chartWrapper.innerHTML = `
+      <div class="chart-header">
+        <div class="chart-header-left">
+          <h3 class="chart-title">Turn Latency vs. TTFT Distribution</h3>
+        </div>
+      </div>
+      <div class="chart-empty">No valid TTFT/Latency data recorded</div>
+    `;
+    return;
+  }
+
+  const p50Ttft = computePercentile(ttftList, 0.5);
+  const p95Ttft = computePercentile(ttftList, 0.95);
+  const p50Lat = computePercentile(latList, 0.5);
+  const p95Lat = computePercentile(latList, 0.95);
+
+  const svgWidth = 600;
+  const svgHeight = 280;
+  const paddingLeft = 52;
+  const paddingRight = 44;
+  const paddingTop = 32;
+  const paddingBottom = 38;
+  const chartWidth = svgWidth - paddingLeft - paddingRight;
+  const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+  const maxX = Math.max(30, Math.ceil((p95Ttft * 1.5) / 5) * 5);
+  const maxY = Math.max(40, Math.ceil((p95Lat * 1.5) / 5) * 5);
+
+  const yTicks = [0, maxY * 0.2, maxY * 0.4, maxY * 0.6, maxY * 0.8, maxY].map(v => Math.round(v));
+  const xTicks = [0, maxX * 0.2, maxX * 0.4, maxX * 0.6, maxX * 0.8, maxX].map(v => Math.round(v));
+
+  let yAxisLinesSvg = '';
+  let yAxisTextsSvg = '';
+  yTicks.forEach(tickVal => {
+    const y = paddingTop + chartHeight - (tickVal / maxY) * chartHeight;
+    yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />`;
+    yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${tickVal}s</text>`;
+  });
+
+  let xAxisLinesSvg = '';
+  let xAxisTextsSvg = '';
+  xTicks.forEach(tickVal => {
+    const x = paddingLeft + (tickVal / maxX) * chartWidth;
+    xAxisLinesSvg += `<line x1="${x.toFixed(1)}" y1="${paddingTop}" x2="${x.toFixed(1)}" y2="${paddingTop + chartHeight}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="${tickVal === 0 ? '0.6' : '0.15'}" />`;
+    xAxisTextsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 12}" text-anchor="middle" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${tickVal}s</text>`;
+  });
+
+  // Diagonal Baseline: y = x (Zero Stream)
+  const diagMax = Math.min(maxX, maxY);
+  const diagX1 = paddingLeft;
+  const diagY1 = paddingTop + chartHeight;
+  const diagX2 = paddingLeft + (diagMax / maxX) * chartWidth;
+  const diagY2 = paddingTop + chartHeight - (diagMax / maxY) * chartHeight;
+  const diagonalSvg = `
+    <line x1="${diagX1.toFixed(1)}" y1="${diagY1.toFixed(1)}" x2="${diagX2.toFixed(1)}" y2="${diagY2.toFixed(1)}"
+          stroke="var(--aura-fg-muted)" stroke-width="1" stroke-dasharray="4 4" opacity="0.3" class="chart-ref-line" />
+    <text x="${(diagX2 - 4).toFixed(1)}" y="${(diagY2 - 6).toFixed(1)}" text-anchor="end" font-size="9.5" font-family="inherit" fill="var(--aura-fg-muted)" opacity="0.55">y = x (Zero Stream)</text>
+  `;
+
+  // P50 Reference Lines (#3B82F6)
+  const p50X = paddingLeft + (p50Ttft / maxX) * chartWidth;
+  const p50Y = paddingTop + chartHeight - (p50Lat / maxY) * chartHeight;
+  const p50Svg = `
+    <g class="chart-ref-p50" opacity="0.9">
+      <line x1="${p50X.toFixed(1)}" y1="${paddingTop}" x2="${p50X.toFixed(1)}" y2="${paddingTop + chartHeight}"
+            stroke="#3B82F6" stroke-width="1.2" stroke-dasharray="3 3" class="chart-ref-line" />
+      <line x1="${paddingLeft}" y1="${p50Y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${p50Y.toFixed(1)}"
+            stroke="#3B82F6" stroke-width="1.2" stroke-dasharray="3 3" class="chart-ref-line" />
+      <rect x="${(p50X - 26).toFixed(1)}" y="${(paddingTop - 18).toFixed(1)}" width="52" height="15" rx="3" fill="#3B82F6" fill-opacity="0.12" stroke="#3B82F6" stroke-width="0.8" />
+      <text x="${p50X.toFixed(1)}" y="${(paddingTop - 7).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--aura-font-mono)" font-weight="600" fill="#3B82F6">P50 ${p50Ttft.toFixed(1)}s</text>
+      <rect x="${(svgWidth - paddingRight + 4).toFixed(1)}" y="${(p50Y - 8).toFixed(1)}" width="36" height="15" rx="3" fill="#3B82F6" fill-opacity="0.12" stroke="#3B82F6" stroke-width="0.8" />
+      <text x="${(svgWidth - paddingRight + 22).toFixed(1)}" y="${(p50Y + 3).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--aura-font-mono)" font-weight="600" fill="#3B82F6">${p50Lat.toFixed(1)}s</text>
+    </g>
+  `;
+
+  // P95 Reference Lines (#F59E0B)
+  const p95X = paddingLeft + (p95Ttft / maxX) * chartWidth;
+  const p95Y = paddingTop + chartHeight - (p95Lat / maxY) * chartHeight;
+  const p95Svg = `
+    <g class="chart-ref-p95" opacity="0.9">
+      <line x1="${p95X.toFixed(1)}" y1="${paddingTop}" x2="${p95X.toFixed(1)}" y2="${paddingTop + chartHeight}"
+            stroke="#F59E0B" stroke-width="1.2" stroke-dasharray="3 3" class="chart-ref-line" />
+      <line x1="${paddingLeft}" y1="${p95Y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${p95Y.toFixed(1)}"
+            stroke="#F59E0B" stroke-width="1.2" stroke-dasharray="3 3" class="chart-ref-line" />
+      <rect x="${(p95X - 26).toFixed(1)}" y="${(paddingTop - 18).toFixed(1)}" width="52" height="15" rx="3" fill="#F59E0B" fill-opacity="0.12" stroke="#F59E0B" stroke-width="0.8" />
+      <text x="${p95X.toFixed(1)}" y="${(paddingTop - 7).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--aura-font-mono)" font-weight="600" fill="#F59E0B">P95 ${p95Ttft.toFixed(1)}s</text>
+      <rect x="${(svgWidth - paddingRight + 4).toFixed(1)}" y="${(p95Y - 8).toFixed(1)}" width="36" height="15" rx="3" fill="#F59E0B" fill-opacity="0.12" stroke="#F59E0B" stroke-width="0.8" />
+      <text x="${(svgWidth - paddingRight + 22).toFixed(1)}" y="${(p95Y + 3).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--aura-font-mono)" font-weight="600" fill="#F59E0B">${p95Lat.toFixed(1)}s</text>
+    </g>
+  `;
+
+  let pointsSvg = '';
+  validPoints.forEach(p => {
+    const cx = paddingLeft + Math.min(1, p.ttft / maxX) * chartWidth;
+    const cy = paddingTop + chartHeight - Math.min(1, p.totDur / maxY) * chartHeight;
+    const speed = p.totDur > 0 ? Math.round(p.outTok / p.totDur) : 0;
+    pointsSvg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2" fill="#00A67E" fill-opacity="0.45" class="latency-scatter-pt" data-turn="${p.idx}" data-ttft="${p.ttft.toFixed(2)}" data-lat="${p.totDur.toFixed(2)}" data-stream="${p.stream.toFixed(2)}" data-out="${p.outTok}" data-speed="${speed}" />`;
+  });
+
+  chartWrapper.innerHTML = `
+    <div class="chart-header">
+      <div class="chart-header-left">
+        <h3 class="chart-title">Turn Latency vs. TTFT Distribution</h3>
+      </div>
+      <div class="scatter-legend">
+        <div class="scatter-legend-item">
+          <span class="scatter-legend-dot" style="background: #00A67E;"></span>
+          <span>Turns (${formatFullNumber(validPoints.length)})</span>
+        </div>
+        <div class="scatter-legend-item">
+          <span class="scatter-legend-line" style="border-color: #3B82F6;"></span>
+          <span style="color: #3B82F6; font-weight: 500;">P50 (${p50Ttft.toFixed(1)}s · ${p50Lat.toFixed(1)}s)</span>
+        </div>
+        <div class="scatter-legend-item">
+          <span class="scatter-legend-line" style="border-color: #F59E0B;"></span>
+          <span style="color: #F59E0B; font-weight: 500;">P95 (${p95Ttft.toFixed(1)}s · ${p95Lat.toFixed(1)}s)</span>
+        </div>
+      </div>
+    </div>
+    <div class="chart-body" style="position: relative;">
+      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="latency-ttft-svg">
+        ${yAxisLinesSvg}
+        ${xAxisLinesSvg}
+        ${yAxisTextsSvg}
+        ${xAxisTextsSvg}
+        ${diagonalSvg}
+        ${p50Svg}
+        ${p95Svg}
+        <g id="latency-scatter-points-group">
+          ${pointsSvg}
+        </g>
+        <circle id="scatter-hover-cursor" cx="0" cy="0" r="4.5" fill="#3B82F6" stroke="#FFFFFF" stroke-width="1.5" style="display: none; pointer-events: none;" />
+        <text x="${(paddingLeft + chartWidth / 2).toFixed(1)}" y="${svgHeight - 1}" text-anchor="middle" font-size="10" font-weight="500" fill="var(--aura-fg-muted)">Time to First Token (TTFT, seconds)</text>
+        <text x="${(paddingLeft - 36).toFixed(1)}" y="${(paddingTop + chartHeight / 2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="500" fill="var(--aura-fg-muted)" transform="rotate(-90 ${(paddingLeft - 36).toFixed(1)} ${(paddingTop + chartHeight / 2).toFixed(1)})">Total Latency (seconds)</text>
+      </svg>
+      <div class="chart-floating-tooltip" id="latency-ttft-floating-tooltip" style="display: none;"></div>
+    </div>
+  `;
+
+  attachLatencyScatterTooltipListeners(chartWrapper, svgWidth);
+}
+
+function attachLatencyScatterTooltipListeners(chartWrapper: HTMLElement, svgWidth: number): void {
+  const stage = chartWrapper.querySelector('.chart-body') as HTMLElement | null;
+  const cursor = chartWrapper.querySelector('#scatter-hover-cursor') as SVGCircleElement | null;
+  const tooltip = chartWrapper.querySelector('#latency-ttft-floating-tooltip') as HTMLElement | null;
+  if (!stage || !tooltip) return;
+
+  const circles = chartWrapper.querySelectorAll('.latency-scatter-pt');
+  circles.forEach(circle => {
+    circle.addEventListener('mouseenter', () => {
+      const turn = circle.getAttribute('data-turn') || '';
+      const ttft = circle.getAttribute('data-ttft') || '';
+      const lat = circle.getAttribute('data-lat') || '';
+      const stream = circle.getAttribute('data-stream') || '';
+      const out = circle.getAttribute('data-out') || '0';
+      const speed = circle.getAttribute('data-speed') || '0';
+
+      const cx = parseFloat(circle.getAttribute('cx') || '0');
+      const cy = parseFloat(circle.getAttribute('cy') || '0');
+
+      if (cursor) {
+        cursor.setAttribute('cx', String(cx));
+        cursor.setAttribute('cy', String(cy));
+        cursor.style.display = 'block';
+      }
+
+      tooltip.innerHTML = `
+        <div class="tooltip-header">Session Turn #${turn}</div>
+        <div class="tooltip-row">
+          <span class="tooltip-dot" style="background: #3B82F6"></span>
+          <span class="tooltip-label">TTFT:</span>
+          <span class="tooltip-val">${ttft}s</span>
+        </div>
+        <div class="tooltip-row">
+          <span class="tooltip-dot" style="background: #F59E0B"></span>
+          <span class="tooltip-label">Total Latency:</span>
+          <span class="tooltip-val">${lat}s</span>
+        </div>
+        <div class="tooltip-row">
+          <span class="tooltip-dot" style="background: #00A67E"></span>
+          <span class="tooltip-label">Stream Gen:</span>
+          <span class="tooltip-val">${stream}s (${out} tok)</span>
+        </div>
+        <div class="tooltip-row">
+          <span class="tooltip-dot" style="background: #8B5CF6"></span>
+          <span class="tooltip-label">E2E Speed:</span>
+          <span class="tooltip-val">${speed} tok/s</span>
+        </div>
+      `;
+
+      tooltip.style.display = 'block';
+      tooltip.style.opacity = '1';
+
+      const stageRect = stage.getBoundingClientRect();
+      const tipWidth = tooltip.offsetWidth || 190;
+      const pxRatio = stageRect.width / svgWidth;
+      const screenX = cx * pxRatio;
+      const screenY = cy * pxRatio;
+
+      let left = screenX + 12;
+      if (left + tipWidth > stageRect.width - 12) {
+        left = screenX - tipWidth - 12;
+      }
+      left = Math.max(6, Math.min(left, stageRect.width - tipWidth - 6));
+
+      let top = screenY - 24;
+      if (top < 10) top = screenY + 12;
+
+      tooltip.style.left = `${Math.round(left)}px`;
+      tooltip.style.top = `${Math.round(top)}px`;
+    });
+  });
+
+  stage.addEventListener('mouseleave', () => {
+    if (cursor) cursor.style.display = 'none';
+    tooltip.style.opacity = '0';
+    setTimeout(() => {
+      if (tooltip.style.opacity === '0') tooltip.style.display = 'none';
+    }, 120);
+  });
+}
+
 function getRangeDisplayTitle(range: TimeRangeOption): string {
   switch (range) {
     case 'session': return 'Active Session';
@@ -2213,10 +2504,8 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
     customInputs.style.display = range === 'custom' ? 'flex' : 'none';
   }
 
-  if (range === 'session') {
-    if (!activeSessionData) {
-      activeSessionData = await fetchActiveSession();
-    }
+  if (!activeSessionData) {
+    activeSessionData = await fetchActiveSession();
   }
 
   if (rawOverview) {
@@ -2226,6 +2515,7 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
     renderModelDistribution(rawOverview, range);
     renderToolDistribution(rawOverview, range);
     renderModelTpsChart(rawOverview, range);
+    renderLatencyTtftDistributionChart(rawOverview, range);
   }
 }
 
@@ -2251,6 +2541,7 @@ export async function refreshAnalytics(): Promise<void> {
     renderModelDistribution(rawOverview, currentRange);
     renderToolDistribution(rawOverview, currentRange);
     renderModelTpsChart(rawOverview, currentRange);
+    renderLatencyTtftDistributionChart(rawOverview, currentRange);
   }
 
   if (refreshBtn) {
