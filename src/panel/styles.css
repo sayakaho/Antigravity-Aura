@@ -964,10 +964,12 @@ html, body {
   display: flex;
   position: relative;
   width: 100%;
+  height: 220px;
 }
 
 .chart-y-axis-sticky {
   width: 48px;
+  height: 220px;
   flex-shrink: 0;
   position: relative;
   z-index: 12;
@@ -983,6 +985,7 @@ html, body {
 .chart-viewport-wrapper {
   flex: 1;
   min-width: 0;
+  height: 220px;
   position: relative;
   overflow: visible;
 }
@@ -1027,11 +1030,13 @@ html, body {
 .chart-stage {
   position: relative;
   width: 100%;
+  height: 220px;
 }
 
 .chart-stage-scrollable {
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
+  height: 220px;
   scrollbar-width: thin;
   scrollbar-color: var(--aura-border) transparent;
   padding-bottom: 4px;
@@ -1056,12 +1061,11 @@ html, body {
 
 .analytics-svg {
   width: 100%;
-  height: auto;
-  min-height: 200px;
+  height: 220px;
   display: block;
 }
 
-/* Scrubber Crosshair Line in Overview Mode */
+/* Scrubber Crosshair Line & Target Dot in Overview Mode */
 .chart-scrubber-line {
   position: absolute;
   top: 24px;
@@ -1071,7 +1075,20 @@ html, body {
   pointer-events: none;
   z-index: 30;
   box-shadow: 0 0 8px rgba(0, 166, 126, 0.7);
-  transition: transform 0.04s ease-out;
+  transform: translateX(-50%);
+}
+
+.chart-scrubber-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #00A67E;
+  border: 2px solid var(--aura-bg, #18181b);
+  box-shadow: 0 0 10px rgba(0, 166, 126, 0.9);
+  pointer-events: none;
+  z-index: 31;
+  transform: translate(-50%, -50%);
 }
 
 .chart-column-group {

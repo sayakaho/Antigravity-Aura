@@ -672,7 +672,19 @@ function renderSessionOverviewArea(
   const totalTurns = steps.length;
   if (totalTurns === 0) return;
 
-  const rawMax = Math.max(...steps.map(s => s.ctx || (s.inTok + s.cacheRead)), 1000);
+  // 1. Sanitize transient zero-token steps to avoid cliff noise in watermark
+  let lastValidCtx = 0;
+  const sanitizedSteps = steps.map(st => {
+    let c = st.ctx || (st.inTok + st.cacheRead);
+    if (c === 0 && st.inTok === 0 && st.outTok === 0) {
+      c = lastValidCtx;
+    } else {
+      lastValidCtx = c;
+    }
+    return { ...st, effectiveCtx: c };
+  });
+
+  const rawMax = Math.max(sanitizedSteps.reduce((m, s) => Math.max(m, s.effectiveCtx), 0), 1000);
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
   const normalized = rawMax / magnitude;
   let tickStep = magnitude;
@@ -698,10 +710,10 @@ function renderSessionOverviewArea(
     `;
   });
 
-  // Viewport Area Chart
+  // Viewport Area Chart with Exact Symmetric Padding
   const svgWidth = 600;
-  const paddingLeft = 14;
-  const paddingRight = 28;
+  const paddingLeft = 10;
+  const paddingRight = 10;
   const chartWidth = svgWidth - paddingLeft - paddingRight;
 
   let gridSvg = '';
@@ -712,35 +724,53 @@ function renderSessionOverviewArea(
     `;
   });
 
-  let areaD = `M ${paddingLeft},${paddingTop + chartHeight}`;
+  let areaD = '';
   let lineD = '';
   let xLabelsSvg = '';
 
   const labelInterval = Math.max(1, Math.floor(totalTurns / 6));
 
-  steps.forEach((st, idx) => {
-    const ctx = st.ctx || (st.inTok + st.cacheRead);
-    const x = paddingLeft + (totalTurns > 1 ? (idx / (totalTurns - 1)) * chartWidth : 0);
-    const y = paddingTop + chartHeight - (ctx / yMax) * chartHeight;
+  if (totalTurns === 1) {
+    const y = paddingTop + chartHeight - (sanitizedSteps[0].effectiveCtx / yMax) * chartHeight;
+    areaD = `M ${paddingLeft},${paddingTop + chartHeight} L ${paddingLeft},${y.toFixed(1)} L ${paddingLeft + chartWidth},${y.toFixed(1)} L ${paddingLeft + chartWidth},${paddingTop + chartHeight} Z`;
+    lineD = `M ${paddingLeft},${y.toFixed(1)} L ${paddingLeft + chartWidth},${y.toFixed(1)}`;
+    xLabelsSvg = `<text x="${paddingLeft}" y="${svgHeight - 8}" text-anchor="start" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#1</text>`;
+  } else {
+    areaD = `M ${paddingLeft},${paddingTop + chartHeight}`;
+    let lastRenderedLabelIdx = -999;
 
-    if (idx === 0) {
-      areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
-      lineD = `M ${x.toFixed(1)},${y.toFixed(1)}`;
-    } else {
-      areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
-      lineD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
-    }
+    sanitizedSteps.forEach((st, idx) => {
+      const ctx = st.effectiveCtx;
+      const x = paddingLeft + (idx / (totalTurns - 1)) * chartWidth;
+      const y = paddingTop + chartHeight - (ctx / yMax) * chartHeight;
 
-    const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.7;
-    if (idx % labelInterval === 0 && !isTooCloseToRight) {
-      const textAnchor = idx === 0 ? 'start' : 'middle';
+      if (idx === 0) {
+        areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+        lineD = `M ${x.toFixed(1)},${y.toFixed(1)}`;
+      } else {
+        areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+        lineD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+      }
+
+      const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.7;
+      if (idx % labelInterval === 0 && !isTooCloseToRight) {
+        const textAnchor = idx === 0 ? 'start' : 'middle';
+        xLabelsSvg += `
+          <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${textAnchor}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
+        `;
+        lastRenderedLabelIdx = idx;
+      }
+    });
+
+    areaD += ` L ${paddingLeft + chartWidth},${paddingTop + chartHeight} Z`;
+
+    // Ensure the last turn is always labeled on the far right if not crowded
+    if ((totalTurns - 1 - lastRenderedLabelIdx) >= Math.floor(labelInterval * 0.5)) {
       xLabelsSvg += `
-        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${textAnchor}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${idx + 1}</text>
+        <text x="${(paddingLeft + chartWidth).toFixed(1)}" y="${svgHeight - 8}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${totalTurns}</text>
       `;
     }
-  });
-
-  areaD += ` L ${paddingLeft + chartWidth},${paddingTop + chartHeight} Z`;
+  }
 
   chartWrapper.innerHTML = `
     <div class="chart-header">
@@ -779,6 +809,7 @@ function renderSessionOverviewArea(
             ${xLabelsSvg}
           </svg>
           <div class="chart-scrubber-line" id="chart-scrubber-line" style="display: none;"></div>
+          <div class="chart-scrubber-dot" id="chart-scrubber-dot" style="display: none;"></div>
           <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
         </div>
       </div>
@@ -786,33 +817,83 @@ function renderSessionOverviewArea(
   `;
 
   attachViewModeSwitchListeners(chartWrapper, columns, rangeTitle);
-  attachOverviewScrubberListeners(chartWrapper, steps);
+  attachOverviewScrubberListeners(chartWrapper, sanitizedSteps, yMax, {
+    svgWidth,
+    svgHeight,
+    paddingLeft,
+    paddingRight,
+    paddingTop,
+    chartWidth,
+    chartHeight
+  });
 }
 
 function attachOverviewScrubberListeners(
   chartWrapper: HTMLElement,
-  steps: SessionAnalyticsData['steps']
+  steps: Array<SessionAnalyticsData['steps'][0] & { effectiveCtx: number }>,
+  yMax: number,
+  coord: {
+    svgWidth: number;
+    svgHeight: number;
+    paddingLeft: number;
+    paddingRight: number;
+    paddingTop: number;
+    chartWidth: number;
+    chartHeight: number;
+  }
 ): void {
   const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
   const scrubber = chartWrapper.querySelector('#chart-scrubber-line') as HTMLElement | null;
+  const scrubberDot = chartWrapper.querySelector('#chart-scrubber-dot') as HTMLElement | null;
   const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
 
   if (!stage || !scrubber || !tooltip) return;
 
+  const { svgWidth, svgHeight, paddingLeft, paddingTop, chartWidth, chartHeight } = coord;
+  const totalTurns = steps.length;
+
   stage.addEventListener('mousemove', (e) => {
     const rect = stage.getBoundingClientRect();
-    const relX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const pct = rect.width > 0 ? relX / rect.width : 0;
-    const stepIdx = Math.min(steps.length - 1, Math.max(0, Math.round(pct * (steps.length - 1))));
+    if (rect.width <= 0) return;
+
+    // 1. Math-exact Inverse Mapping from mouse pixel to SVG coordinates
+    const mouseX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const mouseSvgX = (mouseX / rect.width) * svgWidth;
+
+    // Clamp strictly within data rendering boundary
+    const clampedSvgX = Math.max(paddingLeft, Math.min(paddingLeft + chartWidth, mouseSvgX));
+    const ratio = chartWidth > 0 ? (clampedSvgX - paddingLeft) / chartWidth : 0;
+    const stepIdx = Math.min(totalTurns - 1, Math.max(0, Math.round(ratio * (totalTurns - 1))));
+
     const st = steps[stepIdx];
     if (!st) return;
 
-    const ctx = st.ctx || (st.inTok + st.cacheRead);
+    const ctx = st.effectiveCtx;
+    const isActionTurn = (st.inTok === 0 && st.outTok === 0 && st.cacheRead === 0);
     const speed = Math.round(st.stream > 0 ? st.outTok / st.stream : 0);
+    const speedSubline = isActionTurn
+      ? 'Action / Non-LLM Turn'
+      : (st.stream > 0 ? `Speed: ${speed} tok/s · TTFT: ${st.ttft.toFixed(2)}s` : (st.outTok > 0 ? `Speed: ~${st.outTok} tok/s · TTFT: ${st.ttft.toFixed(2)}s` : `Latency: ${st.totDur > 0 ? st.totDur.toFixed(2) + 's' : '--'}`));
 
+    // 2. Exact Snap Positioning on the rendering polyline
+    const ptSvgX = paddingLeft + (totalTurns > 1 ? (stepIdx / (totalTurns - 1)) * chartWidth : chartWidth / 2);
+    const ptSvgY = paddingTop + chartHeight - (ctx / yMax) * chartHeight;
+
+    const snapPixelX = (ptSvgX / svgWidth) * rect.width;
+    const snapPixelY = (ptSvgY / svgHeight) * rect.height;
+
+    // Direct snap indicator line
     scrubber.style.display = 'block';
-    scrubber.style.transform = `translateX(${relX}px)`;
+    scrubber.style.left = `${snapPixelX.toFixed(1)}px`;
 
+    // Direct snap glowing dot onto polyline vertex
+    if (scrubberDot) {
+      scrubberDot.style.display = 'block';
+      scrubberDot.style.left = `${snapPixelX.toFixed(1)}px`;
+      scrubberDot.style.top = `${snapPixelY.toFixed(1)}px`;
+    }
+
+    // 3. Render Tooltip with exact data
     tooltip.innerHTML = `
       <div class="tooltip-header">Session Turn #${st.idx + 1}</div>
       <div class="tooltip-row ctx-row">
@@ -836,19 +917,14 @@ function attachOverviewScrubberListeners(
         <span class="tooltip-val">${formatFullNumber(st.outTok)}</span>
       </div>
       <div class="tooltip-divider"></div>
-      <div class="tooltip-subline">Speed: ${speed} tok/s · TTFT: ${st.ttft.toFixed(2)}s</div>
+      <div class="tooltip-subline">${speedSubline}</div>
     `;
     tooltip.style.display = 'block';
 
     const tipWidth = tooltip.offsetWidth || 180;
     const tipHeight = tooltip.offsetHeight || 135;
 
-    let left = 0;
-    if (relX > rect.width / 2) {
-      left = relX - tipWidth - 16;
-    } else {
-      left = relX + 16;
-    }
+    let left = snapPixelX > rect.width / 2 ? snapPixelX - tipWidth - 14 : snapPixelX + 14;
     left = Math.max(8, Math.min(left, rect.width - tipWidth - 8));
 
     let top = 10;
@@ -861,6 +937,7 @@ function attachOverviewScrubberListeners(
 
   stage.addEventListener('mouseleave', () => {
     scrubber.style.display = 'none';
+    if (scrubberDot) scrubberDot.style.display = 'none';
     tooltip.style.display = 'none';
   });
 }
@@ -871,7 +948,7 @@ function renderStandardTimelineChart(
   rangeTitle: string,
   isSession: boolean
 ): void {
-  const rawMax = Math.max(...columns.map(d => (d.inputTok + d.outTok + d.cacheRead)), 1000);
+  const rawMax = Math.max(columns.reduce((m, d) => Math.max(m, d.inputTok + d.outTok + d.cacheRead), 0), 1000);
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
   const normalized = rawMax / magnitude;
   let tickStep = magnitude;
@@ -931,10 +1008,12 @@ function renderStandardTimelineChart(
 
     if (total > 0) {
       const totalBarHeight = Math.max(3, Math.round((total / yMax) * chartHeight));
-      const outHeight = item.outTok > 0 ? Math.max(1, Math.round((item.outTok / yMax) * chartHeight)) : 0;
-      const inHeight = item.inputTok > 0 ? Math.max(1, Math.round((item.inputTok / yMax) * chartHeight)) : 0;
-      let cacheHeight = item.cacheRead > 0 ? Math.max(1, totalBarHeight - outHeight - inHeight) : 0;
-      if (cacheHeight < 0) cacheHeight = 0;
+      const outHeight = item.outTok > 0 ? Math.max(1, Math.round((item.outTok / total) * totalBarHeight)) : 0;
+      let inHeight = item.inputTok > 0 ? Math.max(1, Math.round((item.inputTok / total) * totalBarHeight)) : 0;
+      let cacheHeight = item.cacheRead > 0 ? Math.max(0, totalBarHeight - outHeight - inHeight) : 0;
+      if (item.cacheRead === 0 && item.inputTok > 0) {
+        inHeight = Math.max(1, totalBarHeight - outHeight);
+      }
 
       const yBottom = paddingTop + chartHeight;
       const yCache = yBottom - cacheHeight;
@@ -1055,7 +1134,7 @@ function renderStandardTimelineChart(
           </div>
         ` : ''}
         <div class="chart-stage ${isScrollable ? 'chart-stage-scrollable' : ''}" id="chart-stage-container">
-          <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
+          <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
             ${defsSvg}
             ${gridSvg}
             <rect id="chart-shared-hover-band" class="chart-shared-hover-band" x="0" y="${paddingTop}" width="0" height="${chartHeight}" rx="4" style="display: none;" />
@@ -1563,41 +1642,66 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     const steps = activeSessionData!.steps;
     const totalTurns = steps.length;
     let rawMaxTps = 0;
-    const points: Array<{ x: number; y: number; tps: number; stepIdx: number }> = [];
 
-    steps.forEach((st, idx) => {
-      const tps = st.stream > 0 && st.outTok > 0 ? Math.round(st.outTok / st.stream) : 0;
-      if (tps > rawMaxTps) rawMaxTps = tps;
+    steps.forEach((st) => {
+      if (st.stream >= 0.08 && st.outTok > 0) {
+        const tps = Math.round(st.outTok / st.stream);
+        if (tps <= 2500 && tps > rawMaxTps) rawMaxTps = tps;
+      } else if (st.outTok > 0 && st.totDur >= 0.1) {
+        const tps = Math.round(st.outTok / st.totDur);
+        if (tps <= 2500 && tps > rawMaxTps) rawMaxTps = tps;
+      }
     });
 
-    const maxTps = Math.max(300, Math.ceil((rawMaxTps * 1.15) / 100) * 100);
+    const rawMax = Math.max(rawMaxTps, 300);
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+    const normalized = rawMax / magnitude;
+    let tickStep = magnitude;
+    if (normalized <= 2) tickStep = 0.5 * magnitude;
+    else if (normalized <= 5) tickStep = 1 * magnitude;
+    else tickStep = 2 * magnitude;
+
+    const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 400;
+    const yTicks = [0, maxTps * 0.25, maxTps * 0.5, maxTps * 0.75, maxTps];
     const stepX = chartWidth / Math.max(1, totalTurns - 1);
 
+    const points: Array<{ x: number; y: number; tps: number; stepIdx: number }> = [];
     steps.forEach((st, idx) => {
-      const tps = st.stream > 0 && st.outTok > 0 ? Math.round(st.outTok / st.stream) : 0;
+      let tps = 0;
+      if (st.stream >= 0.08 && st.outTok > 0) {
+        tps = Math.min(maxTps, Math.round(st.outTok / st.stream));
+      } else if (st.outTok > 0 && st.totDur >= 0.1) {
+        tps = Math.min(maxTps, Math.round(st.outTok / st.totDur));
+      }
       const x = paddingLeft + (totalTurns > 1 ? idx * stepX : chartWidth / 2);
       const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
       points.push({ x, y, tps, stepIdx: st.idx + 1 });
     });
 
-    const yTicks = [0, Math.round(maxTps * 0.33), Math.round(maxTps * 0.66), maxTps];
     let yAxisLinesSvg = '';
     let yAxisTextsSvg = '';
     yTicks.forEach(tickVal => {
       const y = paddingTop + chartHeight - (tickVal / maxTps) * chartHeight;
-      yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35" />`;
-      yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${tickVal}</text>`;
+      yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="${tickVal === 0 ? '0.6' : '0.25'}" />`;
+      yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>`;
     });
 
     let xLabelsSvg = '';
+    let lastRenderedLabelIdx = -999;
     const labelInterval = Math.max(1, Math.floor(totalTurns / 6));
     steps.forEach((st, idx) => {
       const isTooCloseToRight = (totalTurns - 1 - idx) < labelInterval * 0.7;
       if (idx % labelInterval === 0 && !isTooCloseToRight) {
         const x = paddingLeft + (totalTurns > 1 ? idx * stepX : chartWidth / 2);
         xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${st.idx + 1}</text>`;
+        lastRenderedLabelIdx = idx;
       }
     });
+
+    if (totalTurns > 1 && (totalTurns - 1 - lastRenderedLabelIdx) >= Math.floor(labelInterval * 0.5)) {
+      const lastX = paddingLeft + chartWidth;
+      xLabelsSvg += `<text x="${lastX.toFixed(1)}" y="${svgHeight - 8}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${totalTurns}</text>`;
+    }
 
     let pathD = '';
     let dotsSvg = '';
@@ -1698,7 +1802,15 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
       });
     }
 
-    const maxTps = Math.max(300, Math.ceil((rawMaxTps * 1.15) / 100) * 100);
+    const rawMax = Math.max(rawMaxTps, 300);
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+    const normalized = rawMax / magnitude;
+    let tickStep = magnitude;
+    if (normalized <= 2) tickStep = 0.5 * magnitude;
+    else if (normalized <= 5) tickStep = 1 * magnitude;
+    else tickStep = 2 * magnitude;
+
+    const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 400;
 
     for (const mName of activeModelNames) {
       seriesByModel[mName] = [];
@@ -1716,13 +1828,13 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
       });
     }
 
-    const yTicks = [0, Math.round(maxTps * 0.33), Math.round(maxTps * 0.66), maxTps];
+    const yTicks = [0, maxTps * 0.25, maxTps * 0.5, maxTps * 0.75, maxTps];
     let yAxisLinesSvg = '';
     let yAxisTextsSvg = '';
     yTicks.forEach(tickVal => {
       const y = paddingTop + chartHeight - (tickVal / maxTps) * chartHeight;
-      yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35" />`;
-      yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${tickVal}</text>`;
+      yAxisLinesSvg += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="${tickVal === 0 ? '0.6' : '0.25'}" />`;
+      yAxisTextsSvg += `<text x="${paddingLeft - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>`;
     });
 
     let xLabelsSvg = '';
@@ -1861,7 +1973,15 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     });
   }
 
-  const maxTps = Math.max(500, Math.ceil((rawMaxTps * 1.15) / 100) * 100);
+  const rawMax = Math.max(rawMaxTps, 300);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+  const normalized = rawMax / magnitude;
+  let tickStep = magnitude;
+  if (normalized <= 2) tickStep = 0.5 * magnitude;
+  else if (normalized <= 5) tickStep = 1 * magnitude;
+  else tickStep = 2 * magnitude;
+
+  const maxTps = Math.ceil(rawMax / (tickStep * 4)) * (tickStep * 4) || 400;
   const stepX = chartWidth / Math.max(1, dateList.length - 1);
 
   for (const mName of activeModelNames) {
@@ -1878,17 +1998,17 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
     });
   }
 
-  const yTicks = [0, Math.round(maxTps * 0.33), Math.round(maxTps * 0.66), maxTps];
+  const yTicks = [0, maxTps * 0.25, maxTps * 0.5, maxTps * 0.75, maxTps];
   let yAxisLinesSvg = '';
   let yAxisTextsSvg = '';
 
   yTicks.forEach(tickVal => {
     const y = paddingTop + chartHeight - (tickVal / maxTps) * chartHeight;
     yAxisLinesSvg += `
-      <line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35" />
+      <line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${svgWidth - paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="${tickVal === 0 ? '0.6' : '0.25'}" />
     `;
     yAxisTextsSvg += `
-      <text x="${paddingLeft - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${tickVal}</text>
+      <text x="${paddingLeft - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${formatCompactNumber(tickVal)}</text>
     `;
   });
 
