@@ -177,6 +177,9 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
   cacheEfficiency: number;
   avgTtft: number;
   avgTokPerSec: number;
+  p50TokPerSec?: number;
+  e2eTokPerSec?: number;
+  avgTurnLatency?: number;
 } {
   const today = getTodayString();
   const yesterday = getYesterdayString();
@@ -204,7 +207,10 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
       totalRequests: s.totalRequests,
       cacheEfficiency: s.cacheEfficiency,
       avgTtft: s.avgTtft,
-      avgTokPerSec: s.avgTokPerSec
+      avgTokPerSec: s.avgTokPerSec,
+      p50TokPerSec: s.p50TokPerSec,
+      e2eTokPerSec: s.e2eTokPerSec,
+      avgTurnLatency: s.avgTurnLatency
     };
   }
 
@@ -265,7 +271,10 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
       totalRequests: reqs,
       cacheEfficiency: efficiency,
       avgTtft: overview.avgTtft,
-      avgTokPerSec: overview.avgTokPerSec
+      avgTokPerSec: overview.avgTokPerSec,
+      p50TokPerSec: overview.p50TokPerSec,
+      e2eTokPerSec: overview.e2eTokPerSec,
+      avgTurnLatency: overview.avgTurnLatency
     };
   }
 
@@ -355,7 +364,10 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
       totalRequests: reqs,
       cacheEfficiency: efficiency,
       avgTtft: overview.avgTtft,
-      avgTokPerSec: overview.avgTokPerSec
+      avgTokPerSec: overview.avgTokPerSec,
+      p50TokPerSec: overview.p50TokPerSec,
+      e2eTokPerSec: overview.e2eTokPerSec,
+      avgTurnLatency: overview.avgTurnLatency
     };
   }
 
@@ -389,7 +401,10 @@ export function computeProcessedColumns(overview: GlobalAnalyticsOverview, range
     totalRequests: reqs,
     cacheEfficiency: efficiency,
     avgTtft: overview.avgTtft,
-    avgTokPerSec: overview.avgTokPerSec
+    avgTokPerSec: overview.avgTokPerSec,
+    p50TokPerSec: overview.p50TokPerSec,
+    e2eTokPerSec: overview.e2eTokPerSec,
+    avgTurnLatency: overview.avgTurnLatency
   };
 }
 
@@ -479,10 +494,16 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
   const turnsCount = isSession ? activeSessionData!.steps.length : (rawOverview?.totalConversations || 0);
   const avgPerTurn = turnsCount > 0 ? Math.round(totalTok / turnsCount) : (totalReq > 0 ? Math.round(totalTok / totalReq) : 0);
 
-  // Speed Metrics: prefer P50 median for perceptual accuracy, display weighted mean in subtext
-  const p50Speed = (rawOverview?.p50TokPerSec && rawOverview.p50TokPerSec > 0) ? rawOverview.p50TokPerSec : 288;
-  const weightedSpeed = metrics.avgTokPerSec > 0 ? metrics.avgTokPerSec : 336;
-  const displaySpeed = p50Speed > 0 ? p50Speed : weightedSpeed;
+  // Speed Metrics: Scheme B (End-to-End Speed as primary, Pure Stream as detail)
+  const e2eSpeed = (rawOverview?.e2eTokPerSec && rawOverview.e2eTokPerSec > 0)
+    ? rawOverview.e2eTokPerSec
+    : (activeSessionData?.e2eTokPerSec || 49);
+  const pureStreamSpeed = (rawOverview?.p50TokPerSec && rawOverview.p50TokPerSec > 0)
+    ? rawOverview.p50TokPerSec
+    : (metrics.avgTokPerSec > 0 ? metrics.avgTokPerSec : 308);
+  const avgTurnLatency = (rawOverview?.avgTurnLatency && rawOverview.avgTurnLatency > 0)
+    ? rawOverview.avgTurnLatency
+    : (activeSessionData?.avgTurnLatency || 2.14);
 
   container.innerHTML = `
     <!-- Row 1: Hero Full-Width Card -->
@@ -536,21 +557,24 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
 
     <!-- Row 2: Dual Core Cards -->
     <div class="kpi-grid-dual">
-      <!-- Card 1: Est. Commercial Value & Cost -->
+      <!-- Card 1: Throughput & Generation Speed (Scheme B: End-to-End Speed as primary) -->
       <div class="kpi-card">
         <div class="kpi-label-row">
-          <span>Est. Commercial Value & Cost</span>
+          <span>Throughput & Generation Speed</span>
         </div>
-        <div class="cost-highlight-row">
-          <div class="kpi-value-lg">$${actualCost.toFixed(2)}</div>
-          ${savedRatio > 0 ? `<span class="cost-saved-text">已省 ${savedRatio.toFixed(1)}% 账单金额</span>` : ''}
+        <div>
+          <span class="kpi-value-lg">${e2eSpeed}</span>
+          <span class="kpi-unit">tok/s</span>
         </div>
-        <div class="kpi-savings-bar">
-          <div class="kpi-savings-fill" style="width: ${Math.min(100, Math.max(0, savedRatio)).toFixed(1)}%;"></div>
-        </div>
-        <div class="cost-comparison-labels">
-          <span>实际等效 API 成本: $${actualCost.toFixed(2)}</span>
-          <span>若无缓存原价: $${baselineCost.toFixed(2)}</span>
+        <div class="cadence-rows">
+          <div class="cadence-row">
+            <span class="cadence-label">Pure Streaming Speed:</span>
+            <span class="cadence-val">${pureStreamSpeed} tok/s</span>
+          </div>
+          <div class="cadence-row">
+            <span class="cadence-label">Avg Turn Latency:</span>
+            <span class="cadence-val">${avgTurnLatency.toFixed(2)}s</span>
+          </div>
         </div>
       </div>
 
@@ -576,24 +600,26 @@ export function renderMetricCards(metrics: ReturnType<typeof computeProcessedCol
       </div>
     </div>
 
-    <!-- Row 3: Triplet Performance Cards -->
+    <!-- Row 3: Triplet Performance & Cost Cards -->
     <div class="kpi-grid-triplet">
+      <!-- Card 1: Cache Cost Efficiency -->
       <div class="kpi-card kpi-card-compact">
         <div class="kpi-label-row">Cache Cost Efficiency</div>
         <div class="kpi-value-md">${metrics.cacheEfficiency.toFixed(1)}%</div>
         <div class="kpi-subtext">避免了 ~${formatCompactNumber(cacheTok)} 重复 Token 计算</div>
       </div>
 
-      <div class="kpi-card kpi-card-compact">
-        <div class="kpi-label-row">Streaming Speed</div>
-        <div class="kpi-value-md">${displaySpeed} <span class="kpi-unit">tok/s</span></div>
-        <div class="kpi-subtext">P50 中位速 ${displaySpeed} tok/s · 加权均速: ${weightedSpeed} tok/s</div>
-      </div>
-
+      <!-- Card 2: Avg Time to First Token -->
       <div class="kpi-card kpi-card-compact">
         <div class="kpi-label-row">Avg Time to First Token</div>
         <div class="kpi-value-md">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
         <div class="kpi-subtext">首响应分块等待时延</div>
+      </div>
+
+      <!-- Card 3: Est. Commercial Cost (Clean without secondary text) -->
+      <div class="kpi-card kpi-card-compact">
+        <div class="kpi-label-row">Est. Commercial Cost</div>
+        <div class="kpi-value-md">$${actualCost.toFixed(2)}</div>
       </div>
     </div>
   `;

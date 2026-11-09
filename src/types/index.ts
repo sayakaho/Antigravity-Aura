@@ -82,6 +82,9 @@ export interface SessionAnalyticsData {
   cacheEfficiency: number;
   avgTtft: number;
   avgTokPerSec: number;
+  p50TokPerSec?: number;
+  e2eTokPerSec?: number;
+  avgTurnLatency?: number;
   steps: ConversationStepMetric[];
   models?: ModelTokenStat[];
   tools?: ToolStatItem[];
@@ -125,6 +128,8 @@ export interface GlobalAnalyticsOverview {
   avgTtft: number; // in seconds
   avgTokPerSec: number; // tokens/second (weighted average)
   p50TokPerSec?: number; // tokens/second (P50 median)
+  e2eTokPerSec?: number; // tokens/second (P50 median end-to-end throughput)
+  avgTurnLatency?: number; // in seconds (average turn duration)
   topProjects: Array<{ projectId: string; conversationCount: number; tokenCount: number }>;
   timeRangeSeries: Array<{
     date: string;

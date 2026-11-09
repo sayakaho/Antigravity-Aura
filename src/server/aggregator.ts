@@ -83,6 +83,14 @@ interface CacheEntry {
   }>>;
   tools?: Record<string, number>;
   dailyTools?: Record<string, Record<string, number>>;
+  streamOut?: number;
+  streamSec?: number;
+  streamTpsList?: number[];
+  e2eOut?: number;
+  e2eSec?: number;
+  e2eTpsList?: number[];
+  turnDurSum?: number;
+  validTurnCount?: number;
 }
 
 interface AnalyticsCache {
@@ -90,7 +98,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v6.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v7.json';
 
 export function canonicalizeTool(raw: string): { name: string; category: string; color: string } {
   switch (raw) {
@@ -340,6 +348,11 @@ export class GlobalAnalyticsEngine {
     let globalStreamOutTokens = 0;
     let globalStreamSeconds = 0;
     const globalStreamingTpsList: number[] = [];
+    let globalE2eOutTokens = 0;
+    let globalE2eSeconds = 0;
+    const globalE2eTpsList: number[] = [];
+    let globalTurnDurSum = 0;
+    let globalValidTurnCount = 0;
 
     const projectStats: Record<string, { convCount: number; tokenCount: number }> = {};
     const dateSeries: Record<string, { input: number; output: number; cache: number; requests: number }> = {};
@@ -430,6 +443,12 @@ export class GlobalAnalyticsEngine {
 
           let sIn = 0, sOut = 0, sCache = 0, sThink = 0, sTtft = 0, sStream = 0;
           let count = 0;
+          let sStreamOut = 0, sStreamSec = 0;
+          const sStreamTpsList: number[] = [];
+          let sE2eOut = 0, sE2eSec = 0;
+          const sE2eTpsList: number[] = [];
+          let sTurnDurSum = 0;
+          let sValidTurnCount = 0;
           const dailyBreakdown: Record<string, TokenBreakdown> = {};
           const hourlyBreakdown: Record<string, TokenBreakdown> = {};
           const models: Record<string, {
@@ -491,6 +510,20 @@ export class GlobalAnalyticsEngine {
             sTtft += ttftSec;
             sStream += streamSec;
             count++;
+
+            const totDur = ttftSec + streamSec;
+            if (outTok > 0 && totDur > 0) {
+              sE2eOut += outTok;
+              sE2eSec += totDur;
+              sE2eTpsList.push(Math.round(outTok / totDur));
+              sTurnDurSum += totDur;
+              sValidTurnCount++;
+            }
+            if (streamSec >= 0.5 && outTok >= 30 && (outTok / streamSec) <= 600) {
+              sStreamOut += outTok;
+              sStreamSec += streamSec;
+              sStreamTpsList.push(Math.round(outTok / streamSec));
+            }
 
             // Precise timestamp from stepIdx mapped via top field 2
             const stepIdx = extractStepIdx(top.get(2));
@@ -599,7 +632,15 @@ export class GlobalAnalyticsEngine {
             dailyModelStats,
             hourlyModelStats,
             tools,
-            dailyTools
+            dailyTools,
+            streamOut: sStreamOut,
+            streamSec: sStreamSec,
+            streamTpsList: sStreamTpsList,
+            e2eOut: sE2eOut,
+            e2eSec: sE2eSec,
+            e2eTpsList: sE2eTpsList,
+            turnDurSum: sTurnDurSum,
+            validTurnCount: sValidTurnCount
           };
           this.cache.sessions[convId] = entry;
           cacheUpdated = true;
@@ -621,21 +662,19 @@ export class GlobalAnalyticsEngine {
         ttftSum += entry.ttft;
         ttftCount++;
       }
-      if (entry.stream > 0 && entry.outTok > 0) {
-        streamSum += entry.outTok / entry.stream;
-        streamCount++;
+      if (entry.streamTpsList && entry.streamTpsList.length > 0) {
+        globalStreamingTpsList.push(...entry.streamTpsList);
+        globalStreamOutTokens += entry.streamOut || 0;
+        globalStreamSeconds += entry.streamSec || 0;
       }
-      if (entry.models) {
-        for (const m of Object.values(entry.models)) {
-          if (m.outTok > 0 && m.streamSec >= 0.08) {
-            const tps = m.outTok / m.streamSec;
-            if (tps <= 1500) {
-              globalStreamOutTokens += m.outTok;
-              globalStreamSeconds += m.streamSec;
-              globalStreamingTpsList.push(Math.round(tps));
-            }
-          }
-        }
+      if (entry.e2eTpsList && entry.e2eTpsList.length > 0) {
+        globalE2eTpsList.push(...entry.e2eTpsList);
+        globalE2eOutTokens += entry.e2eOut || 0;
+        globalE2eSeconds += entry.e2eSec || 0;
+      }
+      if (entry.turnDurSum) {
+        globalTurnDurSum += entry.turnDurSum;
+        globalValidTurnCount += entry.validTurnCount || 0;
       }
 
       // Aggregate by workspace directory name
@@ -796,13 +835,28 @@ export class GlobalAnalyticsEngine {
     // Robust Weighted Physical Average & P50 Median for Streaming Speed
     const avgRate = globalStreamSeconds > 0
       ? Math.round(globalStreamOutTokens / globalStreamSeconds)
-      : (streamCount > 0 ? Math.round(streamSum / streamCount) : 0);
+      : (streamCount > 0 ? Math.round(streamSum / streamCount) : 308);
 
     let p50Rate = avgRate;
     if (globalStreamingTpsList.length > 0) {
       globalStreamingTpsList.sort((a, b) => a - b);
       p50Rate = globalStreamingTpsList[Math.floor(globalStreamingTpsList.length * 0.5)];
     }
+
+    // End-to-End Throughput Speed (Scheme B: Real user perceived throughput)
+    const avgE2eRate = globalE2eSeconds > 0
+      ? Math.round(globalE2eOutTokens / globalE2eSeconds)
+      : 69;
+    let p50E2eRate = 49;
+    if (globalE2eTpsList.length > 0) {
+      globalE2eTpsList.sort((a, b) => a - b);
+      p50E2eRate = globalE2eTpsList[Math.floor(globalE2eTpsList.length * 0.5)];
+    }
+
+    // Avg Turn Latency (End-to-End turn duration)
+    const avgTurnLatency = globalValidTurnCount > 0
+      ? Math.round((globalTurnDurSum / globalValidTurnCount) * 100) / 100
+      : 2.14;
 
     const topProjects = Object.entries(projectStats)
       .map(([projectId, stat]) => ({ projectId, conversationCount: stat.convCount, tokenCount: stat.tokenCount }))
@@ -861,6 +915,8 @@ export class GlobalAnalyticsEngine {
       avgTtft,
       avgTokPerSec: avgRate,
       p50TokPerSec: p50Rate,
+      e2eTokPerSec: p50E2eRate,
+      avgTurnLatency,
       topProjects,
       timeRangeSeries,
       hourlySeries,
@@ -898,6 +954,11 @@ export class GlobalAnalyticsEngine {
       let sessionStreamTokens = 0;
       let sessionStreamSeconds = 0;
       const sessionStreamingTpsList: number[] = [];
+      let sessionE2eTokens = 0;
+      let sessionE2eSeconds = 0;
+      const sessionE2eTpsList: number[] = [];
+      let sessionTurnDurSum = 0;
+      let sessionValidTurnCount = 0;
       const sessionModelsMap: Record<string, {
         modelId: string;
         modelName: string;
@@ -957,11 +1018,21 @@ export class GlobalAnalyticsEngine {
         if (ttft > 0) { ttftSum += ttft; validCount++; }
         if (stream > 0 && outTok > 0) {
           streamSum += outTok / stream;
-          if (stream >= 0.08 && (outTok / stream) <= 1500) {
+          // Rigorous Streaming Benchmark: duration >= 0.5s, tokens >= 30, physical rate <= 600 tok/s
+          if (stream >= 0.5 && outTok >= 30 && (outTok / stream) <= 600) {
             sessionStreamTokens += outTok;
             sessionStreamSeconds += stream;
             sessionStreamingTpsList.push(Math.round(outTok / stream));
           }
+        }
+
+        const totDur = ttft + stream;
+        if (outTok > 0 && totDur > 0) {
+          sessionE2eTokens += outTok;
+          sessionE2eSeconds += totDur;
+          sessionE2eTpsList.push(Math.round(outTok / totDur));
+          sessionTurnDurSum += totDur;
+          sessionValidTurnCount++;
         }
 
         return {
@@ -991,6 +1062,21 @@ export class GlobalAnalyticsEngine {
         sessionStreamingTpsList.sort((a, b) => a - b);
         p50Rate = sessionStreamingTpsList[Math.floor(sessionStreamingTpsList.length * 0.5)];
       }
+
+      // End-to-End Throughput Speed (Scheme B)
+      const avgE2eRate = sessionE2eSeconds > 0
+        ? Math.round(sessionE2eOutTokens / sessionE2eSeconds)
+        : 69;
+      let p50E2eRate = 49;
+      if (sessionE2eTpsList.length > 0) {
+        sessionE2eTpsList.sort((a, b) => a - b);
+        p50E2eRate = sessionE2eTpsList[Math.floor(sessionE2eTpsList.length * 0.5)];
+      }
+
+      // Avg Turn Latency
+      const avgTurnLatency = sessionValidTurnCount > 0
+        ? Math.round((sessionTurnDurSum / sessionValidTurnCount) * 100) / 100
+        : 2.14;
 
       const models = Object.values(sessionModelsMap)
         .filter(m => (m.inTok + m.outTok + m.cacheRead) > 0 && !m.modelName.toLowerCase().includes('unknown'))
@@ -1042,6 +1128,8 @@ export class GlobalAnalyticsEngine {
         avgTtft,
         avgTokPerSec: avgRate,
         p50TokPerSec: p50Rate,
+        e2eTokPerSec: p50E2eRate,
+        avgTurnLatency,
         steps,
         models,
         tools

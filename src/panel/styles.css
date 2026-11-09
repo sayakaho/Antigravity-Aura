@@ -673,10 +673,14 @@ html, body {
   min-height: 92px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 4px;
 }
 .kpi-card-compact .kpi-label-row {
   margin-bottom: 2px;
+}
+.kpi-card-compact .kpi-subtext {
+  margin-top: auto;
 }
 
 .kpi-label,
