@@ -138,8 +138,47 @@ export interface ModelTokenStat {
   avgTtft: number;
 }
 
+export interface ProjectStatItem {
+  projectKey: string;
+  name: string;
+  fullPath: string;
+  displayPath: string;
+  badgeText?: string;
+  isWorkspace: boolean;
+  conversationCount: number;
+  tokenCount: number;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  requests: number;
+}
+
+export interface ProjectDailyStat {
+  projectKey: string;
+  name: string;
+  fullPath: string;
+  displayPath: string;
+  badgeText?: string;
+  isWorkspace: boolean;
+  inTok: number;
+  outTok: number;
+  cacheRead: number;
+  requests: number;
+  conversationIds: string[];
+}
+
+export interface SessionProjectMeta {
+  projectKey: string;
+  name: string;
+  fullPath: string;
+  displayPath: string;
+  badgeText?: string;
+  isWorkspace: boolean;
+}
+
 export interface SessionAnalyticsData {
   cascadeId: string;
+  project?: SessionProjectMeta;
   totalTokens: {
     input: number;
     output: number;
@@ -216,6 +255,8 @@ export interface GlobalAnalyticsOverview {
   e2eTokPerSec?: number; // legacy alias mirroring p50TokPerSec
   avgTurnLatency?: number; // in seconds (average turn duration)
   topProjects: Array<{ projectId: string; conversationCount: number; tokenCount: number }>;
+  projects?: ProjectStatItem[];
+  dailyProjectStats?: Record<string, Record<string, ProjectDailyStat>>;
   timeRangeSeries: DailySeriesPoint[];
   hourlySeries?: HourlySeriesPoint[];
   modelDistribution: ModelTokenStat[];

@@ -1,6 +1,7 @@
 import type { TimeRangeOption } from './analytics/time-range';
 
 export type PanelTab = 'analytics' | 'settings';
+export type ProjectScopeMode = 'follow' | 'all-time';
 
 export interface AnalyticsRangeState {
   range: TimeRangeOption;
@@ -15,6 +16,7 @@ export interface StorageLike {
 
 export const PANEL_TAB_STORAGE_KEY = 'aura.panel.activeTab';
 export const ANALYTICS_RANGE_STORAGE_KEY = 'aura.analytics.rangeState';
+export const PROJECT_SCOPE_STORAGE_KEY = 'aura.analytics.projectScope';
 
 const DEFAULT_RANGE_STATE: AnalyticsRangeState = {
   range: 'last-30-days',
@@ -117,6 +119,33 @@ export function saveAnalyticsRangeState(
   };
   try {
     store.setItem(ANALYTICS_RANGE_STORAGE_KEY, JSON.stringify(sanitized));
+  } catch {
+    // Restricted webview contexts may block storage writes
+  }
+}
+
+export function parseProjectScopeState(raw: string | null | undefined): ProjectScopeMode {
+  return raw === 'all-time' ? 'all-time' : 'follow';
+}
+
+export function loadProjectScopeState(storage?: StorageLike | null): ProjectScopeMode {
+  const store = resolveStorage(storage);
+  if (!store) return 'follow';
+  try {
+    return parseProjectScopeState(store.getItem(PROJECT_SCOPE_STORAGE_KEY));
+  } catch {
+    return 'follow';
+  }
+}
+
+export function saveProjectScopeState(
+  scope: ProjectScopeMode,
+  storage?: StorageLike | null
+): void {
+  const store = resolveStorage(storage);
+  if (!store) return;
+  try {
+    store.setItem(PROJECT_SCOPE_STORAGE_KEY, parseProjectScopeState(scope));
   } catch {
     // Restricted webview contexts may block storage writes
   }

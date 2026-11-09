@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -208,6 +209,83 @@ app.api('/api/reload', async () => {
     cssLength: snap.cssBytes,
     version: snap.patchVersion
   };
+});
+
+async function openDirectoryInFileManager(rawPath: string): Promise<string> {
+  const resolved = path.resolve(rawPath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Directory does not exist: ${resolved}`);
+  }
+  const st = fs.statSync(resolved);
+  if (!st.isDirectory()) {
+    throw new Error(`Path is not a directory: ${resolved}`);
+  }
+
+  const cmd =
+    process.platform === 'darwin'
+      ? 'open'
+      : process.platform === 'win32'
+        ? 'explorer'
+        : 'xdg-open';
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const child = spawn(cmd, [resolved], {
+      detached: true,
+      stdio: 'ignore',
+      shell: false
+    });
+    child.once('error', (err) => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    });
+    child.once('spawn', () => {
+      child.unref();
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    });
+  });
+
+  return resolved;
+}
+
+app.api('/api/open-directory', async (data: unknown) => {
+  let payload: unknown = data;
+  if (typeof data === 'string') {
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      payload = null;
+    }
+  }
+
+  const targetPath =
+    payload && typeof payload === 'object' && typeof (payload as { path?: unknown }).path === 'string'
+      ? (payload as { path: string }).path.trim()
+      : '';
+
+  if (!targetPath) {
+    return new Response(JSON.stringify({ ok: false, error: 'Missing directory path' }), {
+      contentType: 'application/json',
+      status: 400
+    });
+  }
+
+  try {
+    const openedPath = await openDirectoryInFileManager(targetPath);
+    return { ok: true, path: openedPath };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const status = msg.includes('does not exist') || msg.includes('not a directory') ? 404 : 500;
+    return new Response(JSON.stringify({ ok: false, error: msg }), {
+      contentType: 'application/json',
+      status
+    });
+  }
 });
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;

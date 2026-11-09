@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { canonicalizeTool, canonicalModelName, resolveCanonicalModelId } from '../shared/catalog';
 import { formatLocalDateAndHourKeys } from '../shared/format';
+import { resolveSummaryProjectInfo, type ResolvedProjectInfo } from '../shared/project';
 import { computeStepTps, computeWeightedTps } from '../shared/tps';
 import type {
   ConversationSummary,
@@ -10,6 +12,8 @@ import type {
   GlobalAnalyticsOverview,
   HourlySeriesPoint,
   ModelDailyStat,
+  ProjectDailyStat,
+  ProjectStatItem,
   RangePerfFields,
   SessionAnalyticsData
 } from '../types';
@@ -337,9 +341,81 @@ export class GlobalAnalyticsEngine {
     }
   }
 
+  public getSummaryById(
+    convId: string
+  ): Pick<ConversationSummary, 'projectId' | 'workspaceUris'> | null {
+    const dbPath = path.join(this.baseDir, 'conversation_summaries.db');
+    if (!fs.existsSync(dbPath)) return null;
+
+    const db = openDb(dbPath);
+    if (!db) return null;
+
+    try {
+      const row = db
+        .prepare(
+          `
+          SELECT project_id, workspace_uris
+          FROM conversation_summaries
+          WHERE conversation_id = ?
+          LIMIT 1
+        `
+        )
+        .get(convId);
+      if (!row) return null;
+      return {
+        projectId: String(row.project_id || ''),
+        workspaceUris: String(row.workspace_uris || '')
+      };
+    } catch {
+      return null;
+    } finally {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+
+  private accumulateDailyProjectStat(
+    target: Record<string, Record<string, ProjectDailyStat>>,
+    dateKey: string,
+    projInfo: ResolvedProjectInfo,
+    convId: string,
+    inTok: number,
+    outTok: number,
+    cacheRead: number,
+    requests: number
+  ): void {
+    if (!dateKey || dateKey.startsWith('0001')) return;
+    if (!target[dateKey]) target[dateKey] = {};
+    if (!target[dateKey][projInfo.projectKey]) {
+      target[dateKey][projInfo.projectKey] = {
+        projectKey: projInfo.projectKey,
+        name: projInfo.name,
+        fullPath: projInfo.fullPath,
+        displayPath: projInfo.displayPath,
+        badgeText: projInfo.badgeText,
+        isWorkspace: projInfo.isWorkspace,
+        inTok: 0,
+        outTok: 0,
+        cacheRead: 0,
+        requests: 0,
+        conversationIds: []
+      };
+    }
+    const stat = target[dateKey][projInfo.projectKey];
+    stat.inTok += inTok;
+    stat.outTok += outTok;
+    stat.cacheRead += cacheRead;
+    stat.requests += requests;
+    if (!stat.conversationIds.includes(convId)) {
+      stat.conversationIds.push(convId);
+    }
+  }
+
   public getGlobalOverview(): GlobalAnalyticsOverview {
     const convDir = path.join(this.baseDir, 'conversations');
     const summaries = this.getSummaries();
+    const homeDir = os.homedir();
     let cacheUpdated = false;
 
     let totalIn = 0;
@@ -355,7 +431,8 @@ export class GlobalAnalyticsEngine {
     let globalTurnDurSum = 0;
     let globalValidTurnCount = 0;
 
-    const projectStats: Record<string, { convCount: number; tokenCount: number }> = {};
+    const projectStats: Record<string, ProjectStatItem> = {};
+    const globalDailyProjectStats: Record<string, Record<string, ProjectDailyStat>> = {};
     const dateSeries: Record<string, DailySeriesPoint> = {};
     const hourSeries: Record<string, HourlySeriesPoint> = {};
     const globalModelMap: Record<string, ModelBucket> = {};
@@ -405,22 +482,43 @@ export class GlobalAnalyticsEngine {
         globalValidTurnCount += entry.validTurnCount || 0;
       }
 
-      let proj = s.projectId || 'Default Project';
-      if (s.workspaceUris) {
-        try {
-          const uris = JSON.parse(s.workspaceUris);
-          if (Array.isArray(uris) && uris.length > 0 && typeof uris[0] === 'string') {
-            const lastPart = uris[0].replace(/^file:\/\//, '').split('/').filter(Boolean).pop();
-            if (lastPart) proj = decodeURIComponent(lastPart);
-          }
-        } catch {}
+      const projInfo = resolveSummaryProjectInfo(s, homeDir);
+      if (!projectStats[projInfo.projectKey]) {
+        projectStats[projInfo.projectKey] = {
+          projectKey: projInfo.projectKey,
+          name: projInfo.name,
+          fullPath: projInfo.fullPath,
+          displayPath: projInfo.displayPath,
+          badgeText: projInfo.badgeText,
+          isWorkspace: projInfo.isWorkspace,
+          conversationCount: 0,
+          tokenCount: 0,
+          inputTok: 0,
+          outTok: 0,
+          cacheRead: 0,
+          requests: 0
+        };
       }
-      if (!projectStats[proj]) projectStats[proj] = { convCount: 0, tokenCount: 0 };
-      projectStats[proj].convCount += 1;
-      projectStats[proj].tokenCount += entry.inTok + entry.outTok + entry.cacheRead;
+      const pStat = projectStats[projInfo.projectKey];
+      pStat.conversationCount += 1;
+      pStat.tokenCount += entry.inTok + entry.outTok + entry.cacheRead;
+      pStat.inputTok += entry.inTok;
+      pStat.outTok += entry.outTok;
+      pStat.cacheRead += entry.cacheRead;
+      pStat.requests += convReq;
 
       if (entry.dailyBreakdown && Object.keys(entry.dailyBreakdown).length > 0) {
         for (const [dateKey, d] of Object.entries(entry.dailyBreakdown)) {
+          this.accumulateDailyProjectStat(
+            globalDailyProjectStats,
+            dateKey,
+            projInfo,
+            convId,
+            d.inTok,
+            d.outTok,
+            d.cacheRead,
+            d.requests
+          );
           if (!dateSeries[dateKey]) {
             dateSeries[dateKey] = {
               date: dateKey,
@@ -446,6 +544,16 @@ export class GlobalAnalyticsEngine {
       } else {
         const { dateKey } = formatLocalDateAndHourKeys(
           s.lastModifiedTime ? new Date(s.lastModifiedTime) : new Date(entry.lastModified)
+        );
+        this.accumulateDailyProjectStat(
+          globalDailyProjectStats,
+          dateKey,
+          projInfo,
+          convId,
+          entry.inTok,
+          entry.outTok,
+          entry.cacheRead,
+          convReq
         );
         if (!dateSeries[dateKey]) {
           dateSeries[dateKey] = {
@@ -626,14 +734,18 @@ export class GlobalAnalyticsEngine {
         ? Math.round((globalTurnDurSum / globalValidTurnCount) * 100) / 100
         : 0;
 
-    const topProjects = Object.entries(projectStats)
-      .map(([projectId, stat]) => ({
-        projectId,
-        conversationCount: stat.convCount,
-        tokenCount: stat.tokenCount
-      }))
-      .sort((a, b) => b.tokenCount - a.tokenCount)
-      .slice(0, 5);
+    const projects = Object.values(projectStats).sort(
+      (a, b) =>
+        b.tokenCount - a.tokenCount ||
+        b.conversationCount - a.conversationCount ||
+        a.name.localeCompare(b.name)
+    );
+
+    const topProjects = projects.slice(0, 5).map((p) => ({
+      projectId: p.name,
+      conversationCount: p.conversationCount,
+      tokenCount: p.tokenCount
+    }));
 
     const timeRangeSeries = Object.values(dateSeries).sort((a, b) =>
       a.date.localeCompare(b.date)
@@ -695,6 +807,8 @@ export class GlobalAnalyticsEngine {
       e2eTokPerSec: p50Rate,
       avgTurnLatency,
       topProjects,
+      projects,
+      dailyProjectStats: globalDailyProjectStats,
       timeRangeSeries,
       hourlySeries,
       modelDistribution,
@@ -1066,8 +1180,14 @@ export class GlobalAnalyticsEngine {
         })
         .sort((a, b) => b.count - a.count);
 
+      const summaryMeta = this.getSummaryById(convId);
+      const project = summaryMeta
+        ? resolveSummaryProjectInfo(summaryMeta, os.homedir())
+        : undefined;
+
       return {
         cascadeId: convId,
+        project,
         totalTokens: {
           input: totalIn,
           output: totalOut,

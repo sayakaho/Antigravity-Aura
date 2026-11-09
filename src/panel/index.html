@@ -101,8 +101,16 @@
 
       <!-- Projects Breakdown -->
       <div class="settings-section">
-        <h2 class="section-title">Workspace & Project Distribution</h2>
-        <p class="section-desc">Token consumption and session volume across active repositories.</p>
+        <div class="section-header-row">
+          <div class="section-header-meta">
+            <h2 class="section-title">Workspace & Project Distribution</h2>
+            <p class="section-desc">Token consumption and session volume across workspaces and conversations.</p>
+          </div>
+          <div class="segmented-control mini-segmented" id="projects-scope-segmented" role="group" aria-label="Workspace distribution time scope">
+            <button type="button" class="segment-btn" data-scope="follow" aria-pressed="false">Follow Range</button>
+            <button type="button" class="segment-btn" data-scope="all-time" aria-pressed="false">All Time</button>
+          </div>
+        </div>
         <div class="settings-card padding-card" id="analytics-projects-list">
           <div class="chart-loading">Loading workspaces...</div>
         </div>

@@ -2,12 +2,16 @@ import { describe, expect, test } from 'bun:test';
 import {
   ANALYTICS_RANGE_STORAGE_KEY,
   PANEL_TAB_STORAGE_KEY,
+  PROJECT_SCOPE_STORAGE_KEY,
   loadAnalyticsRangeState,
   loadPanelTabState,
+  loadProjectScopeState,
   parseAnalyticsRangeState,
   parsePanelTab,
+  parseProjectScopeState,
   saveAnalyticsRangeState,
   savePanelTabState,
+  saveProjectScopeState,
   type StorageLike
 } from '../src/panel/panel-state';
 
@@ -115,5 +119,18 @@ describe('Panel UI state persistence helpers', () => {
         blockedStorage
       )
     ).not.toThrow();
+    expect(loadProjectScopeState(blockedStorage)).toBe('follow');
+    expect(() => saveProjectScopeState('all-time', blockedStorage)).not.toThrow();
+  });
+
+  test('saves and loads project distribution scope state with safe fallback', () => {
+    const store = createMemoryStorage();
+    expect(loadProjectScopeState(store)).toBe('follow');
+
+    saveProjectScopeState('all-time', store);
+    expect(store.getItem(PROJECT_SCOPE_STORAGE_KEY)).toBe('all-time');
+    expect(loadProjectScopeState(store)).toBe('all-time');
+
+    expect(parseProjectScopeState('invalid')).toBe('follow');
   });
 });

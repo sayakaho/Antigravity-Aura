@@ -20,15 +20,19 @@ import type {
   HourlySeriesPoint,
   ModelDailyStat,
   ModelTokenStat,
+  ProjectStatItem,
   RangePerfFields,
   SessionAnalyticsData,
   ToolStatItem
 } from '../../types';
+import type { ProjectScopeMode } from '../panel-state';
+import { showToast } from '../settings';
 import type { ChartColumnData } from './charts-base';
 import {
   generateContinuousDateList,
   getFilterDatesForRange,
   getRangeBounds,
+  getRangeDisplayTitle,
   type TimeRangeOption
 } from './time-range';
 
@@ -594,34 +598,426 @@ export function renderMetricCards(
   `;
 }
 
-export function renderProjectDistribution(projects: GlobalAnalyticsOverview['topProjects']): void {
+const PROJECT_TOOLTIP_ID = 'project-path-tooltip';
+const boundProjectContainers = new WeakSet<HTMLElement>();
+let projectTooltipHideTimer: ReturnType<typeof setTimeout> | null = null;
+let activeProjectTooltipAnchor: HTMLElement | null = null;
+let globalTooltipListenersBound = false;
+
+function getOrCreateProjectTooltip(): HTMLElement | null {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function' || !document.body) {
+    return null;
+  }
+  let tip = document.getElementById(PROJECT_TOOLTIP_ID);
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = PROJECT_TOOLTIP_ID;
+    tip.className = 'project-path-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    if ('popover' in tip) {
+      tip.setAttribute('popover', 'manual');
+    }
+    document.body.appendChild(tip);
+
+    tip.addEventListener('mouseenter', () => {
+      if (projectTooltipHideTimer) {
+        clearTimeout(projectTooltipHideTimer);
+        projectTooltipHideTimer = null;
+      }
+    });
+    tip.addEventListener('mouseleave', (event) => {
+      const next = (event as MouseEvent).relatedTarget as Node | null;
+      if (next && activeProjectTooltipAnchor?.contains(next)) return;
+      scheduleHideProjectTooltip();
+    });
+  }
+
+  if (!globalTooltipListenersBound && typeof window !== 'undefined') {
+    globalTooltipListenersBound = true;
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        hideProjectTooltipImmediately();
+      }
+    });
+    window.addEventListener('scroll', hideProjectTooltipImmediately, true);
+    window.addEventListener('resize', hideProjectTooltipImmediately);
+  }
+
+  return tip;
+}
+
+function hideProjectTooltipImmediately(): void {
+  if (projectTooltipHideTimer) {
+    clearTimeout(projectTooltipHideTimer);
+    projectTooltipHideTimer = null;
+  }
+  if (activeProjectTooltipAnchor) {
+    activeProjectTooltipAnchor.removeAttribute('aria-describedby');
+    activeProjectTooltipAnchor = null;
+  }
+  if (typeof document === 'undefined') return;
+  const tip = document.getElementById(PROJECT_TOOLTIP_ID) as (HTMLElement & { hidePopover?: () => void }) | null;
+  if (!tip) return;
+  tip.classList.remove('visible');
+  if (typeof tip.hidePopover === 'function') {
+    try {
+      tip.hidePopover();
+    } catch {}
+  }
+}
+
+function scheduleHideProjectTooltip(): void {
+  if (projectTooltipHideTimer) clearTimeout(projectTooltipHideTimer);
+  projectTooltipHideTimer = setTimeout(() => {
+    hideProjectTooltipImmediately();
+  }, 120);
+}
+
+function showProjectTooltip(anchor: HTMLElement, text: string): void {
+  const tip = getOrCreateProjectTooltip() as (HTMLElement & { showPopover?: () => void }) | null;
+  if (!tip || !text) return;
+
+  if (projectTooltipHideTimer) {
+    clearTimeout(projectTooltipHideTimer);
+    projectTooltipHideTimer = null;
+  }
+
+  if (activeProjectTooltipAnchor && activeProjectTooltipAnchor !== anchor) {
+    activeProjectTooltipAnchor.removeAttribute('aria-describedby');
+  }
+  activeProjectTooltipAnchor = anchor;
+  anchor.setAttribute('aria-describedby', PROJECT_TOOLTIP_ID);
+
+  tip.textContent = text;
+  tip.classList.add('visible');
+  if (typeof tip.showPopover === 'function') {
+    try {
+      tip.showPopover();
+    } catch {}
+  }
+
+  const rect = anchor.getBoundingClientRect();
+  const tipWidth = tip.offsetWidth || 240;
+  const tipHeight = tip.offsetHeight || 28;
+  const margin = 8;
+
+  let left = rect.left;
+  if (left + tipWidth > window.innerWidth - margin) {
+    left = window.innerWidth - tipWidth - margin;
+  }
+  left = Math.max(margin, left);
+
+  let top = rect.top - tipHeight - 6;
+  if (top < margin) {
+    top = Math.min(window.innerHeight - tipHeight - margin, rect.bottom + 6);
+  }
+
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
+}
+
+async function openProjectDirectory(dirPath: string): Promise<void> {
+  if (!dirPath || typeof window === 'undefined' || !window.sidecar?.fetch) return;
+  try {
+    const res = await window.sidecar.fetch('/api/open-directory', {
+      method: 'POST',
+      body: JSON.stringify({ path: dirPath })
+    });
+    if (!res.ok) {
+      let msg = 'Failed to open directory';
+      try {
+        const json = (await res.json()) as { error?: string };
+        if (json.error) msg = json.error;
+      } catch {}
+      showToast(msg);
+    }
+  } catch (err) {
+    console.error('[Aura Analytics] Failed to open directory:', err);
+    showToast('Failed to open directory');
+  }
+}
+
+function bindProjectContainerEvents(container: HTMLElement): void {
+  if (boundProjectContainers.has(container) || typeof container.addEventListener !== 'function') {
+    return;
+  }
+  boundProjectContainers.add(container);
+
+  container.addEventListener('mouseover', (event) => {
+    const target = event.target as HTMLElement | null;
+    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
+    if (!pill) return;
+    const text = pill.getAttribute('data-tooltip-path') || '';
+    if (text) showProjectTooltip(pill, text);
+  });
+
+  container.addEventListener('mouseout', (event) => {
+    const target = event.target as HTMLElement | null;
+    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
+    if (!pill) return;
+    const next = (event as MouseEvent).relatedTarget as Node | null;
+    const tip = document.getElementById(PROJECT_TOOLTIP_ID);
+    if (next && (pill.contains(next) || tip?.contains(next))) return;
+    scheduleHideProjectTooltip();
+  });
+
+  container.addEventListener('focusin', (event) => {
+    const target = event.target as HTMLElement | null;
+    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
+    if (!pill) return;
+    const text = pill.getAttribute('data-tooltip-path') || '';
+    if (text) showProjectTooltip(pill, text);
+  });
+
+  container.addEventListener('focusout', (event) => {
+    const target = event.target as HTMLElement | null;
+    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
+    if (!pill) return;
+    const next = (event as FocusEvent).relatedTarget as Node | null;
+    const tip = document.getElementById(PROJECT_TOOLTIP_ID);
+    if (next && (pill.contains(next) || tip?.contains(next))) return;
+    scheduleHideProjectTooltip();
+  });
+
+  container.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const openBtn = target?.closest?.('.project-open-btn[data-open-path]') as HTMLElement | null;
+    if (!openBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const dirPath = openBtn.getAttribute('data-open-path') || '';
+    if (dirPath) void openProjectDirectory(dirPath);
+  });
+}
+
+export function computeProjectDistributionItems(
+  overview: GlobalAnalyticsOverview,
+  range: TimeRangeOption,
+  activeSessionData: SessionAnalyticsData | null,
+  scope: ProjectScopeMode,
+  customStart = '',
+  customEnd = '',
+  now = new Date()
+): ProjectStatItem[] {
+  const fallbackProjects = (): ProjectStatItem[] => {
+    if (overview.projects && overview.projects.length > 0) {
+      return [...overview.projects].sort(
+        (a, b) =>
+          b.tokenCount - a.tokenCount ||
+          b.conversationCount - a.conversationCount ||
+          a.name.localeCompare(b.name)
+      );
+    }
+    return (overview.topProjects || [])
+      .map((p) => {
+        const shortName = p.projectId.split(/[\\/]/).filter(Boolean).pop() || p.projectId;
+        const isUnassigned = !shortName || shortName === 'outside-of-project' || shortName === 'Default Project';
+        return {
+          projectKey: isUnassigned ? '__no_workspace__' : p.projectId,
+          name: isUnassigned ? 'Conversations' : shortName,
+          fullPath: '',
+          displayPath: '',
+          badgeText: isUnassigned ? 'outside-of-project' : 'no local path',
+          isWorkspace: false,
+          conversationCount: p.conversationCount,
+          tokenCount: p.tokenCount,
+          inputTok: 0,
+          outTok: 0,
+          cacheRead: 0,
+          requests: 0
+        };
+      })
+      .sort((a, b) => b.tokenCount - a.tokenCount || b.conversationCount - a.conversationCount);
+  };
+
+  if (scope === 'all-time') {
+    return fallbackProjects();
+  }
+
+  if (range === 'session') {
+    if (!activeSessionData || (activeSessionData.steps.length === 0 && activeSessionData.totalTokens.total <= 0)) {
+      return [];
+    }
+    const proj = activeSessionData.project;
+    return [
+      {
+        projectKey: proj?.projectKey || '__no_workspace__',
+        name: proj?.name || 'Conversations',
+        fullPath: proj?.fullPath || '',
+        displayPath: proj?.displayPath || '',
+        badgeText: proj?.badgeText || 'outside-of-project',
+        isWorkspace: proj?.isWorkspace ?? false,
+        conversationCount: 1,
+        tokenCount: activeSessionData.totalTokens.total,
+        inputTok: activeSessionData.totalTokens.input,
+        outTok: activeSessionData.totalTokens.output,
+        cacheRead: activeSessionData.totalTokens.cacheRead,
+        requests: activeSessionData.totalRequests
+      }
+    ];
+  }
+
+  if (!overview.dailyProjectStats) {
+    return fallbackProjects();
+  }
+
+  const dates = getFilterDatesForRange(range, customStart, customEnd, now);
+  const aggMap = new Map<
+    string,
+    {
+      meta: ProjectStatItem;
+      convIds: Set<string>;
+    }
+  >();
+
+  for (const d of dates) {
+    const dayProjects = overview.dailyProjectStats[d];
+    if (!dayProjects) continue;
+    for (const [pKey, st] of Object.entries(dayProjects)) {
+      let bucket = aggMap.get(pKey);
+      if (!bucket) {
+        bucket = {
+          meta: {
+            projectKey: st.projectKey || pKey,
+            name: st.name,
+            fullPath: st.fullPath,
+            displayPath: st.displayPath,
+            badgeText: st.badgeText,
+            isWorkspace: st.isWorkspace,
+            conversationCount: 0,
+            tokenCount: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            requests: 0
+          },
+          convIds: new Set<string>()
+        };
+        aggMap.set(pKey, bucket);
+      }
+      bucket.meta.inputTok += st.inTok;
+      bucket.meta.outTok += st.outTok;
+      bucket.meta.cacheRead += st.cacheRead;
+      bucket.meta.requests += st.requests;
+      for (const cid of st.conversationIds || []) {
+        bucket.convIds.add(cid);
+      }
+    }
+  }
+
+  return Array.from(aggMap.values())
+    .map(({ meta, convIds }) => ({
+      ...meta,
+      conversationCount: convIds.size,
+      tokenCount: meta.inputTok + meta.outTok + meta.cacheRead
+    }))
+    .sort(
+      (a, b) =>
+        b.tokenCount - a.tokenCount ||
+        b.conversationCount - a.conversationCount ||
+        a.name.localeCompare(b.name)
+    );
+}
+
+export function renderProjectDistribution(
+  overview: GlobalAnalyticsOverview,
+  range: TimeRangeOption = 'last-30-days',
+  activeSessionData: SessionAnalyticsData | null = null,
+  scope: ProjectScopeMode = 'follow',
+  customStart = '',
+  customEnd = ''
+): void {
   const container = document.getElementById('analytics-projects-list');
   if (!container) return;
 
-  if (!projects || projects.length === 0) {
-    container.innerHTML = '<div class="chart-empty">No workspace activity recorded</div>';
+  bindProjectContainerEvents(container);
+  hideProjectTooltipImmediately();
+
+  const projects = computeProjectDistributionItems(
+    overview,
+    range,
+    activeSessionData,
+    scope,
+    customStart,
+    customEnd
+  );
+
+  if (projects.length === 0) {
+    const emptyMsg =
+      scope === 'follow' && range === 'session'
+        ? 'No workspace activity recorded in this session'
+        : scope === 'follow'
+          ? 'No workspace activity recorded in this range'
+          : 'No workspace activity recorded';
+    container.innerHTML = `<div class="chart-empty">${emptyMsg}</div>`;
     return;
   }
 
-  const maxTokens = Math.max(...projects.map((p) => p.tokenCount), 1);
+  const totalTokens = projects.reduce((sum, p) => sum + p.tokenCount, 0);
+  const totalSessions = projects.reduce((sum, p) => sum + p.conversationCount, 0);
+  const scopeLabel = scope === 'all-time' ? 'All Time' : getRangeDisplayTitle(range);
+  const workspaceWord = projects.length === 1 ? 'workspace' : 'workspaces';
+  const totalSessionWord = totalSessions === 1 ? 'session' : 'sessions';
 
-  container.innerHTML = projects
+  const rowsHtml = projects
     .map((p) => {
-      const pct = Math.max(4, Math.round((p.tokenCount / maxTokens) * 100));
-      const shortName = p.projectId.split('/').filter(Boolean).pop() || p.projectId;
+      const sharePct = totalTokens > 0 ? (p.tokenCount / totalTokens) * 100 : 0;
+      const barPct = p.tokenCount > 0 ? sharePct : 0;
+      const barFillClass = p.tokenCount > 0 ? 'project-bar-fill project-bar-fill-nonzero' : 'project-bar-fill';
+      const pctText = p.tokenCount > 0 && sharePct < 0.1 ? '<0.1%' : `${sharePct.toFixed(1)}%`;
+      const sessionWord = p.conversationCount === 1 ? 'session' : 'sessions';
+
+      const pillHtml =
+        p.isWorkspace && p.fullPath
+          ? `<span class="project-path-pill" data-tooltip-path="${escapeHtml(p.fullPath)}">` +
+            `<span class="project-path-text" tabindex="0">${escapeHtml(p.displayPath || p.name)}</span>` +
+            `<button type="button" class="project-open-btn" data-open-path="${escapeHtml(p.fullPath)}" aria-label="Open ${escapeHtml(p.name)} in file manager">` +
+            `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+            `<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>` +
+            `<polyline points="15 3 21 3 21 9"></polyline>` +
+            `<line x1="10" y1="14" x2="21" y2="3"></line>` +
+            `</svg>` +
+            `</button>` +
+            `</span>`
+          : `<span class="project-path-pill project-path-pill-muted" data-tooltip-path="${escapeHtml(
+              p.badgeText === 'outside-of-project'
+                ? 'Standalone conversations started without an active workspace directory'
+                : p.badgeText || p.name
+            )}">` +
+            `<span class="project-path-text" tabindex="0">${escapeHtml(p.badgeText || 'outside-of-project')}</span>` +
+            `</span>`;
+
       return `
         <div class="project-stat-row">
           <div class="project-meta">
-            <div class="project-name" title="${escapeHtml(p.projectId)}">${escapeHtml(shortName)}</div>
-            <div class="project-counts">${formatFullNumber(p.conversationCount)} sessions · ${formatCompactNumber(p.tokenCount)} tokens</div>
+            <span class="project-name">${escapeHtml(p.name)}</span>
+            <div class="project-counts">
+              <span class="project-sessions-count">${formatFullNumber(p.conversationCount)} ${sessionWord}</span>
+              <span class="project-counts-sep">·</span>
+              <span class="project-tokens-strong">${formatCompactNumber(p.tokenCount)}</span> tokens
+              <span class="project-pct-badge">${pctText}</span>
+            </div>
           </div>
           <div class="project-bar-track">
-            <div class="project-bar-fill" style="width: ${pct}%"></div>
+            <div class="${barFillClass}" style="width: ${barPct.toFixed(2)}%"></div>
+          </div>
+          <div class="project-footer">
+            ${pillHtml}
           </div>
         </div>
       `;
     })
     .join('');
+
+  container.innerHTML = `
+    <div class="project-distribution-summary">
+      <span class="project-summary-text"><strong>${formatFullNumber(projects.length)}</strong> ${workspaceWord} · <strong>${formatFullNumber(totalSessions)}</strong> ${totalSessionWord} · <strong>${formatCompactNumber(totalTokens)}</strong> tokens</span>
+      <span class="project-scope-badge">${escapeHtml(scopeLabel)}</span>
+    </div>
+    <div class="project-distribution-grid">
+      ${rowsHtml}
+    </div>
+  `;
 }
 
 export function renderModelDistribution(
