@@ -341,7 +341,7 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-
   display: contents !important;
 }
 
-/* 6.2 外部元数据项按序靠右排列：① 实时指标遥测 -> ② 模型 -> ③ 模式 */
+/* 6.2 外部元数据项按序靠右排列：① 实时指标遥测 -> ② 模型 -> ③ 模式 -> ④ 上下文指示器 */
 html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] #ag-live-metrics-pill,
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill {
   order: 1 !important;
@@ -367,11 +367,19 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-te
   margin: 0 !important;
 }
 
+html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] button[data-testid="context-usage-indicator"],
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-testid="context-usage-indicator"] {
+  order: 4 !important;
+  margin: 0 !important;
+}
+
 /* 外部元素样式微调：小巧精致、靠左无符号分隔纯间距 */
 html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"],
 html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"],
 html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"],
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"] {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"],
+html[data-ag-collinear="on"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="context-usage-indicator"],
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="context-usage-indicator"] {
   height: 24px !important;
   font-size: 12px !important;
   padding: 0 6px !important;
@@ -411,16 +419,20 @@ html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) #antigravity\.agen
 /* 6.4 鼠标悬停 (Hover) 时优雅圆角矩形背景微浮雕反馈 */
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="context-usage-indicator"]:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover {
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="context-usage-indicator"]:hover {
   background-color: rgba(0, 0, 0, 0.06) !important;
   color: #1F1E1D !important;
 }
 
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] [id="antigravity.agentSidePanelInputBox"] .agy-composer-footer button[data-testid="context-usage-indicator"]:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="model-selector-trigger"]:hover,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover {
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="permissions-selector-trigger"]:hover,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .agy-composer-footer button[data-testid="context-usage-indicator"]:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
   color: #FFFFFF !important;
 }
