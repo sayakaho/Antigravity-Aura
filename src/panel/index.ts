@@ -4,6 +4,13 @@
 
 import type { SidecarStatusResponse } from '../types';
 import { initTimeRangeControls, refreshAnalytics } from './analytics/index';
+import {
+  PANEL_TAB_STORAGE_KEY,
+  loadPanelTabState,
+  parsePanelTab,
+  savePanelTabState,
+  type PanelTab
+} from './panel-state';
 import { bindSettingsControls, loadConfig, loadSystemFonts, showToast } from './settings';
 import { initThemeListener, syncTheme } from './theme-sync';
 
@@ -39,6 +46,57 @@ async function initApp(): Promise<void> {
   initThemeListener();
   syncTheme();
 
+  const tabAnalytics = document.getElementById('tab-nav-analytics');
+  const tabSettings = document.getElementById('tab-nav-settings');
+  const viewAnalytics = document.getElementById('view-analytics');
+  const viewSettings = document.getElementById('view-settings');
+
+  let activeTab: PanelTab = loadPanelTabState();
+
+  const applyTabUI = (tab: PanelTab) => {
+    activeTab = tab;
+    const isAnalytics = tab === 'analytics';
+    tabAnalytics?.classList.toggle('active', isAnalytics);
+    tabSettings?.classList.toggle('active', !isAnalytics);
+    if (viewAnalytics) viewAnalytics.style.display = isAnalytics ? 'block' : 'none';
+    if (viewSettings) viewSettings.style.display = isAnalytics ? 'none' : 'block';
+  };
+
+  const switchTab = (tab: PanelTab) => {
+    applyTabUI(tab);
+    savePanelTabState(tab);
+    if (tab === 'analytics') void refreshAnalytics();
+  };
+
+  // 首个 await 前同步还原 Tab 与时间范围控件状态，避免从默认状态闪跳
+  applyTabUI(activeTab);
+  initTimeRangeControls();
+
+  tabAnalytics?.addEventListener('click', () => switchTab('analytics'));
+  tabSettings?.addEventListener('click', () => switchTab('settings'));
+
+  document.getElementById('btn-refresh-analytics')?.addEventListener('click', () => {
+    void refreshAnalytics();
+  });
+
+  const syncExternalTabState = (nextTab: PanelTab) => {
+    if (nextTab === activeTab) return;
+    applyTabUI(nextTab);
+    if (nextTab === 'analytics') void refreshAnalytics();
+  };
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === PANEL_TAB_STORAGE_KEY) {
+      syncExternalTabState(parsePanelTab(event.newValue));
+    } else if (event.key === null) {
+      syncExternalTabState(loadPanelTabState());
+    }
+  });
+  window.addEventListener('focus', () => syncExternalTabState(loadPanelTabState()));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncExternalTabState(loadPanelTabState());
+  });
+
   await loadSystemFonts();
   await loadConfig();
   void updateStatus();
@@ -66,36 +124,15 @@ async function initApp(): Promise<void> {
     }
   });
 
-  const tabAnalytics = document.getElementById('tab-nav-analytics');
-  const tabSettings = document.getElementById('tab-nav-settings');
-  const viewAnalytics = document.getElementById('view-analytics');
-  const viewSettings = document.getElementById('view-settings');
-
-  const switchTab = (tab: 'analytics' | 'settings') => {
-    const isAnalytics = tab === 'analytics';
-    tabAnalytics?.classList.toggle('active', isAnalytics);
-    tabSettings?.classList.toggle('active', !isAnalytics);
-    if (viewAnalytics) viewAnalytics.style.display = isAnalytics ? 'block' : 'none';
-    if (viewSettings) viewSettings.style.display = isAnalytics ? 'none' : 'block';
-    if (isAnalytics) void refreshAnalytics();
-  };
-
-  tabAnalytics?.addEventListener('click', () => switchTab('analytics'));
-  tabSettings?.addEventListener('click', () => switchTab('settings'));
-
-  document.getElementById('btn-refresh-analytics')?.addEventListener('click', () => {
-    void refreshAnalytics();
-  });
-
-  initTimeRangeControls();
-
   if (typeof window.sidecar?.onWorkspaceChange === 'function') {
     window.sidecar.onWorkspaceChange(() => {
-      void refreshAnalytics();
+      if (activeTab === 'analytics') void refreshAnalytics();
     });
   }
 
-  await refreshAnalytics();
+  if (activeTab === 'analytics') {
+    await refreshAnalytics();
+  }
 }
 
 if (document.readyState === 'loading') {
