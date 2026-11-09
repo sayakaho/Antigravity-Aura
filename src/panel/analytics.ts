@@ -1636,7 +1636,7 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   const isSession = range === 'session' && !!activeSessionData && activeSessionData.steps.length > 0;
   const isHourly = range === 'today' || range === 'yesterday';
 
-  const svgWidth = 600;
+  const svgWidth = 800;
   const svgHeight = 220;
   const paddingLeft = 45;
   const paddingRight = 20;
@@ -2034,17 +2034,27 @@ export function renderModelTpsChart(overview: GlobalAnalyticsOverview, range: Ti
   });
 
   let xLabelsSvg = '';
-  const labelInterval = Math.max(1, Math.floor(dateList.length / 7));
+  let lastRenderedLabelIdx = -999;
+  const labelInterval = Math.max(2, Math.floor(dateList.length / 6));
   dateList.forEach((dStr, idx) => {
-    const isEdge = idx === dateList.length - 1;
-    const isTooClose = isEdge && (idx % labelInterval < Math.floor(labelInterval / 2)) && idx !== 0;
-    if ((idx % labelInterval === 0 && !isTooClose) || isEdge) {
+    const isTooCloseToRight = (dateList.length - 1 - idx) < labelInterval * 0.75;
+    if (idx % labelInterval === 0 && !isTooCloseToRight) {
       const x = paddingLeft + idx * stepX;
+      const anchor = idx === 0 ? 'start' : 'middle';
       xLabelsSvg += `
-        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${formatDateLabel(dStr)}</text>
+        <text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${anchor}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${formatDateLabel(dStr)}</text>
       `;
+      lastRenderedLabelIdx = idx;
     }
   });
+
+  if (dateList.length > 1 && (dateList.length - 1 - lastRenderedLabelIdx) >= Math.max(2, Math.floor(labelInterval * 0.5))) {
+    const lastX = paddingLeft + (dateList.length - 1) * stepX;
+    const lastDate = dateList[dateList.length - 1];
+    xLabelsSvg += `
+      <text x="${lastX.toFixed(1)}" y="${svgHeight - 8}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${formatDateLabel(lastDate)}</text>
+    `;
+  }
 
   let pathsSvg = '';
   let dotsSvg = '';
@@ -2265,8 +2275,8 @@ export function renderLatencyTtftDistributionChart(overview: GlobalAnalyticsOver
   const p50Lat = computePercentile(latList, 0.5);
   const p95Lat = computePercentile(latList, 0.95);
 
-  const svgWidth = 600;
-  const svgHeight = 280;
+  const svgWidth = 800;
+  const svgHeight = 300;
   const paddingLeft = 52;
   const paddingRight = 44;
   const paddingTop = 32;
@@ -2274,8 +2284,8 @@ export function renderLatencyTtftDistributionChart(overview: GlobalAnalyticsOver
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
 
-  const maxX = Math.max(30, Math.ceil((p95Ttft * 1.5) / 5) * 5);
-  const maxY = Math.max(40, Math.ceil((p95Lat * 1.5) / 5) * 5);
+  const maxX = Math.max(35, Math.ceil((p95Ttft * 1.5) / 5) * 5);
+  const maxY = Math.max(45, Math.ceil((p95Lat * 1.5) / 5) * 5);
 
   const yTicks = [0, maxY * 0.2, maxY * 0.4, maxY * 0.6, maxY * 0.8, maxY].map(v => Math.round(v));
   const xTicks = [0, maxX * 0.2, maxX * 0.4, maxX * 0.6, maxX * 0.8, maxX].map(v => Math.round(v));
@@ -2341,9 +2351,13 @@ export function renderLatencyTtftDistributionChart(overview: GlobalAnalyticsOver
   `;
 
   let pointsSvg = '';
+  let plottedCount = 0;
   validPoints.forEach(p => {
-    const cx = paddingLeft + Math.min(1, p.ttft / maxX) * chartWidth;
-    const cy = paddingTop + chartHeight - Math.min(1, p.totDur / maxY) * chartHeight;
+    // Filter out outlier points beyond chart bounds so they do not artificially stack at borders
+    if (p.ttft > maxX || p.totDur > maxY) return;
+    plottedCount++;
+    const cx = paddingLeft + (p.ttft / maxX) * chartWidth;
+    const cy = paddingTop + chartHeight - (p.totDur / maxY) * chartHeight;
     const speed = p.totDur > 0 ? Math.round(p.outTok / p.totDur) : 0;
     pointsSvg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2" fill="#00A67E" fill-opacity="0.45" class="latency-scatter-pt" data-turn="${p.idx}" data-ttft="${p.ttft.toFixed(2)}" data-lat="${p.totDur.toFixed(2)}" data-stream="${p.stream.toFixed(2)}" data-out="${p.outTok}" data-speed="${speed}" />`;
   });
@@ -2356,7 +2370,7 @@ export function renderLatencyTtftDistributionChart(overview: GlobalAnalyticsOver
       <div class="scatter-legend">
         <div class="scatter-legend-item">
           <span class="scatter-legend-dot" style="background: #00A67E;"></span>
-          <span>Turns (${formatFullNumber(validPoints.length)})</span>
+          <span>Turns (${formatFullNumber(plottedCount)})</span>
         </div>
         <div class="scatter-legend-item">
           <span class="scatter-legend-line" style="border-color: #3B82F6;"></span>

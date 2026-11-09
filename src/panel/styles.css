@@ -1086,8 +1086,12 @@ body.dark .timerange-segmented .segment-btn.active {
 
 .analytics-svg {
   width: 100%;
-  height: 220px;
+  height: auto;
   display: block;
+}
+
+#analytics-svg-element {
+  height: 220px;
 }
 
 /* Scrubber Crosshair Line & Target Dot in Overview Mode */
