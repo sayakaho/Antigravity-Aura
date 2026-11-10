@@ -2,6 +2,17 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.2.2] - 2026-11-10
+
+### Added
+- **Subagent Execution Analytics**: Added a conditional **Subagent Execution** breakdown section below the performance charts showing main vs. subagent token/request split and deduplicated per-agent run counts across time ranges and `Session` view.
+- **Session Speed Trends Time Buckets**: Switched `Session` mode **Model Speed Trends** to adaptive active time buckets (`30s`–`1d`, folding idle pauses with dashed gap dividers) and merged main plus descendant subagent requests into per-`modelId` throughput curves.
+- **Model Speed Trends Legend Bar**: Added a wrapped model legend below the chart header with color parity synced to **Model Token Consumption**.
+
+### Changed
+- **Root-Session Deduplication**: Counted only root sessions for global and workspace session totals (excluding subagents and orphan subagent threads) while retaining full token, model, and tool consumption and default-merging descendant trees in `Session` mode.
+- **Compact Speed Tooltips**: Displayed raw `modelId` labels in **Model Speed Trends** hover tooltips while keeping full disambiguated names in the legend bar.
+
 ## [0.2.1] - 2026-11-10
 
 ### Changed
