@@ -379,6 +379,129 @@ describe('Subagent session tree & analytics integration', () => {
       expect(session!.subagents?.subagentTokens).toBe(13800);
       expect(session!.subagents?.totalRuns).toBe(3);
       expect(session!.subagents?.items.map((x) => x.agentName)).toEqual(['research', 'self']);
+
+      // Session speedTimeline merges main + descendant subagent requests by canonical modelId
+      expect(session!.speedTimeline).toBeDefined();
+      expect(session!.speedTimeline!.slots.length).toBe(1);
+      const slotModels = session!.speedTimeline!.slots[0].models;
+      expect(Object.keys(slotModels).sort()).toEqual([
+        'claude-opus-4-6-thinking',
+        'gemini-3.8-flash-s'
+      ]);
+      expect(slotModels['claude-opus-4-6-thinking'].requests).toBe(1);
+      expect(slotModels['gemini-3.8-flash-s'].requests).toBe(4);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('GlobalAnalyticsEngine builds multi-slot session speedTimeline across subagent timestamps and invalidates cache on db update', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-speed-timeline-'));
+    try {
+      const convDir = path.join(tmpDir, 'conversations');
+      fs.mkdirSync(convDir, { recursive: true });
+
+      const rootId = 'aaaa1111-1111-1111-1111-111111111111';
+      const subId = 'bbbb2222-2222-2222-2222-222222222222';
+      const t0 = Math.floor(new Date('2026-11-10T10:00:00').getTime() / 1000);
+      const t1 = t0 + 600; // 10 minutes later
+      const wsUri = '["file:///Users/oren/WorkSpace/Apps/demo"]';
+
+      const sumDb = new DatabaseSync(path.join(tmpDir, 'conversation_summaries.db'));
+      sumDb.exec(`
+        CREATE TABLE conversation_summaries (
+          conversation_id TEXT PRIMARY KEY,
+          title TEXT,
+          step_count INTEGER,
+          last_modified_time TEXT,
+          project_id TEXT,
+          agent_name TEXT,
+          workspace_uris TEXT,
+          status TEXT,
+          parent_conversation_id TEXT,
+          nesting_depth INTEGER
+        );
+      `);
+      sumDb
+        .prepare(
+          `INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(rootId, 'Root', 1, '2026-11-10T10:00:00', 'proj-1', '', wsUri, 'IDLE', '', 0);
+      sumDb
+        .prepare(
+          `INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(subId, 'Sub', 1, '2026-11-10T10:10:00', 'proj-1', 'research', wsUri, 'IDLE', rootId, 1);
+      sumDb.close();
+
+      createConvDb(
+        path.join(convDir, `${rootId}.db`),
+        [
+          {
+            inTok: 1000,
+            outTok: 300,
+            cacheRead: 500,
+            streamSec: 3,
+            modelId: 'gemini-3.8-flash-s',
+            modelName: 'Gemini 3.8 Flash (High)',
+            stepIdx: 1
+          }
+        ],
+        [],
+        t0
+      );
+      createConvDb(
+        path.join(convDir, `${subId}.db`),
+        [
+          {
+            inTok: 1200,
+            outTok: 160,
+            cacheRead: 800,
+            streamSec: 2,
+            modelId: 'gemini-3.8-flash-n',
+            modelName: 'Gemini 3.8 Flash (High)',
+            stepIdx: 1
+          }
+        ],
+        [],
+        t1
+      );
+
+      const engine = new GlobalAnalyticsEngine(tmpDir);
+      const first = engine.getSessionDetails(rootId);
+      expect(first?.speedTimeline?.slots.length).toBe(2);
+      expect(first?.speedTimeline?.slots[0].models['gemini-3.8-flash-s'].effOutTok).toBe(300);
+      expect(first?.speedTimeline?.slots[1].models['gemini-3.8-flash-n'].effOutTok).toBe(160);
+
+      // Update subagent DB with an extra request at a different size/mtime and verify cache refresh
+      const subDbPath = path.join(convDir, `${subId}.db`);
+      const subDb = new DatabaseSync(subDbPath);
+      const metaBlob = buildStepMetaBlob(t1 + 10);
+      subDb.prepare('INSERT INTO steps (idx, step_type, step_payload, metadata) VALUES (?, ?, ?, ?)').run(
+        2,
+        15,
+        Buffer.alloc(0),
+        metaBlob
+      );
+      subDb.prepare('INSERT INTO gen_metadata (idx, data) VALUES (?, ?)').run(
+        1,
+        buildGenMetadataBlob({
+          inTok: 500,
+          outTok: 240,
+          cacheRead: 400,
+          streamSec: 3,
+          modelId: 'gemini-3.8-flash-n',
+          modelName: 'Gemini 3.8 Flash (High)',
+          stepIdx: 2
+        })
+      );
+      subDb.close();
+      const nextTime = new Date(Date.now() + 5000);
+      fs.utimesSync(subDbPath, nextTime, nextTime);
+
+      const updated = engine.getSessionDetails(rootId);
+      expect(updated?.speedTimeline?.slots[1].models['gemini-3.8-flash-n'].requests).toBe(2);
+      expect(updated?.speedTimeline?.slots[1].models['gemini-3.8-flash-n'].effOutTok).toBe(400);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

@@ -50,12 +50,14 @@ interface TpsSlotMeta {
   title: string;
   centerX: number;
   items: TpsSlotEntry[];
+  subline?: string;
 }
 
 interface TpsPoint {
   x: number;
   y: number;
   tps: number;
+  ts?: number;
 }
 
 interface NormalizedTpsModelSeries {
@@ -646,10 +648,69 @@ function attachStandardTimelineTooltipListeners(
   });
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function formatBucketDurationBadge(bucketSizeSec: number): string {
+  if (bucketSizeSec >= 86400) return `${Math.round(bucketSizeSec / 86400)}d`;
+  if (bucketSizeSec >= 3600) return `${Math.round(bucketSizeSec / 3600)}h`;
+  if (bucketSizeSec >= 60) return `${Math.round(bucketSizeSec / 60)}m`;
+  return `${bucketSizeSec}s`;
+}
+
+function formatIdleGapLabel(gapSec: number): string {
+  const mins = Math.round(gapSec / 60);
+  if (mins < 60) return `${Math.max(1, mins)}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours < 24) return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+}
+
+function formatSessionSlotAxisLabel(
+  bucketStartSec: number,
+  bucketSizeSec: number,
+  isMultiDay: boolean
+): string {
+  const d = new Date(bucketStartSec * 1000);
+  const md = `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`;
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  if (bucketSizeSec >= 86400) return md;
+  if (isMultiDay) return `${md} ${hm}`;
+  if (bucketSizeSec < 60) return `${hm}:${pad2(d.getSeconds())}`;
+  return hm;
+}
+
+function formatSessionSlotTooltipTitle(bucketStartSec: number, bucketSizeSec: number): string {
+  const start = new Date(bucketStartSec * 1000);
+  const startDate = formatLocalDateKey(start);
+  if (bucketSizeSec >= 86400) return startDate;
+
+  const end = new Date((bucketStartSec + bucketSizeSec) * 1000);
+  const endDate = formatLocalDateKey(end);
+  const startClock =
+    bucketSizeSec < 60
+      ? `${pad2(start.getHours())}:${pad2(start.getMinutes())}:${pad2(start.getSeconds())}`
+      : `${pad2(start.getHours())}:${pad2(start.getMinutes())}`;
+  const endClock =
+    bucketSizeSec < 60
+      ? `${pad2(end.getHours())}:${pad2(end.getMinutes())}:${pad2(end.getSeconds())}`
+      : `${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+
+  if (startDate === endDate) {
+    return `${startDate} ${startClock} - ${endClock}`;
+  }
+  return `${startDate} ${startClock} - ${endDate} ${endClock}`;
+}
+
 function resolveChartSeriesMeta(
   statsBySlot: Record<string, Record<string, ModelDailyStat>> | undefined,
-  slotKeys: string[]
-): Array<{ key: string; label: string; color: string }> {
+  slotKeys: string[],
+  preferredOrderIds?: string[]
+): Array<{ key: string; label: string; tooltipLabel: string; color: string }> {
   const displayNameByKey = new Map<string, string>();
   for (const sKey of slotKeys) {
     const bucket = statsBySlot?.[sKey];
@@ -669,16 +730,93 @@ function resolveChartSeriesMeta(
     }
   }
 
+  const orderedEntries = Array.from(displayNameByKey.entries());
+  if (preferredOrderIds && preferredOrderIds.length > 0) {
+    const rankMap = new Map<string, number>();
+    preferredOrderIds.forEach((id, idx) => {
+      if (id && !rankMap.has(id)) rankMap.set(id, idx);
+    });
+    orderedEntries.sort((a, b) => {
+      const rankA = rankMap.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
+      const rankB = rankMap.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
+      return rankA - rankB;
+    });
+  }
+
   const nameCounts = new Map<string, number>();
-  for (const name of displayNameByKey.values()) {
+  for (const [, name] of orderedEntries) {
     nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
   }
 
   const usedColors = new Set<string>();
-  return Array.from(displayNameByKey.entries()).map(([key, displayName], idx) => {
-    const label = (nameCounts.get(displayName) || 0) > 1 ? `${displayName} (${key})` : displayName;
+  return orderedEntries.map(([key, displayName], idx) => {
+    const isConflict = (nameCounts.get(displayName) || 0) > 1;
+    const label = isConflict ? `${displayName} (${key})` : displayName;
+    const tooltipLabel = key;
     const color = getModelColor(key || displayName, idx, usedColors);
-    return { key, label, color };
+    return { key, label, tooltipLabel, color };
+  });
+}
+
+function resolveSessionTimelineModels(
+  slots: NonNullable<SessionAnalyticsData['speedTimeline']>['slots'],
+  sessionModels?: SessionAnalyticsData['models']
+): Array<{ key: string; label: string; tooltipLabel: string; color: string }> {
+  const modelMetaMap = new Map<
+    string,
+    { displayName: string; effOutTok: number; requests: number }
+  >();
+
+  for (const slot of slots) {
+    for (const [mKey, st] of Object.entries(slot.models)) {
+      const displayName = st.modelName || canonicalModelName(mKey);
+      if (
+        !mKey ||
+        mKey.toLowerCase().includes('unknown') ||
+        displayName.toLowerCase().includes('unknown') ||
+        computeBucketTps(st) <= 0
+      ) {
+        continue;
+      }
+      const existing = modelMetaMap.get(mKey);
+      if (!existing) {
+        modelMetaMap.set(mKey, {
+          displayName,
+          effOutTok: st.effOutTok,
+          requests: st.requests
+        });
+      } else {
+        existing.effOutTok += st.effOutTok;
+        existing.requests += st.requests;
+      }
+    }
+  }
+
+  // Match Model Token Consumption ordering so color-collision resolution stays identical across cards.
+  const rankMap = new Map<string, number>();
+  (sessionModels || []).forEach((m, idx) => {
+    if (m.modelId && !rankMap.has(m.modelId)) rankMap.set(m.modelId, idx);
+  });
+
+  const sortedEntries = Array.from(modelMetaMap.entries()).sort((a, b) => {
+    const rankA = rankMap.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
+    const rankB = rankMap.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
+    if (rankA !== rankB) return rankA - rankB;
+    return b[1].effOutTok - a[1].effOutTok || b[1].requests - a[1].requests || a[0].localeCompare(b[0]);
+  });
+
+  const nameCounts = new Map<string, number>();
+  for (const [, info] of sortedEntries) {
+    nameCounts.set(info.displayName, (nameCounts.get(info.displayName) || 0) + 1);
+  }
+
+  const usedColors = new Set<string>();
+  return sortedEntries.map(([key, info], idx) => {
+    const isConflict = (nameCounts.get(info.displayName) || 0) > 1;
+    const label = isConflict ? `${info.displayName} (${key})` : info.displayName;
+    const tooltipLabel = key;
+    const color = getModelColor(key || info.displayName, idx, usedColors);
+    return { key, label, tooltipLabel, color };
   });
 }
 
@@ -693,7 +831,12 @@ export function renderModelTpsChart(
   const chartWrapper = document.getElementById('analytics-model-tps-chart');
   if (!chartWrapper) return;
 
-  const isSession = range === 'session' && Boolean(activeSessionData && activeSessionData.steps.length > 0);
+  const isSession =
+    range === 'session' &&
+    Boolean(
+      activeSessionData &&
+        (activeSessionData.steps.length > 0 || (activeSessionData.speedTimeline?.slots.length || 0) > 0)
+    );
   const isHourly = range === 'today' || range === 'yesterday';
 
   const svgWidth = 800;
@@ -706,48 +849,165 @@ export function renderModelTpsChart(
   const chartHeight = svgHeight - paddingTop - paddingBottom;
 
   const title = 'Model Speed Trends';
-  const subtitle = '(Stream · E2E Fallback)';
+  let subtitle = '(Stream · E2E Fallback)';
 
   const series: NormalizedTpsModelSeries[] = [];
   const slotMeta: TpsSlotMeta[] = [];
   let totalSlots = 0;
   let maxTps = 80;
   let xLabelsSvg = '';
+  let gapDividersSvg = '';
+  let sessionGapThresholdSec = 0;
+  let showModelLegend = true;
 
   if (isSession) {
-    const steps = activeSessionData!.steps;
-    totalSlots = steps.length;
-    const rawValues = steps.map((st) => Math.round(computeStepTps(st.outTok, st.ttft, st.stream, st.totDur).displayTps));
-    const rawMaxTps = rawValues.reduce((m, v) => (v <= 600 && v > m ? v : m), 0);
-    maxTps = computeNiceYScale(rawMaxTps, 60, 4).yMax;
-
-    const stepX = chartWidth / Math.max(1, totalSlots - 1);
-    const pts: Array<TpsPoint | null> = steps.map((st, idx) => {
-      const tps = Math.min(maxTps, rawValues[idx]);
-      const x = paddingLeft + (totalSlots > 1 ? idx * stepX : chartWidth / 2);
-      const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
-      slotMeta.push({
-        title: `Session Turn #${st.idx + 1}`,
-        centerX: x,
-        items: [{ model: `Turn #${st.idx + 1}`, color: '#3B82F6', tps, reqs: 1 }]
-      });
-      return { x, y, tps };
-    });
-    series.push({ name: 'Session', color: '#3B82F6', points: pts });
-
-    const labelInterval = Math.max(1, Math.floor(totalSlots / 6));
-    let lastRenderedIdx = -999;
-    steps.forEach((st, idx) => {
-      const isTooCloseToRight = totalSlots - 1 - idx < labelInterval * 0.7;
-      if (idx % labelInterval === 0 && !isTooCloseToRight) {
-        const x = paddingLeft + (totalSlots > 1 ? idx * stepX : chartWidth / 2);
-        xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${st.idx + 1}</text>`;
-        lastRenderedIdx = idx;
+    const timeline = activeSessionData!.speedTimeline;
+    if (timeline && timeline.slots.length > 0) {
+      const slots = timeline.slots;
+      const bucketSizeSec = timeline.bucketSizeSec;
+      const activeModels = resolveSessionTimelineModels(slots, activeSessionData!.models);
+      if (activeModels.length === 0) {
+        renderEmptyChartCard(chartWrapper, title, 'No throughput data recorded in this session', subtitle);
+        return;
       }
-    });
-    if (totalSlots > 1 && totalSlots - 1 - lastRenderedIdx >= Math.floor(labelInterval * 0.5)) {
-      const lastX = paddingLeft + chartWidth;
-      xLabelsSvg += `<text x="${lastX.toFixed(1)}" y="${svgHeight - 8}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${totalSlots}</text>`;
+
+      subtitle = `(${formatBucketDurationBadge(bucketSizeSec)} Buckets · Stream · E2E)`;
+      sessionGapThresholdSec = Math.max(3600, bucketSizeSec * 6);
+
+      let rawMaxTps = 0;
+      for (const m of activeModels) {
+        for (const slot of slots) {
+          const st = slot.models[m.key];
+          if (st) {
+            const tps = computeBucketTps(st);
+            if (tps > rawMaxTps) rawMaxTps = tps;
+          }
+        }
+      }
+      maxTps = computeNiceYScale(rawMaxTps, 60, 4).yMax;
+
+      totalSlots = slots.length;
+      const stepX = chartWidth / Math.max(1, totalSlots - 1);
+      const isMultiDay =
+        formatLocalDateKey(new Date(slots[0].bucketStartSec * 1000)) !==
+        formatLocalDateKey(new Date(slots[slots.length - 1].bucketStartSec * 1000));
+
+      activeModels.forEach((m) => {
+        const pts: Array<TpsPoint | null> = slots.map((slot, idx) => {
+          const st = slot.models[m.key];
+          const tps = st ? computeBucketTps(st) : 0;
+          if (tps <= 0) return null;
+          const x = paddingLeft + (totalSlots > 1 ? idx * stepX : chartWidth / 2);
+          const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+          return { x, y, tps, ts: slot.bucketStartSec };
+        });
+        series.push({ name: m.label, color: m.color, points: pts });
+      });
+
+      const gapBeforeSlot = new Array<number>(totalSlots).fill(0);
+      for (let idx = 1; idx < totalSlots; idx++) {
+        const delta = slots[idx].bucketStartSec - slots[idx - 1].bucketStartSec;
+        if (delta > sessionGapThresholdSec) {
+          gapBeforeSlot[idx] = delta;
+          const prevX = paddingLeft + (idx - 1) * stepX;
+          const currX = paddingLeft + idx * stepX;
+          const midX = (prevX + currX) / 2;
+          gapDividersSvg += `<line class="tps-gap-divider" x1="${midX.toFixed(1)}" y1="${paddingTop}" x2="${midX.toFixed(1)}" y2="${paddingTop + chartHeight}" stroke="var(--aura-fg-muted)" stroke-width="1" stroke-dasharray="2 3" opacity="0.45" />`;
+        }
+      }
+
+      slots.forEach((slot, idx) => {
+        const x = paddingLeft + (totalSlots > 1 ? idx * stepX : chartWidth / 2);
+        const items: TpsSlotEntry[] = [];
+        activeModels.forEach((m) => {
+          const st = slot.models[m.key];
+          if (st) {
+            const tps = computeBucketTps(st);
+            if (tps > 0) {
+              items.push({ model: m.tooltipLabel || m.label, color: m.color, tps, reqs: st.requests });
+            }
+          }
+        });
+        const gapSec = gapBeforeSlot[idx];
+        slotMeta.push({
+          title: formatSessionSlotTooltipTitle(slot.bucketStartSec, bucketSizeSec),
+          centerX: x,
+          items,
+          subline: gapSec > 0 ? `Resumed after ${formatIdleGapLabel(gapSec)} idle` : undefined
+        });
+      });
+
+      if (totalSlots === 1) {
+        const label = formatSessionSlotAxisLabel(slots[0].bucketStartSec, bucketSizeSec, isMultiDay);
+        const x = paddingLeft + chartWidth / 2;
+        xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${escapeHtml(label)}</text>`;
+      } else {
+        const maxLabels = isMultiDay ? 5 : 6;
+        const labelInterval = Math.max(1, Math.ceil((totalSlots - 1) / Math.max(1, maxLabels - 1)));
+        let lastRenderedIdx = -999;
+
+        for (let idx = 0; idx < totalSlots - 1; idx++) {
+          const isTooCloseToRight = totalSlots - 1 - idx < Math.ceil(labelInterval * 0.55);
+          if (idx % labelInterval === 0 && !isTooCloseToRight) {
+            const x = paddingLeft + idx * stepX;
+            const anchor = idx === 0 ? 'start' : 'middle';
+            const label = formatSessionSlotAxisLabel(
+              slots[idx].bucketStartSec,
+              bucketSizeSec,
+              isMultiDay
+            );
+            xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="${anchor}" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${escapeHtml(label)}</text>`;
+            lastRenderedIdx = idx;
+          }
+        }
+
+        if (totalSlots - 1 - lastRenderedIdx >= Math.max(1, Math.floor(labelInterval * 0.55))) {
+          const lastIdx = totalSlots - 1;
+          const lastX = paddingLeft + lastIdx * stepX;
+          const label = formatSessionSlotAxisLabel(
+            slots[lastIdx].bucketStartSec,
+            bucketSizeSec,
+            isMultiDay
+          );
+          xLabelsSvg += `<text x="${lastX.toFixed(1)}" y="${svgHeight - 8}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${escapeHtml(label)}</text>`;
+        }
+      }
+    } else {
+      showModelLegend = false;
+      const steps = activeSessionData!.steps;
+      totalSlots = steps.length;
+      const rawValues = steps.map((st) => Math.round(computeStepTps(st.outTok, st.ttft, st.stream, st.totDur).displayTps));
+      const rawMaxTps = rawValues.reduce((m, v) => (v <= 600 && v > m ? v : m), 0);
+      maxTps = computeNiceYScale(rawMaxTps, 60, 4).yMax;
+
+      const stepX = chartWidth / Math.max(1, totalSlots - 1);
+      const pts: Array<TpsPoint | null> = steps.map((st, idx) => {
+        const tps = Math.min(maxTps, rawValues[idx]);
+        const x = paddingLeft + (totalSlots > 1 ? idx * stepX : chartWidth / 2);
+        const y = paddingTop + chartHeight - (tps / maxTps) * chartHeight;
+        slotMeta.push({
+          title: `Session Turn #${st.idx + 1}`,
+          centerX: x,
+          items: [{ model: `Turn #${st.idx + 1}`, color: '#3B82F6', tps, reqs: 1 }]
+        });
+        return { x, y, tps };
+      });
+      series.push({ name: 'Session', color: '#3B82F6', points: pts });
+
+      const labelInterval = Math.max(1, Math.floor(totalSlots / 6));
+      let lastRenderedIdx = -999;
+      steps.forEach((st, idx) => {
+        const isTooCloseToRight = totalSlots - 1 - idx < labelInterval * 0.7;
+        if (idx % labelInterval === 0 && !isTooCloseToRight) {
+          const x = paddingLeft + (totalSlots > 1 ? idx * stepX : chartWidth / 2);
+          xLabelsSvg += `<text x="${x.toFixed(1)}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${st.idx + 1}</text>`;
+          lastRenderedIdx = idx;
+        }
+      });
+      if (totalSlots > 1 && totalSlots - 1 - lastRenderedIdx >= Math.floor(labelInterval * 0.5)) {
+        const lastX = paddingLeft + chartWidth;
+        xLabelsSvg += `<text x="${lastX.toFixed(1)}" y="${svgHeight - 8}" text-anchor="end" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#${totalSlots}</text>`;
+      }
     }
   } else if (isHourly) {
     const targetDate =
@@ -756,7 +1016,8 @@ export function renderModelTpsChart(
         : formatLocalDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
     const hourKeys = Array.from({ length: 24 }, (_, h) => `${targetDate} ${String(h).padStart(2, '0')}:00`);
 
-    const activeModels = resolveChartSeriesMeta(overview.hourlyModelStats, hourKeys);
+    const preferredOrder = (overview.modelDistribution || []).map((m) => m.modelId);
+    const activeModels = resolveChartSeriesMeta(overview.hourlyModelStats, hourKeys, preferredOrder);
     if (activeModels.length === 0) {
       renderEmptyChartCard(
         chartWrapper,
@@ -802,7 +1063,7 @@ export function renderModelTpsChart(
         if (st) {
           const tps = computeBucketTps(st);
           if (tps > 0) {
-            items.push({ model: m.label, color: m.color, tps, reqs: st.requests });
+            items.push({ model: m.tooltipLabel || m.label, color: m.color, tps, reqs: st.requests });
           }
         }
       });
@@ -813,7 +1074,8 @@ export function renderModelTpsChart(
     });
   } else {
     const dateList = getFilterDatesForRange(range, customStart, customEnd, now);
-    const activeModels = resolveChartSeriesMeta(overview.dailyModelStats, dateList);
+    const preferredOrder = (overview.modelDistribution || []).map((m) => m.modelId);
+    const activeModels = resolveChartSeriesMeta(overview.dailyModelStats, dateList, preferredOrder);
     if (activeModels.length === 0) {
       renderEmptyChartCard(chartWrapper, title, 'No throughput data recorded in this period', subtitle);
       return;
@@ -857,7 +1119,7 @@ export function renderModelTpsChart(
         if (st) {
           const tps = computeBucketTps(st);
           if (tps > 0) {
-            items.push({ model: m.label, color: m.color, tps, reqs: st.requests });
+            items.push({ model: m.tooltipLabel || m.label, color: m.color, tps, reqs: st.requests });
           }
         }
       });
@@ -893,27 +1155,77 @@ export function renderModelTpsChart(
 
   let pathsSvg = '';
   let dotsSvg = '';
-  const showDots = !isSession || totalSlots <= 50;
+  const showDots = totalSlots <= 50;
 
   for (const s of series) {
     let currentPath = '';
-    for (const p of s.points) {
-      if (p) {
+    let lastDrawnPt: TpsPoint | null = null;
+
+    if (sessionGapThresholdSec > 0) {
+      for (const p of s.points) {
+        if (!p) continue;
+        const breaksForGap =
+          lastDrawnPt?.ts !== undefined &&
+          p.ts !== undefined &&
+          p.ts - lastDrawnPt.ts > sessionGapThresholdSec;
+
+        if (breaksForGap && currentPath) {
+          if (currentPath.includes(' L ')) {
+            pathsSvg += `<path d="${currentPath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+          } else if (!showDots && lastDrawnPt) {
+            dotsSvg += `<circle cx="${lastDrawnPt.x.toFixed(1)}" cy="${lastDrawnPt.y.toFixed(1)}" r="3.2" fill="${s.color}" stroke="var(--aura-bg, #1e1e1e)" stroke-width="1.5" />`;
+          }
+          currentPath = '';
+        }
+
         currentPath = currentPath
           ? `${currentPath} L ${p.x.toFixed(1)},${p.y.toFixed(1)}`
           : `M ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        lastDrawnPt = p;
         if (showDots) {
           dotsSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.2" fill="${s.color}" stroke="var(--aura-bg, #1e1e1e)" stroke-width="1.5" />`;
         }
-      } else if (currentPath) {
+      }
+      if (currentPath) {
+        if (currentPath.includes(' L ')) {
+          pathsSvg += `<path d="${currentPath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+        } else if (!showDots && lastDrawnPt) {
+          dotsSvg += `<circle cx="${lastDrawnPt.x.toFixed(1)}" cy="${lastDrawnPt.y.toFixed(1)}" r="3.2" fill="${s.color}" stroke="var(--aura-bg, #1e1e1e)" stroke-width="1.5" />`;
+        }
+      }
+    } else {
+      for (const p of s.points) {
+        if (p) {
+          currentPath = currentPath
+            ? `${currentPath} L ${p.x.toFixed(1)},${p.y.toFixed(1)}`
+            : `M ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+          if (showDots) {
+            dotsSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.2" fill="${s.color}" stroke="var(--aura-bg, #1e1e1e)" stroke-width="1.5" />`;
+          }
+        } else if (currentPath) {
+          pathsSvg += `<path d="${currentPath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+          currentPath = '';
+        }
+      }
+      if (currentPath) {
         pathsSvg += `<path d="${currentPath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
-        currentPath = '';
       }
     }
-    if (currentPath) {
-      pathsSvg += `<path d="${currentPath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
-    }
   }
+
+  const legendHtml =
+    showModelLegend && series.length > 0
+      ? `<div class="tps-legend-bar">${series
+          .map(
+            (s) => `
+              <span class="tps-legend-item">
+                <span class="tps-legend-swatch" style="background: ${escapeHtml(s.color)}"></span>
+                <span class="tps-legend-label">${escapeHtml(s.name)}</span>
+              </span>
+            `
+          )
+          .join('')}</div>`
+      : '';
 
   const stepXForBand = chartWidth / Math.max(1, totalSlots - 1);
   const hoverBandsSvg = slotMeta
@@ -926,13 +1238,15 @@ export function renderModelTpsChart(
   chartWrapper.innerHTML = `
     <div class="chart-header">
       <div class="chart-header-left">
-        <h3 class="chart-title">${title}<span class="chart-subtitle">${subtitle}</span></h3>
+        <h3 class="chart-title">${title}<span class="chart-subtitle">${escapeHtml(subtitle)}</span></h3>
       </div>
     </div>
+    ${legendHtml}
     <div class="chart-body" style="position: relative;">
       <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="tps-svg-element">
         ${yAxisLinesSvg}
         ${yAxisTextsSvg}
+        ${gapDividersSvg}
         ${xLabelsSvg}
         ${pathsSvg}
         ${dotsSvg}
@@ -981,9 +1295,14 @@ function attachTpsTooltipListeners(
               .join('')
           : '<div class="tooltip-subline">No activity on this date</div>';
 
+      const sublineHtml = meta.subline
+        ? `<div class="tooltip-subline">${escapeHtml(meta.subline)}</div>`
+        : '';
+
       tooltip.innerHTML = `
         <div class="tooltip-header">${escapeHtml(meta.title)}</div>
         ${rowsHtml}
+        ${sublineHtml}
       `;
 
       tooltip.style.display = 'block';

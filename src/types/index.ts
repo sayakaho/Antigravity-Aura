@@ -209,6 +209,32 @@ export interface SessionProjectMeta {
   isWorkspace: boolean;
 }
 
+export interface TimedSpeedSample {
+  ts: number;
+  modelId: string;
+  modelName: string;
+  effOutTok: number;
+  effSec: number;
+}
+
+export interface SessionSpeedModelStat {
+  modelId: string;
+  modelName: string;
+  effOutTok: number;
+  effSec: number;
+  requests: number;
+}
+
+export interface SessionSpeedSlot {
+  bucketStartSec: number;
+  models: Record<string, SessionSpeedModelStat>;
+}
+
+export interface SessionSpeedTimeline {
+  bucketSizeSec: number;
+  slots: SessionSpeedSlot[];
+}
+
 export interface SessionAnalyticsData {
   cascadeId: string;
   project?: SessionProjectMeta;
@@ -230,6 +256,7 @@ export interface SessionAnalyticsData {
   models?: ModelTokenStat[];
   tools?: ToolStatItem[];
   subagents?: SubagentBreakdownSummary;
+  speedTimeline?: SessionSpeedTimeline;
 }
 
 export interface ModelDailyStat {

@@ -1,5 +1,14 @@
+import type {
+  SessionSpeedModelStat,
+  SessionSpeedSlot,
+  SessionSpeedTimeline,
+  TimedSpeedSample
+} from '../types';
+
 export const CAPSULE_MIN_STREAM_SEC = 0.25;
 export const CAPSULE_MAX_STREAM_TPS = 600;
+export const SESSION_SPEED_BUCKET_SIZES = [30, 60, 120, 300, 900, 1800, 3600, 14400, 86400] as const;
+export const SESSION_SPEED_MAX_SLOTS = 36;
 
 export interface StepTpsResult {
   streamTps: number;
@@ -64,4 +73,124 @@ export function computeBucketTps(bucket?: BucketTpsInput | null): number {
     return Math.round(bucket.effOutTok! / bucket.effSec!);
   }
   return Math.round(computeStepTps(bucket.outTok, bucket.ttftSec, bucket.streamSec).displayTps);
+}
+
+/**
+ * Align to local wall-clock bucket boundaries rather than dividing UTC epoch seconds,
+ * so half-hour timezones and multi-hour/daily ticks still fall cleanly on :00 / midnight.
+ */
+export function alignLocalBucketStartSec(epochSec: number, bucketSizeSec: number): number {
+  const d = new Date(epochSec * 1000);
+  if (bucketSizeSec >= 86400) {
+    return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 1000);
+  }
+  if (bucketSizeSec >= 3600) {
+    const hours = Math.max(1, Math.floor(bucketSizeSec / 3600));
+    const alignedHour = Math.floor(d.getHours() / hours) * hours;
+    return Math.floor(
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), alignedHour, 0, 0).getTime() / 1000
+    );
+  }
+  if (bucketSizeSec >= 60) {
+    const mins = Math.max(1, Math.floor(bucketSizeSec / 60));
+    const alignedMin = Math.floor(d.getMinutes() / mins) * mins;
+    return Math.floor(
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), alignedMin, 0).getTime() /
+        1000
+    );
+  }
+  const stepSec = Math.max(1, Math.floor(bucketSizeSec));
+  const alignedSec = Math.floor(d.getSeconds() / stepSec) * stepSec;
+  return Math.floor(
+    new Date(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate(),
+      d.getHours(),
+      d.getMinutes(),
+      alignedSec
+    ).getTime() / 1000
+  );
+}
+
+/**
+ * Aggregate timed session samples into adaptive non-empty active buckets so overnight/multi-day
+ * pauses fold cleanly without crushing active work bursts into coarse buckets.
+ */
+export function buildSessionSpeedTimeline(
+  samples: TimedSpeedSample[]
+): SessionSpeedTimeline | undefined {
+  const valid: TimedSpeedSample[] = [];
+  for (const s of samples || []) {
+    const modelId = (s.modelId || '').trim();
+    const modelName = (s.modelName || '').trim();
+    if (
+      !Number.isFinite(s.ts) ||
+      s.ts <= 1_000_000_000 ||
+      !Number.isFinite(s.effOutTok) ||
+      s.effOutTok <= 0 ||
+      !Number.isFinite(s.effSec) ||
+      s.effSec <= 0 ||
+      !modelId ||
+      modelId.toLowerCase() === 'unknown' ||
+      modelName.toLowerCase().includes('unknown')
+    ) {
+      continue;
+    }
+    valid.push({
+      ts: s.ts,
+      modelId,
+      modelName: modelName || modelId,
+      effOutTok: s.effOutTok,
+      effSec: s.effSec
+    });
+  }
+
+  if (valid.length === 0) return undefined;
+
+  let chosenBucketSize: number = SESSION_SPEED_BUCKET_SIZES[SESSION_SPEED_BUCKET_SIZES.length - 1];
+  for (const candidateSize of SESSION_SPEED_BUCKET_SIZES) {
+    const distinctStarts = new Set<number>();
+    for (const s of valid) {
+      distinctStarts.add(alignLocalBucketStartSec(s.ts, candidateSize));
+      if (distinctStarts.size > SESSION_SPEED_MAX_SLOTS) break;
+    }
+    if (distinctStarts.size <= SESSION_SPEED_MAX_SLOTS) {
+      chosenBucketSize = candidateSize;
+      break;
+    }
+  }
+
+  const slotMap = new Map<number, Record<string, SessionSpeedModelStat>>();
+  for (const s of valid) {
+    const bucketStartSec = alignLocalBucketStartSec(s.ts, chosenBucketSize);
+    let models = slotMap.get(bucketStartSec);
+    if (!models) {
+      models = {};
+      slotMap.set(bucketStartSec, models);
+    }
+    const existing = models[s.modelId];
+    if (!existing) {
+      models[s.modelId] = {
+        modelId: s.modelId,
+        modelName: s.modelName,
+        effOutTok: s.effOutTok,
+        effSec: s.effSec,
+        requests: 1
+      };
+    } else {
+      existing.effOutTok += s.effOutTok;
+      existing.effSec += s.effSec;
+      existing.requests += 1;
+    }
+  }
+
+  const slots: SessionSpeedSlot[] = Array.from(slotMap.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([bucketStartSec, models]) => ({ bucketStartSec, models }));
+
+  return {
+    bucketSizeSec: chosenBucketSize,
+    slots
+  };
 }

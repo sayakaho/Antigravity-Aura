@@ -10,7 +10,7 @@ import {
   isSubagentSummary,
   resolveSubagentAgentName
 } from '../shared/session';
-import { computeStepTps, computeWeightedTps } from '../shared/tps';
+import { buildSessionSpeedTimeline, computeStepTps, computeWeightedTps } from '../shared/tps';
 import type {
   ConversationSummary,
   DailySeriesPoint,
@@ -23,7 +23,8 @@ import type {
   SessionAnalyticsData,
   SubagentBreakdownSummary,
   SubagentDailyStat,
-  SubagentStatItem
+  SubagentStatItem,
+  TimedSpeedSample
 } from '../types';
 import {
   extractGenMetadataStep,
@@ -219,10 +220,29 @@ function accumulateModelDailyStat(
   st.requests += requests;
 }
 
+function parseEpochSecFromIso(isoStr?: string): number {
+  if (!isoStr) return 0;
+  const ms = Date.parse(isoStr);
+  return Number.isFinite(ms) && ms > 1_000_000_000_000 ? Math.floor(ms / 1000) : 0;
+}
+
+function getFileMtimeSec(filePath: string): number {
+  try {
+    const sec = Math.floor(fs.statSync(filePath).mtimeMs / 1000);
+    return sec > 1_000_000_000 ? sec : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export class GlobalAnalyticsEngine {
   private readonly baseDir: string;
   private readonly cachePath: string;
   private cache: AnalyticsCache;
+  private readonly timedSamplesCache = new Map<
+    string,
+    { sig: string; samples: TimedSpeedSample[] }
+  >();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private cacheDirty = false;
   private isWritingCache = false;
@@ -1165,6 +1185,84 @@ export class GlobalAnalyticsEngine {
     }
   }
 
+  private extractTimedSamplesFromRows(
+    rows: Array<{ data: Buffer | Uint8Array }> | undefined,
+    stepTimeMap: Map<number, number>,
+    fallbackTsSec: number
+  ): TimedSpeedSample[] {
+    const samples: TimedSpeedSample[] = [];
+    for (const r of rows || []) {
+      const parsed = extractGenMetadataStep(r.data);
+      const tpsRes = computeStepTps(parsed.outTok, parsed.ttftSec, parsed.streamSec, parsed.totDur);
+      const stepEffOut = parsed.outTok > 0 && tpsRes.effectiveSec > 0 ? parsed.outTok : 0;
+      const stepEffSec = stepEffOut > 0 ? tpsRes.effectiveSec : 0;
+      if (stepEffOut <= 0 || stepEffSec <= 0 || tpsRes.displayTps <= 0) continue;
+
+      const modelKey = resolveCanonicalModelId(parsed.rawModelId, parsed.modelName);
+      if (modelKey === 'unknown' || parsed.modelName.toLowerCase().includes('unknown')) continue;
+
+      const stepTs = parsed.stepIdx !== null ? stepTimeMap.get(parsed.stepIdx) : undefined;
+      const ts = stepTs && stepTs > 1_000_000_000 ? stepTs : fallbackTsSec;
+      if (!ts || ts <= 1_000_000_000) continue;
+
+      samples.push({
+        ts,
+        modelId: modelKey,
+        modelName: parsed.modelName,
+        effOutTok: stepEffOut,
+        effSec: stepEffSec
+      });
+    }
+    return samples;
+  }
+
+  private getOrReadSubagentTimedSamples(
+    subId: string,
+    subDbPath: string,
+    sig: string,
+    lastModifiedTime?: string
+  ): TimedSpeedSample[] {
+    const cached = this.timedSamplesCache.get(subId);
+    if (cached && cached.sig === sig) {
+      this.timedSamplesCache.delete(subId);
+      this.timedSamplesCache.set(subId, cached);
+      return cached.samples;
+    }
+
+    const db = openDb(subDbPath);
+    if (!db) return [];
+
+    const fallbackTsSec =
+      parseEpochSecFromIso(lastModifiedTime) || getFileMtimeSec(subDbPath);
+
+    try {
+      const stepTimeMap = new Map<number, number>();
+      try {
+        const stepRows = db.prepare('SELECT idx, metadata FROM steps').all();
+        for (const sr of stepRows || []) {
+          const ts = extractTimestampFromStepMeta(sr.metadata);
+          if (ts) stepTimeMap.set(Number(sr.idx), ts);
+        }
+      } catch {}
+
+      const rows = db.prepare('SELECT data FROM gen_metadata ORDER BY idx ASC').all();
+      const samples = this.extractTimedSamplesFromRows(rows, stepTimeMap, fallbackTsSec);
+
+      if (this.timedSamplesCache.size >= 500) {
+        const oldestKey = this.timedSamplesCache.keys().next().value;
+        if (oldestKey) this.timedSamplesCache.delete(oldestKey);
+      }
+      this.timedSamplesCache.set(subId, { sig, samples });
+      return samples;
+    } catch {
+      return [];
+    } finally {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+
   public getSessionDetails(convId: string): SessionAnalyticsData | null {
     if (!convId || !/^[0-9a-f-]{36}$/i.test(convId)) return null;
     const dbPath = path.join(this.baseDir, 'conversations', `${convId}.db`);
@@ -1175,12 +1273,40 @@ export class GlobalAnalyticsEngine {
 
     try {
       const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
-      const toolRows = db.prepare('SELECT step_payload FROM steps WHERE step_type = 132').all();
 
       const summaries = this.getSummaries();
       const sessionTree = buildSessionTreeIndex(summaries);
       const descendantIds = sessionTree.collectDescendantIds(convId);
+      const mainSummaryMeta = sessionTree.summaryById.get(convId);
       if ((!rows || rows.length === 0) && descendantIds.length === 0) return null;
+
+      const mainFallbackTsSec =
+        parseEpochSecFromIso(mainSummaryMeta?.lastModifiedTime) || getFileMtimeSec(dbPath);
+
+      const mainStepTimeMap = new Map<number, number>();
+      const sessionToolsMap: Record<string, number> = {};
+      try {
+        const stepRows = db
+          .prepare('SELECT idx, step_type, step_payload, metadata FROM steps')
+          .all();
+        for (const sr of stepRows || []) {
+          const ts = extractTimestampFromStepMeta(sr.metadata);
+          if (ts) mainStepTimeMap.set(Number(sr.idx), ts);
+
+          if (sr.step_type === 132 && sr.step_payload) {
+            const t = extractToolInfo(sr.step_payload);
+            if (t) sessionToolsMap[t] = (sessionToolsMap[t] || 0) + 1;
+          }
+        }
+      } catch {
+        try {
+          const toolRows = db.prepare('SELECT step_payload FROM steps WHERE step_type = 132').all();
+          for (const tr of toolRows || []) {
+            const t = extractToolInfo(tr.step_payload);
+            if (t) sessionToolsMap[t] = (sessionToolsMap[t] || 0) + 1;
+          }
+        } catch {}
+      }
 
       let mainIn = 0;
       let mainOut = 0;
@@ -1197,6 +1323,7 @@ export class GlobalAnalyticsEngine {
       let sessionTurnDurSum = 0;
       let sessionValidTurnCount = 0;
       const sessionModelsMap: Record<string, ModelBucket> = {};
+      const allSpeedSamples: TimedSpeedSample[] = [];
 
       const steps = (rows || []).map((r) => {
         const parsed = extractGenMetadataStep(r.data);
@@ -1250,6 +1377,20 @@ export class GlobalAnalyticsEngine {
           sessionEffOut += stepEffOut;
           sessionEffSec += stepEffSec;
           sessionTpsList.push(Math.round(tpsRes.displayTps));
+
+          if (modelKey !== 'unknown' && !parsed.modelName.toLowerCase().includes('unknown')) {
+            const stepTs = parsed.stepIdx !== null ? mainStepTimeMap.get(parsed.stepIdx) : undefined;
+            const ts = stepTs && stepTs > 1_000_000_000 ? stepTs : mainFallbackTsSec;
+            if (ts > 1_000_000_000) {
+              allSpeedSamples.push({
+                ts,
+                modelId: modelKey,
+                modelName: parsed.modelName,
+                effOutTok: stepEffOut,
+                effSec: stepEffSec
+              });
+            }
+          }
         }
 
         return {
@@ -1265,12 +1406,6 @@ export class GlobalAnalyticsEngine {
           totDur: tpsRes.totDur
         };
       });
-
-      const sessionToolsMap: Record<string, number> = {};
-      for (const tr of toolRows || []) {
-        const t = extractToolInfo(tr.step_payload);
-        if (t) sessionToolsMap[t] = (sessionToolsMap[t] || 0) + 1;
-      }
 
       let totalRequests = steps.length;
       const sessionSubagentMap: Record<string, SubagentStatItem> = {};
@@ -1298,6 +1433,16 @@ export class GlobalAnalyticsEngine {
 
         const subTokTotal = subEntry.inTok + subEntry.outTok + subEntry.cacheRead;
         if (subTokTotal === 0 && subEntry.reqCount === 0) continue;
+
+        const subSamples = this.getOrReadSubagentTimedSamples(
+          subId,
+          subDbPath,
+          sig,
+          subSummary?.lastModifiedTime
+        );
+        if (subSamples.length > 0) {
+          allSpeedSamples.push(...subSamples);
+        }
 
         const subReq = subEntry.reqCount;
         totalIn += subEntry.inTok;
@@ -1451,10 +1596,11 @@ export class GlobalAnalyticsEngine {
             }
           : undefined;
 
-      const summaryMeta = sessionTree.summaryById.get(convId) ?? this.getSummaryById(convId);
+      const summaryMeta = mainSummaryMeta ?? this.getSummaryById(convId);
       const project = summaryMeta
         ? resolveSummaryProjectInfo(summaryMeta, os.homedir())
         : undefined;
+      const speedTimeline = buildSessionSpeedTimeline(allSpeedSamples);
 
       return {
         cascadeId: convId,
@@ -1476,7 +1622,8 @@ export class GlobalAnalyticsEngine {
         steps,
         models,
         tools,
-        subagents
+        subagents,
+        speedTimeline
       };
     } catch (err) {
       console.error('[Aggregator] getSessionDetails error:', err);

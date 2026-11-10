@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test';
+import { renderModelTpsChart } from '../src/panel/analytics/charts';
 import {
   computeApiCostAndSavings,
   computeProcessedColumns,
   computeRangePerf,
   renderModelDistribution
 } from '../src/panel/analytics/metrics';
-import { computeBucketTps, computeStepTps, computeWeightedTps } from '../src/shared/tps';
+import {
+  alignLocalBucketStartSec,
+  buildSessionSpeedTimeline,
+  computeBucketTps,
+  computeStepTps,
+  computeWeightedTps
+} from '../src/shared/tps';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../src/types';
 
 function makeOverviewFixture(): GlobalAnalyticsOverview {
@@ -271,5 +278,197 @@ describe('Unified TPS & Analytics Metrics', () => {
     const footerSection = firstRow.split('class="model-chips"')[1] || '';
     expect(titleSection).not.toContain('model-speed-badge');
     expect(footerSection).toContain('model-speed-badge');
+  });
+
+  test('buildSessionSpeedTimeline adapts granularity via active buckets, aligns to local clock, and aggregates weighted TPS', () => {
+    const baseSec = Math.floor(new Date('2026-11-10T10:00:12').getTime() / 1000);
+    // Two bursts 14 hours apart: total calendar span >14h, but only 4 distinct 30s active buckets
+    const burst2Sec = baseSec + 14 * 3600 + 45;
+    const timeline = buildSessionSpeedTimeline([
+      { ts: baseSec, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 400, effSec: 2 },
+      { ts: baseSec + 10, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 200, effSec: 4 },
+      { ts: baseSec + 35, modelId: 'gemini-3.8-flash-n', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 140, effSec: 2 },
+      { ts: burst2Sec, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 500, effSec: 2 },
+      { ts: 123, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 100, effSec: 1 },
+      { ts: baseSec, modelId: 'unknown', modelName: 'Unknown Model', effOutTok: 100, effSec: 1 }
+    ]);
+
+    expect(timeline).toBeDefined();
+    expect(timeline!.bucketSizeSec).toBe(30);
+    expect(timeline!.slots.length).toBe(3);
+    expect(timeline!.slots[0].bucketStartSec).toBe(alignLocalBucketStartSec(baseSec, 30));
+
+    // Weighted TPS in first bucket: (400 + 200) / (2 + 4) = 100 (not unweighted 125)
+    const firstStat = timeline!.slots[0].models['gemini-3.8-flash-s'];
+    expect(firstStat.requests).toBe(2);
+    expect(computeBucketTps(firstStat)).toBe(100);
+
+    // Continuous 50-minute burst (100 distinct 30s buckets) steps up to 120s buckets to stay <=36 slots
+    const denseSamples = Array.from({ length: 100 }, (_, i) => ({
+      ts: baseSec + i * 30,
+      modelId: 'gemini-3.8-flash-s',
+      modelName: 'Gemini 3.8 Flash (High)',
+      effOutTok: 300,
+      effSec: 2
+    }));
+    const denseTimeline = buildSessionSpeedTimeline(denseSamples);
+    expect(denseTimeline).toBeDefined();
+    expect(denseTimeline!.bucketSizeSec).toBe(120);
+    expect(denseTimeline!.slots.length).toBeLessThanOrEqual(36);
+  });
+
+  test('renderModelTpsChart renders multi-model speed lines, matching colors, time labels, and gap dividers in session mode', () => {
+    const overview = makeOverviewFixture();
+    const t0 = Math.floor(new Date('2026-11-10T10:00:00').getTime() / 1000);
+    const session: SessionAnalyticsData = {
+      cascadeId: '00000000-0000-0000-0000-000000000002',
+      totalTokens: { input: 20000, output: 3000, cacheRead: 100000, thinking: 0, total: 123000 },
+      totalRequests: 5,
+      cacheEfficiency: 83.3,
+      avgTtft: 1.0,
+      avgTokPerSec: 180,
+      steps: [
+        {
+          idx: 0,
+          inTok: 1000,
+          outTok: 400,
+          cacheRead: 2000,
+          ctx: 3000,
+          thinkTok: 0,
+          respTok: 400,
+          ttft: 1.0,
+          stream: 2.0,
+          totDur: 3.0
+        }
+      ],
+      models: [
+        {
+          modelId: 'gemini-3.8-flash-s',
+          modelName: 'Gemini 3.8 Flash (High)',
+          totalTokens: 84000,
+          inputTok: 12000,
+          outTok: 2000,
+          cacheRead: 70000,
+          thinkTok: 0,
+          requests: 3,
+          avgTps: 250,
+          avgTtft: 1.0
+        },
+        {
+          modelId: 'gemini-3.8-flash-n',
+          modelName: 'Gemini 3.8 Flash (High)',
+          totalTokens: 39000,
+          inputTok: 8000,
+          outTok: 1000,
+          cacheRead: 30000,
+          thinkTok: 0,
+          requests: 2,
+          avgTps: 75,
+          avgTtft: 1.0
+        }
+      ],
+      speedTimeline: buildSessionSpeedTimeline([
+        // Burst 1: flash-s & flash-n interleaved across active burst
+        { ts: t0, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 500, effSec: 2 },
+        { ts: t0 + 120, modelId: 'gemini-3.8-flash-n', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 150, effSec: 2 },
+        { ts: t0 + 240, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 520, effSec: 2 },
+        { ts: t0 + 300, modelId: 'gemini-3.8-flash-n', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 180, effSec: 2 },
+        // Burst 2 after 8-hour idle pause
+        { ts: t0 + 8 * 3600, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 480, effSec: 2 },
+        { ts: t0 + 8 * 3600 + 60, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 500, effSec: 2 },
+        { ts: t0 + 8 * 3600 + 90, modelId: 'gemini-3.8-flash-n', modelName: 'Gemini 3.8 Flash (High)', effOutTok: 160, effSec: 2 }
+      ])
+    };
+
+    const fakeModelsContainer = { innerHTML: '' };
+    let slotHandler: (() => void) | null = null;
+    const fakeHoverSlot = {
+      getAttribute: (name: string) => (name === 'data-slot-idx' ? '0' : null),
+      addEventListener: (evt: string, fn: () => void) => {
+        if (evt === 'mouseenter') slotHandler = fn;
+      }
+    };
+    const fakeTooltip = { innerHTML: '', style: {}, offsetWidth: 200, offsetHeight: 80 };
+    const fakeScrubber = { setAttribute: () => {}, style: {} };
+    const fakeTpsContainer = {
+      innerHTML: '',
+      querySelector: (sel: string) =>
+        sel === '#tps-floating-tooltip'
+          ? fakeTooltip
+          : sel === '#tps-scrubber-line'
+            ? fakeScrubber
+            : sel === '.chart-body'
+              ? {
+                  getBoundingClientRect: () => ({ width: 800, height: 220, left: 0, top: 0 }),
+                  addEventListener: () => {}
+                }
+              : null,
+      querySelectorAll: (sel: string) => (sel === '.tps-hover-slot' ? [fakeHoverSlot] : [])
+    };
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) =>
+        id === 'analytics-models-list'
+          ? fakeModelsContainer
+          : id === 'analytics-model-tps-chart'
+            ? fakeTpsContainer
+            : null
+    };
+
+    try {
+      renderModelDistribution(overview, 'session', session);
+      renderModelTpsChart(overview, 'session', session);
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
+
+    const html = fakeTpsContainer.innerHTML;
+    expect(html).toContain('30s Buckets · Stream · E2E');
+    expect(html).toContain('class="tps-legend-bar"');
+    expect(html).toContain('Gemini 3.8 Flash (High) (gemini-3.8-flash-s)');
+    expect(html).toContain('Gemini 3.8 Flash (High) (gemini-3.8-flash-n)');
+    expect(html).toContain('class="tps-gap-divider"');
+    expect(html).toContain('10:00:00');
+    expect(html).not.toContain('>#1<');
+
+    // Legend uses full disambiguated display name, while tooltip directly shows raw modelId
+    expect(slotHandler).not.toBeNull();
+    slotHandler!();
+    expect(fakeTooltip.innerHTML).toContain('class="tooltip-label">gemini-3.8-flash-s</span>');
+    expect(fakeTooltip.innerHTML).not.toContain('Gemini 3.8 Flash (High) (gemini-3.8-flash-s)');
+
+    // Separate polyline path for each model + separate path segments across idle gap
+    const pathMatches = html.match(/<path d="/g) || [];
+    expect(pathMatches.length).toBeGreaterThanOrEqual(2);
+
+    // Extract colors from Model Token Consumption and confirm Session Speed Trends reuses exact colors
+    const distColors = Array.from(
+      fakeModelsContainer.innerHTML.matchAll(/class="model-dot" style="background:\s*([^"]+)"/g)
+    ).map((m) => m[1]);
+    const legendColors = Array.from(
+      html.matchAll(/class="tps-legend-swatch" style="background:\s*([^"]+)"/g)
+    ).map((m) => m[1]);
+    expect(legendColors).toEqual(distColors);
+
+    // Fallback: legacy Session object without speedTimeline keeps turn-based #1 chart
+    const legacySession: SessionAnalyticsData = { ...session, speedTimeline: undefined };
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) => (id === 'analytics-model-tps-chart' ? fakeTpsContainer : null)
+    };
+    try {
+      renderModelTpsChart(overview, 'session', legacySession);
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
+    expect(fakeTpsContainer.innerHTML).toContain('#1');
+    expect(fakeTpsContainer.innerHTML).not.toContain('tps-legend-bar');
   });
 });

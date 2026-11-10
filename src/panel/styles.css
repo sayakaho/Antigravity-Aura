@@ -1520,6 +1520,40 @@ html[data-theme="dark"] .chart-shared-hover-band {
   min-width: 0;
 }
 
+.tps-legend-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: -4px 0 10px;
+  font-size: 11px;
+  color: var(--aura-fg-muted);
+}
+
+.tps-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tps-legend-swatch {
+  width: 10px;
+  height: 3px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.tps-legend-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tps-gap-divider {
+  pointer-events: none;
+}
+
 .tps-hover-slot {
   cursor: crosshair;
 }
