@@ -1,3 +1,5 @@
+import type { ConversationSummary } from '../types';
+
 export function resolveAnalyticsSessionId(
   data: Record<string, unknown> | undefined,
   activeCascadeId: string
@@ -23,4 +25,88 @@ export function buildSessionAnalyticsEndpoint(fallbackId?: string | null): strin
   return cleanFallback
     ? `/api/analytics/session?fallbackId=${encodeURIComponent(cleanFallback)}`
     : '/api/analytics/session';
+}
+
+export function isSubagentSummary(
+  summary: Pick<ConversationSummary, 'parentConversationId' | 'nestingDepth'>
+): boolean {
+  const parentId = (summary.parentConversationId || '').trim();
+  return Boolean(parentId) || (summary.nestingDepth ?? 0) > 0;
+}
+
+export function resolveSubagentAgentName(agentName: string | null | undefined): string {
+  const trimmed = (agentName || '').trim();
+  return trimmed || 'subagent';
+}
+
+export interface SessionTreeIndex {
+  summaryById: Map<string, ConversationSummary>;
+  resolveRootConversationId: (convId: string) => string | null;
+  collectDescendantIds: (rootId: string) => string[];
+}
+
+export function buildSessionTreeIndex(summaries: ConversationSummary[]): SessionTreeIndex {
+  const summaryById = new Map<string, ConversationSummary>();
+  const childrenByParent = new Map<string, string[]>();
+
+  for (const s of summaries) {
+    if (!s.conversationId) continue;
+    summaryById.set(s.conversationId, s);
+    const parentId = (s.parentConversationId || '').trim();
+    if (parentId && parentId !== s.conversationId) {
+      let list = childrenByParent.get(parentId);
+      if (!list) {
+        list = [];
+        childrenByParent.set(parentId, list);
+      }
+      list.push(s.conversationId);
+    }
+  }
+
+  const resolveRootConversationId = (convId: string): string | null => {
+    const visited = new Set<string>();
+    let currId = convId;
+
+    while (currId) {
+      if (visited.has(currId)) return null;
+      visited.add(currId);
+
+      const node = summaryById.get(currId);
+      if (!node) return null;
+      if (!isSubagentSummary(node)) return node.conversationId;
+
+      const nextParent = (node.parentConversationId || '').trim();
+      if (!nextParent) return null;
+      currId = nextParent;
+    }
+
+    return null;
+  };
+
+  const collectDescendantIds = (rootId: string): string[] => {
+    const descendants: string[] = [];
+    const visited = new Set<string>([rootId]);
+    const queue: string[] = [...(childrenByParent.get(rootId) || [])];
+
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      descendants.push(id);
+      const children = childrenByParent.get(id);
+      if (children) {
+        for (const childId of children) {
+          if (!visited.has(childId)) queue.push(childId);
+        }
+      }
+    }
+
+    return descendants;
+  };
+
+  return {
+    summaryById,
+    resolveRootConversationId,
+    collectDescendantIds
+  };
 }

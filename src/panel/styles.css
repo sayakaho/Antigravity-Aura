@@ -1538,6 +1538,89 @@ html[data-theme="dark"] .chart-shared-hover-band {
   user-select: all;
 }
 
+/* Subagent Execution Breakdown */
+.subagent-distribution-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--aura-fg-muted);
+}
+
+.subagent-summary-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.subagent-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subagent-distribution-summary strong {
+  color: var(--aura-fg);
+  font-weight: 600;
+  font-family: var(--aura-font-mono, monospace);
+}
+
+.subagent-dot-main {
+  background: #00A67E;
+}
+
+.subagent-dot-sub {
+  background: #EC4899;
+}
+
+.subagent-split-bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  background: var(--aura-control-bg);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.subagent-split-main {
+  height: 100%;
+  background: #00A67E;
+  transition: width 0.35s ease;
+}
+
+.subagent-split-sub {
+  height: 100%;
+  background: #EC4899;
+  transition: width 0.35s ease;
+}
+
+.subagent-distribution-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.subagent-runs-badge {
+  font-family: var(--aura-font-mono, monospace);
+  font-size: 10.5px;
+  line-height: 1.3;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(236, 72, 153, 0.12);
+  color: #EC4899;
+  border: 1px solid rgba(236, 72, 153, 0.28);
+  letter-spacing: -0.01em;
+}
+
+.subagent-bar-fill-nonzero {
+  min-width: 6px;
+}
+
 /* Tool Ecosystem Usage Styles */
 .tool-distribution-summary {
   margin-bottom: 12px;

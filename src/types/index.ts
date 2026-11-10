@@ -114,6 +114,39 @@ export interface ConversationSummary {
   agentName: string;
   workspaceUris: string;
   status: string;
+  parentConversationId?: string;
+  nestingDepth?: number;
+}
+
+export interface SubagentStatItem {
+  agentName: string;
+  runs: number;
+  totalTokens: number;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
+}
+
+export interface SubagentDailyStat {
+  agentName: string;
+  runs: number;
+  inTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
+  conversationIds: string[];
+}
+
+export interface SubagentBreakdownSummary {
+  mainTokens: number;
+  subagentTokens: number;
+  mainRequests: number;
+  subagentRequests: number;
+  totalRuns: number;
+  items: SubagentStatItem[];
 }
 
 export interface ToolStatItem {
@@ -196,6 +229,7 @@ export interface SessionAnalyticsData {
   steps: ConversationStepMetric[];
   models?: ModelTokenStat[];
   tools?: ToolStatItem[];
+  subagents?: SubagentBreakdownSummary;
 }
 
 export interface ModelDailyStat {
@@ -264,6 +298,8 @@ export interface GlobalAnalyticsOverview {
   hourlyModelStats?: Record<string, Record<string, ModelDailyStat>>;
   toolDistribution: ToolStatItem[];
   dailyToolStats: Record<string, Record<string, number>>;
+  subagentDistribution?: SubagentStatItem[];
+  dailySubagentStats?: Record<string, Record<string, SubagentDailyStat>>;
 }
 
 export interface LiveMetricsPayload {

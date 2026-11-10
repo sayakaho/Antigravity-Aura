@@ -5,6 +5,11 @@ import path from 'node:path';
 import { canonicalizeTool, canonicalModelName, resolveCanonicalModelId } from '../shared/catalog';
 import { formatLocalDateAndHourKeys } from '../shared/format';
 import { resolveSummaryProjectInfo, type ResolvedProjectInfo } from '../shared/project';
+import {
+  buildSessionTreeIndex,
+  isSubagentSummary,
+  resolveSubagentAgentName
+} from '../shared/session';
 import { computeStepTps, computeWeightedTps } from '../shared/tps';
 import type {
   ConversationSummary,
@@ -15,7 +20,10 @@ import type {
   ProjectDailyStat,
   ProjectStatItem,
   RangePerfFields,
-  SessionAnalyticsData
+  SessionAnalyticsData,
+  SubagentBreakdownSummary,
+  SubagentDailyStat,
+  SubagentStatItem
 } from '../types';
 import {
   extractGenMetadataStep,
@@ -29,6 +37,7 @@ interface TokenBreakdown extends RangePerfFields {
   inTok: number;
   outTok: number;
   cacheRead: number;
+  thinkTok?: number;
   requests: number;
 }
 
@@ -77,7 +86,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v10.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v11.json';
 const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache.json',
   'aura_analytics_cache_v1.json',
@@ -88,7 +97,8 @@ const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache_v6.json',
   'aura_analytics_cache_v7.json',
   'aura_analytics_cache_v8.json',
-  'aura_analytics_cache_v9.json'
+  'aura_analytics_cache_v9.json',
+  'aura_analytics_cache_v10.json'
 ];
 
 function createEmptyBreakdown(): TokenBreakdown {
@@ -96,6 +106,7 @@ function createEmptyBreakdown(): TokenBreakdown {
     inTok: 0,
     outTok: 0,
     cacheRead: 0,
+    thinkTok: 0,
     requests: 0,
     effOutTok: 0,
     effSec: 0,
@@ -128,6 +139,7 @@ function recordStepIntoBreakdown(
   inTok: number,
   outTok: number,
   cacheRead: number,
+  thinkTok: number,
   ttftSec: number,
   stepEffOut: number,
   stepEffSec: number,
@@ -138,6 +150,7 @@ function recordStepIntoBreakdown(
   bucket.inTok += inTok;
   bucket.outTok += outTok;
   bucket.cacheRead += cacheRead;
+  bucket.thinkTok = (bucket.thinkTok || 0) + thinkTok;
   bucket.requests += 1;
   if (ttftSec > 0) {
     bucket.ttftSum = (bucket.ttftSum || 0) + ttftSec;
@@ -315,7 +328,7 @@ export class GlobalAnalyticsEngine {
       const rows = db
         .prepare(
           `
-          SELECT conversation_id, title, step_count, last_modified_time, project_id, agent_name, workspace_uris, status
+          SELECT conversation_id, title, step_count, last_modified_time, project_id, agent_name, workspace_uris, status, parent_conversation_id, nesting_depth
           FROM conversation_summaries
           ORDER BY last_modified_time DESC
         `
@@ -329,7 +342,9 @@ export class GlobalAnalyticsEngine {
         projectId: String(r.project_id || ''),
         agentName: String(r.agent_name || ''),
         workspaceUris: String(r.workspace_uris || ''),
-        status: String(r.status || '')
+        status: String(r.status || ''),
+        parentConversationId: String(r.parent_conversation_id || ''),
+        nestingDepth: Number(r.nesting_depth || 0)
       }));
     } catch (err) {
       console.error('[Aura Analytics] Error reading summaries:', err);
@@ -379,7 +394,7 @@ export class GlobalAnalyticsEngine {
     target: Record<string, Record<string, ProjectDailyStat>>,
     dateKey: string,
     projInfo: ResolvedProjectInfo,
-    convId: string,
+    rootConvId: string | null,
     inTok: number,
     outTok: number,
     cacheRead: number,
@@ -407,14 +422,52 @@ export class GlobalAnalyticsEngine {
     stat.outTok += outTok;
     stat.cacheRead += cacheRead;
     stat.requests += requests;
-    if (!stat.conversationIds.includes(convId)) {
-      stat.conversationIds.push(convId);
+    if (rootConvId && !stat.conversationIds.includes(rootConvId)) {
+      stat.conversationIds.push(rootConvId);
+    }
+  }
+
+  private accumulateDailySubagentStat(
+    target: Record<string, Record<string, SubagentDailyStat>>,
+    dateKey: string,
+    agentName: string,
+    subConvId: string,
+    inTok: number,
+    outTok: number,
+    cacheRead: number,
+    thinkTok: number,
+    requests: number
+  ): void {
+    if (!dateKey || dateKey.startsWith('0001')) return;
+    if (!target[dateKey]) target[dateKey] = {};
+    if (!target[dateKey][agentName]) {
+      target[dateKey][agentName] = {
+        agentName,
+        runs: 0,
+        inTok: 0,
+        outTok: 0,
+        cacheRead: 0,
+        thinkTok: 0,
+        requests: 0,
+        conversationIds: []
+      };
+    }
+    const stat = target[dateKey][agentName];
+    stat.inTok += inTok;
+    stat.outTok += outTok;
+    stat.cacheRead += cacheRead;
+    stat.thinkTok += thinkTok;
+    stat.requests += requests;
+    if (subConvId && !stat.conversationIds.includes(subConvId)) {
+      stat.conversationIds.push(subConvId);
+      stat.runs = stat.conversationIds.length;
     }
   }
 
   public getGlobalOverview(): GlobalAnalyticsOverview {
     const convDir = path.join(this.baseDir, 'conversations');
     const summaries = this.getSummaries();
+    const sessionTree = buildSessionTreeIndex(summaries);
     const homeDir = os.homedir();
     let cacheUpdated = false;
 
@@ -431,6 +484,8 @@ export class GlobalAnalyticsEngine {
     let globalTurnDurSum = 0;
     let globalValidTurnCount = 0;
 
+    const globalRootSessionIds = new Set<string>();
+    const projectRootSessionIds: Record<string, Set<string>> = {};
     const projectStats: Record<string, ProjectStatItem> = {};
     const globalDailyProjectStats: Record<string, Record<string, ProjectDailyStat>> = {};
     const dateSeries: Record<string, DailySeriesPoint> = {};
@@ -440,6 +495,8 @@ export class GlobalAnalyticsEngine {
     const globalHourlyModelStats: Record<string, Record<string, ModelDailyStat>> = {};
     const globalDailyToolStats: Record<string, Record<string, number>> = {};
     const globalToolsMap: Record<string, number> = {};
+    const globalSubagentMap: Record<string, SubagentStatItem> = {};
+    const globalDailySubagentStats: Record<string, Record<string, SubagentDailyStat>> = {};
 
     for (const s of summaries) {
       const convId = s.conversationId;
@@ -455,6 +512,9 @@ export class GlobalAnalyticsEngine {
         this.cache.sessions[convId] = entry;
         cacheUpdated = true;
       }
+
+      const isSubagent = isSubagentSummary(s);
+      const rootConvId = sessionTree.resolveRootConversationId(convId);
 
       totalIn += entry.inTok;
       totalOut += entry.outTok;
@@ -498,14 +558,44 @@ export class GlobalAnalyticsEngine {
           cacheRead: 0,
           requests: 0
         };
+        projectRootSessionIds[projInfo.projectKey] = new Set<string>();
       }
       const pStat = projectStats[projInfo.projectKey];
-      pStat.conversationCount += 1;
+      if (rootConvId) {
+        globalRootSessionIds.add(rootConvId);
+        projectRootSessionIds[projInfo.projectKey].add(rootConvId);
+      }
       pStat.tokenCount += entry.inTok + entry.outTok + entry.cacheRead;
       pStat.inputTok += entry.inTok;
       pStat.outTok += entry.outTok;
       pStat.cacheRead += entry.cacheRead;
       pStat.requests += convReq;
+
+      const hasSubagentActivity =
+        isSubagent && (entry.inTok + entry.outTok + entry.cacheRead > 0 || entry.reqCount > 0);
+      const subagentName = hasSubagentActivity ? resolveSubagentAgentName(s.agentName) : '';
+      if (hasSubagentActivity) {
+        if (!globalSubagentMap[subagentName]) {
+          globalSubagentMap[subagentName] = {
+            agentName: subagentName,
+            runs: 0,
+            totalTokens: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0
+          };
+        }
+        const sg = globalSubagentMap[subagentName];
+        sg.runs += 1;
+        sg.inputTok += entry.inTok;
+        sg.outTok += entry.outTok;
+        sg.cacheRead += entry.cacheRead;
+        sg.thinkTok += entry.thinkTok;
+        sg.totalTokens += entry.inTok + entry.outTok + entry.cacheRead;
+        sg.requests += convReq;
+      }
 
       if (entry.dailyBreakdown && Object.keys(entry.dailyBreakdown).length > 0) {
         for (const [dateKey, d] of Object.entries(entry.dailyBreakdown)) {
@@ -513,12 +603,25 @@ export class GlobalAnalyticsEngine {
             globalDailyProjectStats,
             dateKey,
             projInfo,
-            convId,
+            rootConvId,
             d.inTok,
             d.outTok,
             d.cacheRead,
             d.requests
           );
+          if (hasSubagentActivity) {
+            this.accumulateDailySubagentStat(
+              globalDailySubagentStats,
+              dateKey,
+              subagentName,
+              convId,
+              d.inTok,
+              d.outTok,
+              d.cacheRead,
+              d.thinkTok || 0,
+              d.requests
+            );
+          }
           if (!dateSeries[dateKey]) {
             dateSeries[dateKey] = {
               date: dateKey,
@@ -549,12 +652,25 @@ export class GlobalAnalyticsEngine {
           globalDailyProjectStats,
           dateKey,
           projInfo,
-          convId,
+          rootConvId,
           entry.inTok,
           entry.outTok,
           entry.cacheRead,
           convReq
         );
+        if (hasSubagentActivity) {
+          this.accumulateDailySubagentStat(
+            globalDailySubagentStats,
+            dateKey,
+            subagentName,
+            convId,
+            entry.inTok,
+            entry.outTok,
+            entry.cacheRead,
+            entry.thinkTok,
+            convReq
+          );
+        }
         if (!dateSeries[dateKey]) {
           dateSeries[dateKey] = {
             date: dateKey,
@@ -734,6 +850,10 @@ export class GlobalAnalyticsEngine {
         ? Math.round((globalTurnDurSum / globalValidTurnCount) * 100) / 100
         : 0;
 
+    for (const [projKey, pStat] of Object.entries(projectStats)) {
+      pStat.conversationCount = projectRootSessionIds[projKey]?.size ?? 0;
+    }
+
     const projects = Object.values(projectStats).sort(
       (a, b) =>
         b.tokenCount - a.tokenCount ||
@@ -790,8 +910,15 @@ export class GlobalAnalyticsEngine {
       })
       .sort((a, b) => b.count - a.count);
 
+    const subagentDistribution = Object.values(globalSubagentMap).sort(
+      (a, b) =>
+        b.totalTokens - a.totalTokens ||
+        b.runs - a.runs ||
+        a.agentName.localeCompare(b.agentName)
+    );
+
     return {
-      totalConversations: summaries.length,
+      totalConversations: globalRootSessionIds.size,
       totalRequests,
       totalTokens: {
         input: totalIn,
@@ -815,7 +942,9 @@ export class GlobalAnalyticsEngine {
       dailyModelStats: globalDailyModelStats,
       hourlyModelStats: globalHourlyModelStats,
       toolDistribution,
-      dailyToolStats: globalDailyToolStats
+      dailyToolStats: globalDailyToolStats,
+      subagentDistribution,
+      dailySubagentStats: globalDailySubagentStats
     };
   }
 
@@ -917,6 +1046,7 @@ export class GlobalAnalyticsEngine {
           parsed.inTok,
           parsed.outTok,
           parsed.cacheRead,
+          parsed.thinkTok,
           parsed.ttftSec,
           stepEffOut,
           stepEffSec,
@@ -931,6 +1061,7 @@ export class GlobalAnalyticsEngine {
           parsed.inTok,
           parsed.outTok,
           parsed.cacheRead,
+          parsed.thinkTok,
           parsed.ttftSec,
           stepEffOut,
           stepEffSec,
@@ -1045,8 +1176,15 @@ export class GlobalAnalyticsEngine {
     try {
       const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
       const toolRows = db.prepare('SELECT step_payload FROM steps WHERE step_type = 132').all();
-      if (!rows || rows.length === 0) return null;
 
+      const summaries = this.getSummaries();
+      const sessionTree = buildSessionTreeIndex(summaries);
+      const descendantIds = sessionTree.collectDescendantIds(convId);
+      if ((!rows || rows.length === 0) && descendantIds.length === 0) return null;
+
+      let mainIn = 0;
+      let mainOut = 0;
+      let mainCache = 0;
       let totalIn = 0;
       let totalOut = 0;
       let totalCache = 0;
@@ -1060,7 +1198,7 @@ export class GlobalAnalyticsEngine {
       let sessionValidTurnCount = 0;
       const sessionModelsMap: Record<string, ModelBucket> = {};
 
-      const steps = rows.map((r) => {
+      const steps = (rows || []).map((r) => {
         const parsed = extractGenMetadataStep(r.data);
         const tpsRes = computeStepTps(parsed.outTok, parsed.ttftSec, parsed.streamSec, parsed.totDur);
         const stepEffOut = parsed.outTok > 0 && tpsRes.effectiveSec > 0 ? parsed.outTok : 0;
@@ -1093,6 +1231,9 @@ export class GlobalAnalyticsEngine {
         sm.effSec += stepEffSec;
         sm.count += 1;
 
+        mainIn += parsed.inTok;
+        mainOut += parsed.outTok;
+        mainCache += parsed.cacheRead;
         totalIn += parsed.inTok;
         totalOut += parsed.outTok;
         totalCache += parsed.cacheRead;
@@ -1124,6 +1265,129 @@ export class GlobalAnalyticsEngine {
           totDur: tpsRes.totDur
         };
       });
+
+      const sessionToolsMap: Record<string, number> = {};
+      for (const tr of toolRows || []) {
+        const t = extractToolInfo(tr.step_payload);
+        if (t) sessionToolsMap[t] = (sessionToolsMap[t] || 0) + 1;
+      }
+
+      let totalRequests = steps.length;
+      const sessionSubagentMap: Record<string, SubagentStatItem> = {};
+      const convDir = path.join(this.baseDir, 'conversations');
+      let cacheUpdated = false;
+
+      for (const subId of descendantIds) {
+        const subSummary = sessionTree.summaryById.get(subId);
+        const subDbPath = path.join(convDir, `${subId}.db`);
+        const sig = getDbSignature(subDbPath);
+        if (!sig) continue;
+
+        let subEntry = this.cache.sessions[subId];
+        if (!subEntry || subEntry.sig !== sig) {
+          const parsedSub = this.parseSessionCacheEntry(
+            subDbPath,
+            sig,
+            subSummary?.lastModifiedTime
+          );
+          if (!parsedSub) continue;
+          subEntry = parsedSub;
+          this.cache.sessions[subId] = subEntry;
+          cacheUpdated = true;
+        }
+
+        const subTokTotal = subEntry.inTok + subEntry.outTok + subEntry.cacheRead;
+        if (subTokTotal === 0 && subEntry.reqCount === 0) continue;
+
+        const subReq = subEntry.reqCount;
+        totalIn += subEntry.inTok;
+        totalOut += subEntry.outTok;
+        totalCache += subEntry.cacheRead;
+        totalThink += subEntry.thinkTok;
+        totalRequests += subReq;
+
+        if ((subEntry.ttftCount || 0) > 0 && (subEntry.ttftSum || 0) > 0) {
+          ttftSum += subEntry.ttftSum || 0;
+          validCount += subEntry.ttftCount || 0;
+        } else if (subEntry.ttft > 0) {
+          ttftSum += subEntry.ttft;
+          validCount++;
+        }
+        if (subEntry.effSec && subEntry.effSec > 0) {
+          sessionEffOut += subEntry.effOutTok || 0;
+          sessionEffSec += subEntry.effSec;
+        }
+        if (subEntry.tpsList && subEntry.tpsList.length > 0) {
+          sessionTpsList.push(...subEntry.tpsList);
+        }
+        if (subEntry.turnDurSum) {
+          sessionTurnDurSum += subEntry.turnDurSum;
+          sessionValidTurnCount += subEntry.validTurnCount || 0;
+        }
+
+        if (subEntry.models) {
+          for (const [mKey, m] of Object.entries(subEntry.models)) {
+            if (!sessionModelsMap[mKey]) {
+              sessionModelsMap[mKey] = { ...m };
+            } else {
+              const sm = sessionModelsMap[mKey];
+              if ((!sm.modelName || sm.modelName === 'Unknown Model') && m.modelName) {
+                sm.modelName = m.modelName;
+              }
+              sm.inTok += m.inTok;
+              sm.outTok += m.outTok;
+              sm.cacheRead += m.cacheRead;
+              sm.thinkTok += m.thinkTok;
+              sm.streamSec += m.streamSec;
+              sm.ttftSec += m.ttftSec;
+              sm.effOutTok += m.effOutTok || 0;
+              sm.effSec += m.effSec || 0;
+              sm.count += m.count;
+            }
+          }
+        }
+
+        if (subEntry.tools) {
+          for (const [tName, tCount] of Object.entries(subEntry.tools)) {
+            sessionToolsMap[tName] = (sessionToolsMap[tName] || 0) + tCount;
+          }
+        }
+
+        const agentName = resolveSubagentAgentName(subSummary?.agentName);
+        if (!sessionSubagentMap[agentName]) {
+          sessionSubagentMap[agentName] = {
+            agentName,
+            runs: 0,
+            totalTokens: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0
+          };
+        }
+        const sa = sessionSubagentMap[agentName];
+        sa.runs += 1;
+        sa.inputTok += subEntry.inTok;
+        sa.outTok += subEntry.outTok;
+        sa.cacheRead += subEntry.cacheRead;
+        sa.thinkTok += subEntry.thinkTok;
+        sa.totalTokens += subTokTotal;
+        sa.requests += subReq;
+      }
+
+      if (cacheUpdated) {
+        this.scheduleSaveCache();
+      }
+
+      const subagentItems = Object.values(sessionSubagentMap).sort(
+        (a, b) =>
+          b.totalTokens - a.totalTokens ||
+          b.runs - a.runs ||
+          a.agentName.localeCompare(b.agentName)
+      );
+
+      if (steps.length === 0 && subagentItems.length === 0) return null;
 
       const totalRaw = totalIn + totalCache;
       const efficiency = totalRaw > 0 ? Math.round((totalCache / totalRaw) * 1000) / 10 : 0;
@@ -1160,11 +1424,6 @@ export class GlobalAnalyticsEngine {
         }))
         .sort((a, b) => b.totalTokens - a.totalTokens);
 
-      const sessionToolsMap: Record<string, number> = {};
-      for (const tr of toolRows || []) {
-        const t = extractToolInfo(tr.step_payload);
-        if (t) sessionToolsMap[t] = (sessionToolsMap[t] || 0) + 1;
-      }
       const totalSessionTools = Object.values(sessionToolsMap).reduce((a, b) => a + b, 0);
       const tools = Object.entries(sessionToolsMap)
         .map(([rawName, count]) => {
@@ -1180,7 +1439,19 @@ export class GlobalAnalyticsEngine {
         })
         .sort((a, b) => b.count - a.count);
 
-      const summaryMeta = this.getSummaryById(convId);
+      const subagents: SubagentBreakdownSummary | undefined =
+        subagentItems.length > 0
+          ? {
+              mainTokens: mainIn + mainOut + mainCache,
+              subagentTokens: subagentItems.reduce((sum, item) => sum + item.totalTokens, 0),
+              mainRequests: steps.length,
+              subagentRequests: subagentItems.reduce((sum, item) => sum + item.requests, 0),
+              totalRuns: subagentItems.reduce((sum, item) => sum + item.runs, 0),
+              items: subagentItems
+            }
+          : undefined;
+
+      const summaryMeta = sessionTree.summaryById.get(convId) ?? this.getSummaryById(convId);
       const project = summaryMeta
         ? resolveSummaryProjectInfo(summaryMeta, os.homedir())
         : undefined;
@@ -1195,7 +1466,7 @@ export class GlobalAnalyticsEngine {
           thinking: totalThink,
           total: totalIn + totalOut + totalCache
         },
-        totalRequests: steps.length,
+        totalRequests,
         cacheEfficiency: efficiency,
         avgTtft,
         avgTokPerSec: avgRate,
@@ -1204,7 +1475,8 @@ export class GlobalAnalyticsEngine {
         avgTurnLatency,
         steps,
         models,
-        tools
+        tools,
+        subagents
       };
     } catch (err) {
       console.error('[Aggregator] getSessionDetails error:', err);

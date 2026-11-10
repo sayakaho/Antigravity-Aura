@@ -23,6 +23,8 @@ import type {
   ProjectStatItem,
   RangePerfFields,
   SessionAnalyticsData,
+  SubagentBreakdownSummary,
+  SubagentStatItem,
   ToolStatItem
 } from '../../types';
 import type { ProjectScopeMode } from '../panel-state';
@@ -1253,6 +1255,217 @@ export function renderToolDistribution(
     </div>
     <div class="tool-distribution-grid">
       ${itemsHtml}
+    </div>
+  `;
+}
+
+export function computeSubagentBreakdown(
+  overview: GlobalAnalyticsOverview,
+  range: TimeRangeOption,
+  activeSessionData: SessionAnalyticsData | null,
+  processedMetrics: ProcessedRangeMetrics,
+  customStart = '',
+  customEnd = '',
+  now = new Date()
+): SubagentBreakdownSummary | null {
+  if (range === 'session') {
+    const sa = activeSessionData?.subagents;
+    if (!sa || sa.items.length === 0 || (sa.subagentTokens <= 0 && sa.totalRuns <= 0)) {
+      return null;
+    }
+    return {
+      ...sa,
+      items: [...sa.items].sort(
+        (a, b) =>
+          b.totalTokens - a.totalTokens ||
+          b.runs - a.runs ||
+          a.agentName.localeCompare(b.agentName)
+      )
+    };
+  }
+
+  if (!overview.dailySubagentStats) {
+    return null;
+  }
+
+  const dates = getFilterDatesForRange(range, customStart, customEnd, now);
+  const aggMap = new Map<
+    string,
+    {
+      item: SubagentStatItem;
+      convIds: Set<string>;
+    }
+  >();
+
+  for (const d of dates) {
+    const daySubagents = overview.dailySubagentStats[d];
+    if (!daySubagents) continue;
+    for (const [agentKey, st] of Object.entries(daySubagents)) {
+      const name = (st.agentName || agentKey || '').trim() || 'subagent';
+      let bucket = aggMap.get(name);
+      if (!bucket) {
+        bucket = {
+          item: {
+            agentName: name,
+            runs: 0,
+            totalTokens: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0
+          },
+          convIds: new Set<string>()
+        };
+        aggMap.set(name, bucket);
+      }
+      bucket.item.inputTok += st.inTok;
+      bucket.item.outTok += st.outTok;
+      bucket.item.cacheRead += st.cacheRead;
+      bucket.item.thinkTok += st.thinkTok;
+      bucket.item.requests += st.requests;
+      if (st.conversationIds && st.conversationIds.length > 0) {
+        for (const cid of st.conversationIds) {
+          bucket.convIds.add(cid);
+        }
+      } else {
+        bucket.item.runs += st.runs;
+      }
+    }
+  }
+
+  const items = Array.from(aggMap.values())
+    .map(({ item, convIds }) => ({
+      ...item,
+      runs: convIds.size > 0 ? convIds.size : item.runs,
+      totalTokens: item.inputTok + item.outTok + item.cacheRead
+    }))
+    .filter((item) => item.totalTokens > 0 || item.requests > 0)
+    .sort(
+      (a, b) =>
+        b.totalTokens - a.totalTokens ||
+        b.runs - a.runs ||
+        a.agentName.localeCompare(b.agentName)
+    );
+
+  if (items.length === 0) return null;
+
+  const subagentTokens = items.reduce((sum, item) => sum + item.totalTokens, 0);
+  const subagentRequests = items.reduce((sum, item) => sum + item.requests, 0);
+  const totalRuns = items.reduce((sum, item) => sum + item.runs, 0);
+
+  return {
+    mainTokens: Math.max(0, processedMetrics.totalTokens.total - subagentTokens),
+    subagentTokens,
+    mainRequests: Math.max(0, processedMetrics.totalRequests - subagentRequests),
+    subagentRequests,
+    totalRuns,
+    items
+  };
+}
+
+export function renderSubagentDistribution(
+  overview: GlobalAnalyticsOverview,
+  range: TimeRangeOption,
+  activeSessionData: SessionAnalyticsData | null,
+  processedMetrics: ProcessedRangeMetrics,
+  customStart = '',
+  customEnd = ''
+): void {
+  const section = document.getElementById('analytics-subagents-section');
+  const container = document.getElementById('analytics-subagents-list');
+  if (!container) return;
+
+  const breakdown = computeSubagentBreakdown(
+    overview,
+    range,
+    activeSessionData,
+    processedMetrics,
+    customStart,
+    customEnd
+  );
+
+  if (!breakdown || breakdown.items.length === 0) {
+    if (section) section.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  if (section) section.style.display = '';
+
+  const combinedTokens = breakdown.mainTokens + breakdown.subagentTokens;
+  const mainPct = combinedTokens > 0 ? (breakdown.mainTokens / combinedTokens) * 100 : 0;
+  const subPct = combinedTokens > 0 ? (breakdown.subagentTokens / combinedTokens) * 100 : 0;
+  const runWord = breakdown.totalRuns === 1 ? 'run' : 'runs';
+  const usedColors = new Set<string>();
+
+  const rowsHtml = breakdown.items
+    .map((item, idx) => {
+      const sharePct =
+        breakdown.subagentTokens > 0 ? (item.totalTokens / breakdown.subagentTokens) * 100 : 0;
+      const barPct = item.totalTokens > 0 ? sharePct : 0;
+      const barFillClass =
+        item.totalTokens > 0 ? 'model-bar-fill subagent-bar-fill-nonzero' : 'model-bar-fill';
+      const pctText =
+        item.totalTokens > 0 && sharePct < 0.1 ? '<0.1%' : `${sharePct.toFixed(1)}%`;
+      const color = getModelColor(item.agentName, idx, usedColors);
+      const rawTotal = item.inputTok + item.cacheRead;
+      const cacheRate = rawTotal > 0 ? Math.round((item.cacheRead / rawTotal) * 100) : 0;
+      const itemRunWord = item.runs === 1 ? 'run' : 'runs';
+      const tokenParts = [
+        `Cache: ${cacheRate}% (${formatCompactNumber(item.cacheRead)})`,
+        `Out: ${formatCompactNumber(item.outTok)}`,
+        `In: ${formatCompactNumber(item.inputTok)}`
+      ];
+      if (item.thinkTok > 0) {
+        tokenParts.push(`Think: ${formatCompactNumber(item.thinkTok)}`);
+      }
+
+      return `
+        <div class="model-stat-row subagent-stat-row">
+          <div class="model-meta">
+            <div class="model-title-line">
+              <span class="model-dot" style="background: ${color}"></span>
+              <span class="model-name">${escapeHtml(item.agentName)}</span>
+              <span class="subagent-runs-badge">${formatFullNumber(item.runs)} ${itemRunWord}</span>
+            </div>
+            <div class="project-counts">
+              <span class="model-tokens-strong">${formatCompactNumber(item.totalTokens)}</span> tokens
+              <span class="model-req-count">(${formatFullNumber(item.requests)} reqs)</span>
+              <span class="project-pct-badge">${pctText}</span>
+            </div>
+          </div>
+          <div class="model-bar-track">
+            <div class="${barFillClass}" style="width: ${barPct.toFixed(2)}%; background: ${color}"></div>
+          </div>
+          <div class="model-chips">
+            <span class="model-token-summary">${tokenParts.join(' · ')}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = `
+    <div class="subagent-distribution-summary">
+      <div class="subagent-summary-legend">
+        <span class="subagent-legend-item">
+          <span class="kpi-dot subagent-dot-main"></span>
+          <span>Main Agent <strong>${mainPct.toFixed(1)}%</strong> (${formatCompactNumber(breakdown.mainTokens)})</span>
+        </span>
+        <span class="subagent-legend-item">
+          <span class="kpi-dot subagent-dot-sub"></span>
+          <span>Subagents <strong>${subPct.toFixed(1)}%</strong> (${formatCompactNumber(breakdown.subagentTokens)})</span>
+        </span>
+      </div>
+      <span class="project-scope-badge">${formatFullNumber(breakdown.totalRuns)} ${runWord}</span>
+    </div>
+    <div class="subagent-split-bar" aria-label="Main agent vs subagents token share">
+      <div class="subagent-split-main" style="width: ${mainPct.toFixed(2)}%;"></div>
+      <div class="subagent-split-sub" style="width: ${subPct.toFixed(2)}%;"></div>
+    </div>
+    <div class="subagent-distribution-grid">
+      ${rowsHtml}
     </div>
   `;
 }

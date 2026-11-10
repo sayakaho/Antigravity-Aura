@@ -22,6 +22,7 @@ import {
   renderMetricCards,
   renderModelDistribution,
   renderProjectDistribution,
+  renderSubagentDistribution,
   renderToolDistribution
 } from './metrics';
 import { getRangeDisplayTitle, type TimeRangeOption } from './time-range';
@@ -122,6 +123,14 @@ function renderRangeDependentViews(
   renderMetricCards(processed, range, overview, activeSessionData, customStartDate, customEndDate);
   renderActivityChart(processed.columns, getRangeDisplayTitle(range), range, activeSessionData);
   renderModelDistribution(overview, range, activeSessionData, customStartDate, customEndDate);
+  renderSubagentDistribution(
+    overview,
+    range,
+    activeSessionData,
+    processed,
+    customStartDate,
+    customEndDate
+  );
   renderToolDistribution(overview, range, activeSessionData, customStartDate, customEndDate);
   renderProjectDistribution(
     overview,
