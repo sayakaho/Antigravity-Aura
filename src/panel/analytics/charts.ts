@@ -26,8 +26,11 @@ import { getFilterDatesForRange, type TimeRangeOption } from './time-range';
 
 type ActivityViewMode = 'overview' | 'timeline';
 
-interface OverviewStepPoint extends ConversationStepMetric {
+export interface OverviewStepPoint extends ConversationStepMetric {
   effectiveCtx: number;
+  isActionTurn: boolean;
+  cacheHitRate: number | null;
+  isCacheBreak: boolean;
 }
 
 interface OverviewCoord {
@@ -79,11 +82,61 @@ interface ScatterPointMeta {
 
 let sessionViewMode: ActivityViewMode = 'overview';
 
+export function buildSessionOverviewSeries(steps: ConversationStepMetric[]): OverviewStepPoint[] {
+  let lastValidCtx = 0;
+  let prevLlmHitRate: number | null = null;
+  let prevLlmPromptTok = 0;
+  let prevLlmInTok = 0;
+
+  return steps.map((st) => {
+    const promptTok = st.inTok + st.cacheRead;
+    const rawCtx = st.ctx || promptTok;
+    const isActionTurn = rawCtx === 0 && st.inTok === 0 && st.outTok === 0 && st.cacheRead === 0;
+
+    if (isActionTurn) {
+      return {
+        ...st,
+        effectiveCtx: lastValidCtx,
+        isActionTurn: true,
+        cacheHitRate: null,
+        isCacheBreak: false
+      };
+    }
+
+    lastValidCtx = rawCtx;
+    const cacheHitRate =
+      promptTok > 0 ? Math.max(0, Math.min(100, (st.cacheRead / promptTok) * 100)) : null;
+
+    const isCacheBreak =
+      cacheHitRate !== null &&
+      prevLlmHitRate !== null &&
+      prevLlmPromptTok >= 2000 &&
+      prevLlmHitRate >= 40 &&
+      st.inTok >= 2000 &&
+      (cacheHitRate <= 20 || (prevLlmHitRate - cacheHitRate >= 45 && st.inTok > prevLlmInTok));
+
+    if (cacheHitRate !== null && promptTok > 0) {
+      prevLlmHitRate = cacheHitRate;
+      prevLlmPromptTok = promptTok;
+      prevLlmInTok = st.inTok;
+    }
+
+    return {
+      ...st,
+      effectiveCtx: rawCtx,
+      isActionTurn: false,
+      cacheHitRate,
+      isCacheBreak
+    };
+  });
+}
+
 export function renderActivityChart(
   columns: ChartColumnData[],
   rangeTitle: string,
   range: TimeRangeOption,
-  activeSessionData: SessionAnalyticsData | null
+  activeSessionData: SessionAnalyticsData | null,
+  focusColumnIdx?: number
 ): void {
   const chartWrapper = document.getElementById('analytics-activity-chart');
   if (!chartWrapper) return;
@@ -99,7 +152,15 @@ export function renderActivityChart(
   if (isSession && sessionViewMode === 'overview') {
     renderSessionOverviewArea(chartWrapper, activeSessionData!, rangeTitle, columns, range);
   } else {
-    renderStandardTimelineChart(chartWrapper, columns, rangeTitle, isSession, range, activeSessionData);
+    renderStandardTimelineChart(
+      chartWrapper,
+      columns,
+      rangeTitle,
+      isSession,
+      range,
+      activeSessionData,
+      focusColumnIdx
+    );
   }
 }
 
@@ -134,6 +195,112 @@ function renderStickyYAxis(yTicks: number[], yMax: number, paddingTop: number, c
   return yAxisSvg;
 }
 
+function renderStickyPercentYAxis(paddingTop: number, chartHeight: number): string {
+  const ticks = [0, 25, 50, 75, 100];
+  let axisSvg = '';
+  for (const pct of ticks) {
+    const y = paddingTop + chartHeight - (pct / 100) * chartHeight;
+    axisSvg += `<line x1="0" y1="${y}" x2="5" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${pct === 0 ? '0.6' : '0.25'}" />`;
+    if (pct === 0 || pct === 50 || pct === 100) {
+      axisSvg += `<text x="8" y="${y + 3.5}" text-anchor="start" font-size="10" font-family="var(--aura-font-mono)" fill="#F59E0B" opacity="0.72">${pct}%</text>`;
+    }
+  }
+  return axisSvg;
+}
+
+type HealthStripTier = 'neutral' | 'healthy' | 'degraded' | 'break';
+
+function buildCacheHealthStripSvg(
+  steps: OverviewStepPoint[],
+  stripX: number,
+  stripY: number,
+  stripW: number,
+  stripH: number
+): string {
+  const totalTurns = steps.length;
+  if (totalTurns === 0 || stripW <= 0) return '';
+
+  let hasSeenLlmTurn = false;
+  let lastTier: HealthStripTier = 'neutral';
+  const tiers: HealthStripTier[] = steps.map((st) => {
+    if (st.isActionTurn || st.cacheHitRate === null) {
+      return lastTier;
+    }
+    let tier: HealthStripTier;
+    if (!hasSeenLlmTurn) {
+      hasSeenLlmTurn = true;
+      tier = st.cacheHitRate >= 75 ? 'healthy' : 'neutral';
+    } else if (st.isCacheBreak || st.cacheHitRate < 35) {
+      tier = 'break';
+    } else if (st.cacheHitRate < 75) {
+      tier = 'degraded';
+    } else {
+      tier = 'healthy';
+    }
+    lastTier = tier;
+    return tier;
+  });
+
+  const runs: Array<{ tier: HealthStripTier; x1: number; x2: number }> = [];
+  if (totalTurns === 1) {
+    runs.push({ tier: tiers[0], x1: stripX, x2: stripX + stripW });
+  } else {
+    const slotStep = stripW / (totalTurns - 1);
+    for (let idx = 0; idx < totalTurns; idx++) {
+      const centerX = stripX + idx * slotStep;
+      const segLeft = idx === 0 ? stripX : centerX - slotStep / 2;
+      const segRight = idx === totalTurns - 1 ? stripX + stripW : centerX + slotStep / 2;
+      const tier = tiers[idx];
+      const prev = runs[runs.length - 1];
+      if (prev && prev.tier === tier) {
+        prev.x2 = segRight;
+      } else {
+        runs.push({ tier, x1: segLeft, x2: segRight });
+      }
+    }
+  }
+
+  const baseRects: string[] = [];
+  const degradedRects: string[] = [];
+  const breakRects: string[] = [];
+
+  for (const r of runs) {
+    const rawW = Math.max(0.5, r.x2 - r.x1);
+    if (r.tier === 'neutral') {
+      baseRects.push(
+        `<rect x="${r.x1.toFixed(2)}" y="${stripY}" width="${rawW.toFixed(2)}" height="${stripH}" fill="var(--aura-fg-muted)" opacity="0.22" />`
+      );
+    } else if (r.tier === 'healthy') {
+      baseRects.push(
+        `<rect x="${r.x1.toFixed(2)}" y="${stripY}" width="${rawW.toFixed(2)}" height="${stripH}" fill="#00A67E" opacity="0.44" />`
+      );
+    } else if (r.tier === 'degraded') {
+      const w = Math.max(rawW, 1.6);
+      const center = (r.x1 + r.x2) / 2;
+      const x = Math.max(stripX, Math.min(stripX + stripW - w, center - w / 2));
+      degradedRects.push(
+        `<rect class="strip-seg-degraded" x="${x.toFixed(2)}" y="${stripY}" width="${w.toFixed(2)}" height="${stripH}" fill="#F59E0B" opacity="0.78" />`
+      );
+    } else {
+      const w = Math.max(rawW, 2.2);
+      const center = (r.x1 + r.x2) / 2;
+      const x = Math.max(stripX, Math.min(stripX + stripW - w, center - w / 2));
+      breakRects.push(
+        `<rect class="strip-seg-break" x="${x.toFixed(2)}" y="${stripY}" width="${w.toFixed(2)}" height="${stripH}" fill="#EF4444" opacity="0.92" />`
+      );
+    }
+  }
+
+  return `
+    <g class="overview-health-strip" clip-path="url(#aura-strip-clip)">
+      <rect x="${stripX}" y="${stripY}" width="${stripW}" height="${stripH}" fill="var(--aura-border)" opacity="0.24" />
+      ${baseRects.join('')}
+      ${degradedRects.join('')}
+      ${breakRects.join('')}
+    </g>
+  `;
+}
+
 function renderSessionOverviewArea(
   chartWrapper: HTMLElement,
   session: SessionAnalyticsData,
@@ -145,16 +312,7 @@ function renderSessionOverviewArea(
   const totalTurns = steps.length;
   if (totalTurns === 0) return;
 
-  let lastValidCtx = 0;
-  const sanitizedSteps: OverviewStepPoint[] = steps.map((st) => {
-    let c = st.ctx || st.inTok + st.cacheRead;
-    if (c === 0 && st.inTok === 0 && st.outTok === 0) {
-      c = lastValidCtx;
-    } else {
-      lastValidCtx = c;
-    }
-    return { ...st, effectiveCtx: c };
-  });
+  const sanitizedSteps = buildSessionOverviewSeries(steps);
 
   const rawMax = sanitizedSteps.reduce((m, s) => Math.max(m, s.effectiveCtx), 0);
   const { yMax, yTicks } = computeNiceYScale(rawMax, 1000, 4);
@@ -167,8 +325,18 @@ function renderSessionOverviewArea(
   const paddingLeft = 10;
   const paddingRight = 10;
   const chartWidth = svgWidth - paddingLeft - paddingRight;
+  const stripY = paddingTop + chartHeight + 3;
+  const stripH = 5;
 
   const yAxisSvg = renderStickyYAxis(yTicks, yMax, paddingTop, chartHeight);
+  const rightYAxisSvg = renderStickyPercentYAxis(paddingTop, chartHeight);
+  const healthStripSvg = buildCacheHealthStripSvg(
+    sanitizedSteps,
+    paddingLeft,
+    stripY,
+    chartWidth,
+    stripH
+  );
 
   let gridSvg = '';
   for (const tickVal of yTicks) {
@@ -178,23 +346,49 @@ function renderSessionOverviewArea(
 
   let areaD = '';
   let lineD = '';
+  let hitLineD = '';
+  let breakGuidesSvg = '';
+  let breakDotsHtml = '';
   let xLabelsSvg = '';
   const labelInterval = Math.max(1, Math.floor(totalTurns / 6));
 
   if (totalTurns === 1) {
-    const y = paddingTop + chartHeight - (sanitizedSteps[0].effectiveCtx / yMax) * chartHeight;
+    const st = sanitizedSteps[0];
+    const y = paddingTop + chartHeight - (st.effectiveCtx / yMax) * chartHeight;
     areaD = `M ${paddingLeft},${paddingTop + chartHeight} L ${paddingLeft},${y.toFixed(1)} L ${paddingLeft + chartWidth},${y.toFixed(1)} L ${paddingLeft + chartWidth},${paddingTop + chartHeight} Z`;
     lineD = `M ${paddingLeft},${y.toFixed(1)} L ${paddingLeft + chartWidth},${y.toFixed(1)}`;
+    if (st.cacheHitRate !== null) {
+      const hitY = paddingTop + chartHeight - (st.cacheHitRate / 100) * chartHeight;
+      hitLineD = `M ${paddingLeft},${hitY.toFixed(1)} L ${paddingLeft + chartWidth},${hitY.toFixed(1)}`;
+    }
     xLabelsSvg = `<text x="${paddingLeft}" y="${svgHeight - 8}" text-anchor="start" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">#1</text>`;
   } else {
     areaD = `M ${paddingLeft},${paddingTop + chartHeight}`;
     let lastRenderedLabelIdx = -999;
+    let singleHitPt: { x: number; y: number } | null = null;
+    let hitPtCount = 0;
 
     sanitizedSteps.forEach((st, idx) => {
       const x = paddingLeft + (idx / (totalTurns - 1)) * chartWidth;
       const y = paddingTop + chartHeight - (st.effectiveCtx / yMax) * chartHeight;
       areaD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
       lineD = idx === 0 ? `M ${x.toFixed(1)},${y.toFixed(1)}` : `${lineD} L ${x.toFixed(1)},${y.toFixed(1)}`;
+
+      if (st.cacheHitRate !== null) {
+        const hitY = paddingTop + chartHeight - (st.cacheHitRate / 100) * chartHeight;
+        hitLineD = hitLineD
+          ? `${hitLineD} L ${x.toFixed(1)},${hitY.toFixed(1)}`
+          : `M ${x.toFixed(1)},${hitY.toFixed(1)}`;
+        singleHitPt = { x, y: hitY };
+        hitPtCount++;
+
+        if (st.isCacheBreak) {
+          breakGuidesSvg += `<line class="overview-break-guide" x1="${x.toFixed(1)}" y1="${paddingTop}" x2="${x.toFixed(1)}" y2="${paddingTop + chartHeight}" stroke="#EF4444" stroke-width="1" stroke-dasharray="2.5 2.5" opacity="0.24" vector-effect="non-scaling-stroke" />`;
+          const leftPct = (x / svgWidth) * 100;
+          const topPct = (hitY / svgHeight) * 100;
+          breakDotsHtml += `<div class="chart-break-dot" data-turn-idx="${idx}" style="left: ${leftPct.toFixed(2)}%; top: ${topPct.toFixed(2)}%;"></div>`;
+        }
+      }
 
       const isTooCloseToRight = totalTurns - 1 - idx < labelInterval * 0.7;
       if (idx % labelInterval === 0 && !isTooCloseToRight) {
@@ -203,6 +397,14 @@ function renderSessionOverviewArea(
         lastRenderedLabelIdx = idx;
       }
     });
+
+    if (hitPtCount === 1 && singleHitPt) {
+      const pt = singleHitPt as { x: number; y: number };
+      const leftPct = (pt.x / svgWidth) * 100;
+      const topPct = (pt.y / svgHeight) * 100;
+      breakDotsHtml += `<div class="chart-hit-single-dot" style="left: ${leftPct.toFixed(2)}%; top: ${topPct.toFixed(2)}%;"></div>`;
+      hitLineD = '';
+    }
 
     areaD += ` L ${paddingLeft + chartWidth},${paddingTop + chartHeight} Z`;
     if (totalTurns - 1 - lastRenderedLabelIdx >= Math.floor(labelInterval * 0.5)) {
@@ -221,7 +423,8 @@ function renderSessionOverviewArea(
           <button class="segment-btn" data-mode="timeline">Timeline</button>
         </div>
         <div class="chart-legend">
-          <span class="legend-item"><span class="legend-dot" style="background: #00A67E"></span>Context Window Watermark</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #00A67E"></span>Context Window</span>
+          <span class="legend-item legend-item-hit-trigger" id="overview-hit-legend-trigger" title="Hover strip below to overlay Cache Hit %"><span class="legend-strip-swatch"></span>Cache Health</span>
         </div>
       </div>
     </div>
@@ -230,7 +433,7 @@ function renderSessionOverviewArea(
         <svg viewBox="0 0 48 ${svgHeight}" class="y-axis-svg">${yAxisSvg}</svg>
       </div>
       <div class="chart-viewport-wrapper">
-        <div class="chart-stage" id="chart-stage-container">
+        <div class="chart-stage chart-stage-clickable" id="chart-stage-container">
           <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="analytics-svg" id="analytics-svg-element">
             <defs>
               <linearGradient id="aura-ctx-grad" x1="0" y1="0" x2="0" y2="1">
@@ -238,61 +441,129 @@ function renderSessionOverviewArea(
                 <stop offset="65%" stop-color="#00A67E" stop-opacity="0.12" />
                 <stop offset="100%" stop-color="#00A67E" stop-opacity="0.02" />
               </linearGradient>
+              <clipPath id="aura-strip-clip">
+                <rect x="${paddingLeft}" y="${stripY}" width="${chartWidth}" height="${stripH}" rx="2.5" ry="2.5" />
+              </clipPath>
             </defs>
             ${gridSvg}
+            <g class="overview-hit-layer">
+              ${breakGuidesSvg}
+              ${hitLineD ? `<path class="overview-hit-rate-line" d="${hitLineD}" fill="none" stroke="#F59E0B" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity="0.68" />` : ''}
+            </g>
             <path d="${areaD}" fill="url(#aura-ctx-grad)" />
-            <path d="${lineD}" fill="none" stroke="#00A67E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="${lineD}" fill="none" stroke="#00A67E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            ${healthStripSvg}
             ${xLabelsSvg}
           </svg>
+          <div class="overview-hit-overlay-dots">${breakDotsHtml}</div>
+          <div class="chart-health-strip-hitbox" id="chart-health-strip-hitbox"></div>
           <div class="chart-scrubber-line" id="chart-scrubber-line" style="display: none;"></div>
           <div class="chart-scrubber-dot" id="chart-scrubber-dot" style="display: none;"></div>
-          <div class="chart-floating-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
+          <div class="chart-scrubber-dot chart-scrubber-hit-dot" id="chart-scrubber-hit-dot" style="display: none;"></div>
+          <div class="chart-floating-tooltip overview-tooltip" id="chart-floating-tooltip" style="display: none;"></div>
         </div>
+      </div>
+      <div class="chart-y-axis-sticky chart-y-axis-right">
+        <svg viewBox="0 0 38 ${svgHeight}" class="y-axis-right-svg">${rightYAxisSvg}</svg>
       </div>
     </div>
   `;
 
   attachViewModeSwitchListeners(chartWrapper, columns, rangeTitle, range, session);
-  attachOverviewScrubberListeners(chartWrapper, sanitizedSteps, yMax, {
-    svgWidth,
-    svgHeight,
-    paddingLeft,
-    paddingTop,
-    chartWidth,
-    chartHeight
-  });
+  attachOverviewScrubberListeners(
+    chartWrapper,
+    sanitizedSteps,
+    yMax,
+    {
+      svgWidth,
+      svgHeight,
+      paddingLeft,
+      paddingTop,
+      chartWidth,
+      chartHeight
+    },
+    (selectedIdx) => {
+      sessionViewMode = 'timeline';
+      renderActivityChart(columns, rangeTitle, range, session, selectedIdx);
+    }
+  );
 }
 
 function attachOverviewScrubberListeners(
   chartWrapper: HTMLElement,
   steps: OverviewStepPoint[],
   yMax: number,
-  coord: OverviewCoord
+  coord: OverviewCoord,
+  onSelectStep?: (stepIdx: number) => void
 ): void {
+  const layoutRoot = chartWrapper.querySelector('.chart-layout-root') as HTMLElement | null;
   const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
+  const stripHitbox = chartWrapper.querySelector('#chart-health-strip-hitbox') as HTMLElement | null;
+  const legendTrigger = chartWrapper.querySelector('#overview-hit-legend-trigger') as HTMLElement | null;
   const scrubber = chartWrapper.querySelector('#chart-scrubber-line') as HTMLElement | null;
   const scrubberDot = chartWrapper.querySelector('#chart-scrubber-dot') as HTMLElement | null;
+  const scrubberHitDot = chartWrapper.querySelector('#chart-scrubber-hit-dot') as HTMLElement | null;
   const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
   if (!stage || !scrubber || !tooltip) return;
 
+  let stripHovered = false;
+  let legendHovered = false;
+  const syncHitOverlay = () => {
+    const active = stripHovered || legendHovered;
+    layoutRoot?.classList.toggle('overview-hit-active', active);
+    legendTrigger?.classList.toggle('active', active);
+  };
+
+  stripHitbox?.addEventListener('mouseenter', () => {
+    stripHovered = true;
+    syncHitOverlay();
+    tooltip.style.display = 'none';
+  });
+  stripHitbox?.addEventListener('mouseleave', () => {
+    stripHovered = false;
+    syncHitOverlay();
+  });
+  legendTrigger?.addEventListener('mouseenter', () => {
+    legendHovered = true;
+    syncHitOverlay();
+  });
+  legendTrigger?.addEventListener('mouseleave', () => {
+    legendHovered = false;
+    syncHitOverlay();
+  });
+
   const { svgWidth, svgHeight, paddingLeft, paddingTop, chartWidth, chartHeight } = coord;
   const totalTurns = steps.length;
+  let activeIdx = -1;
+
+  const resolveStepIdxFromClientX = (clientX: number, rect: DOMRect): number => {
+    const mouseX = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const mouseSvgX = (mouseX / rect.width) * svgWidth;
+    const clampedSvgX = Math.max(paddingLeft, Math.min(paddingLeft + chartWidth, mouseSvgX));
+    const ratio = chartWidth > 0 ? (clampedSvgX - paddingLeft) / chartWidth : 0;
+    return Math.min(totalTurns - 1, Math.max(0, Math.round(ratio * (totalTurns - 1))));
+  };
 
   stage.addEventListener('mousemove', (e) => {
     const rect = stage.getBoundingClientRect();
     if (rect.width <= 0) return;
 
-    const mouseX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const mouseSvgX = (mouseX / rect.width) * svgWidth;
-    const clampedSvgX = Math.max(paddingLeft, Math.min(paddingLeft + chartWidth, mouseSvgX));
-    const ratio = chartWidth > 0 ? (clampedSvgX - paddingLeft) / chartWidth : 0;
-    const stepIdx = Math.min(totalTurns - 1, Math.max(0, Math.round(ratio * (totalTurns - 1))));
+    const stepIdx = resolveStepIdxFromClientX(e.clientX, rect);
+    const shouldShowTooltip = !stripHovered;
+    if (
+      stepIdx === activeIdx &&
+      scrubber.style.display === 'block' &&
+      (shouldShowTooltip ? tooltip.style.display === 'block' : tooltip.style.display === 'none')
+    ) {
+      return;
+    }
+    activeIdx = stepIdx;
 
     const st = steps[stepIdx];
     if (!st) return;
 
     const ctx = st.effectiveCtx;
-    const isActionTurn = st.inTok === 0 && st.outTok === 0 && st.cacheRead === 0;
+    const isActionTurn = st.isActionTurn;
     const tps = computeStepTps(st.outTok, st.ttft, st.stream, st.totDur);
 
     const speedSubline = isActionTurn
@@ -316,12 +587,39 @@ function attachOverviewScrubberListeners(
       scrubberDot.style.top = `${snapPixelY.toFixed(1)}px`;
     }
 
+    if (scrubberHitDot) {
+      if (st.cacheHitRate !== null) {
+        const hitSvgY = paddingTop + chartHeight - (st.cacheHitRate / 100) * chartHeight;
+        const hitPixelY = (hitSvgY / svgHeight) * rect.height;
+        scrubberHitDot.style.display = 'block';
+        scrubberHitDot.style.left = `${snapPixelX.toFixed(1)}px`;
+        scrubberHitDot.style.top = `${hitPixelY.toFixed(1)}px`;
+      } else {
+        scrubberHitDot.style.display = 'none';
+      }
+    }
+
+    if (!shouldShowTooltip) {
+      tooltip.style.display = 'none';
+      return;
+    }
+
+    const breakBadgeHtml = st.isCacheBreak
+      ? '<span class="tooltip-break-badge">Cache Break</span>'
+      : '';
+    const hitRateText = st.cacheHitRate !== null ? `${st.cacheHitRate.toFixed(1)}%` : 'N/A';
+
     tooltip.innerHTML = `
-      <div class="tooltip-header">Session Turn #${st.idx + 1}</div>
+      <div class="tooltip-header"><span>Session Turn #${st.idx + 1}</span>${breakBadgeHtml}</div>
       <div class="tooltip-row ctx-row">
         <span class="tooltip-dot" style="background: #3B82F6"></span>
         <span class="tooltip-label">Context Window</span>
         <span class="tooltip-val">${formatCompactNumber(ctx)} (${formatFullNumber(ctx)})</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-dot" style="background: #F59E0B"></span>
+        <span class="tooltip-label">Cache Hit Rate</span>
+        <span class="tooltip-val">${hitRateText}</span>
       </div>
       <div class="tooltip-row">
         <span class="tooltip-dot" style="background: #00A67E"></span>
@@ -340,6 +638,7 @@ function attachOverviewScrubberListeners(
       </div>
       <div class="tooltip-divider"></div>
       <div class="tooltip-subline">${escapeHtml(speedSubline)}</div>
+      <div class="tooltip-subline tooltip-click-hint">Click to inspect in Timeline →</div>
     `;
     tooltip.style.display = 'block';
 
@@ -354,10 +653,24 @@ function attachOverviewScrubberListeners(
   });
 
   stage.addEventListener('mouseleave', () => {
+    activeIdx = -1;
+    stripHovered = false;
+    syncHitOverlay();
     scrubber.style.display = 'none';
     if (scrubberDot) scrubberDot.style.display = 'none';
+    if (scrubberHitDot) scrubberHitDot.style.display = 'none';
     tooltip.style.display = 'none';
   });
+
+  if (onSelectStep) {
+    stage.addEventListener('click', (e) => {
+      if (totalTurns === 0) return;
+      const rect = stage.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const stepIdx = resolveStepIdxFromClientX(e.clientX, rect);
+      onSelectStep(stepIdx);
+    });
+  }
 }
 
 function renderStandardTimelineChart(
@@ -366,7 +679,8 @@ function renderStandardTimelineChart(
   rangeTitle: string,
   isSession: boolean,
   range: TimeRangeOption,
-  activeSessionData: SessionAnalyticsData | null
+  activeSessionData: SessionAnalyticsData | null,
+  focusColumnIdx?: number
 ): void {
   const rawMax = columns.reduce((m, d) => Math.max(m, d.inputTok + d.outTok + d.cacheRead), 0);
   const { yMax, yTicks } = computeNiceYScale(rawMax, 1000, 4);
@@ -394,6 +708,7 @@ function renderStandardTimelineChart(
 
   let defsSvg = '<defs>';
   let barsSvg = '';
+  let focusBandSvg = '';
   let xLabelsSvg = '';
 
   const isHourly = columns.length === 24 && (columns[0]?.label.includes(':00') || false);
@@ -405,6 +720,10 @@ function renderStandardTimelineChart(
     const total = item.inputTok + item.outTok + item.cacheRead;
     const slotX = paddingLeft + idx * step;
     const centerX = x + barWidth / 2;
+
+    if (focusColumnIdx === idx) {
+      focusBandSvg = `<rect id="chart-focus-band" class="chart-focus-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" data-focus-idx="${idx}" />`;
+    }
 
     if (total > 0) {
       const totalBarHeight = Math.max(3, Math.round((total / yMax) * chartHeight));
@@ -509,6 +828,7 @@ function renderStandardTimelineChart(
           <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
             ${defsSvg}
             ${gridSvg}
+            ${focusBandSvg}
             <rect id="chart-shared-hover-band" class="chart-shared-hover-band" x="0" y="${paddingTop}" width="0" height="${chartHeight}" rx="4" style="display: none;" />
             ${barsSvg}
             ${xLabelsSvg}
@@ -529,7 +849,19 @@ function renderStandardTimelineChart(
       const maskLeft = chartWrapper.querySelector('#chart-mask-left') as HTMLElement | null;
       const maskRight = chartWrapper.querySelector('#chart-mask-right') as HTMLElement | null;
       if (stage) {
-        stage.scrollLeft = stage.scrollWidth;
+        if (
+          typeof focusColumnIdx === 'number' &&
+          focusColumnIdx >= 0 &&
+          focusColumnIdx < columns.length &&
+          stage.scrollWidth > stage.clientWidth
+        ) {
+          const targetCenterSvgX = paddingLeft + focusColumnIdx * step + step / 2;
+          const targetCenterPx = (targetCenterSvgX / svgWidth) * stage.scrollWidth;
+          const maxScroll = Math.max(0, stage.scrollWidth - stage.clientWidth);
+          stage.scrollLeft = Math.max(0, Math.min(maxScroll, targetCenterPx - stage.clientWidth / 2));
+        } else {
+          stage.scrollLeft = stage.scrollWidth;
+        }
         if (maskLeft && maskRight) {
           const updateMasks = () => {
             const maxScroll = stage.scrollWidth - stage.clientWidth;
@@ -558,6 +890,7 @@ function attachStandardTimelineTooltipListeners(
   const tooltip = chartWrapper.querySelector('#chart-floating-tooltip') as HTMLElement | null;
   const stage = chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null;
   const hoverBand = chartWrapper.querySelector('#chart-shared-hover-band') as SVGGraphicsElement | null;
+  const focusBand = chartWrapper.querySelector('#chart-focus-band') as SVGGraphicsElement | null;
   if (!tooltip || !stage) return;
 
   let activeIdx = -1;
@@ -568,6 +901,10 @@ function attachStandardTimelineTooltipListeners(
       const idx = Number(target.getAttribute('data-idx') || '-1');
       if (idx < 0 || idx >= columns.length || idx === activeIdx) return;
       activeIdx = idx;
+
+      if (focusBand) {
+        focusBand.style.display = 'none';
+      }
 
       const col = columns[idx];
       const total = col.inputTok + col.outTok + col.cacheRead;
