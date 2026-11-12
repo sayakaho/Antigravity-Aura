@@ -167,7 +167,13 @@ function renderRangeDependentViews(
     customEndDate
   );
   renderModelTpsChart(overview, range, activeSessionData, customStartDate, customEndDate);
-  renderLatencyTtftDistributionChart(activeSessionData);
+  renderLatencyTtftDistributionChart(
+    overview,
+    range,
+    activeSessionData,
+    customStartDate,
+    customEndDate
+  );
 }
 
 async function applyExternalRangeState(next: AnalyticsRangeState): Promise<void> {

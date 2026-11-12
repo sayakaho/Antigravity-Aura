@@ -2009,16 +2009,20 @@ html[data-theme="dark"] .chart-shared-hover-band {
 
 .scatter-legend {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 6px 14px;
+  margin: -4px 0 10px;
   font-size: 11px;
 }
 
 .scatter-legend-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
   color: var(--aura-fg-muted);
+  white-space: nowrap;
 }
 
 .scatter-legend-dot {

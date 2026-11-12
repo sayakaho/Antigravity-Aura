@@ -12,7 +12,8 @@ import type {
   ConversationStepMetric,
   GlobalAnalyticsOverview,
   ModelDailyStat,
-  SessionAnalyticsData
+  SessionAnalyticsData,
+  TurnLatencySample
 } from '../../types';
 import {
   buildYAxisGridSvg,
@@ -23,7 +24,7 @@ import {
   setRenderedHtmlIfChanged,
   type ChartColumnData
 } from './charts-base';
-import { getFilterDatesForRange, type TimeRangeOption } from './time-range';
+import { getFilterDatesForRange, getRangeDisplayTitle, type TimeRangeOption } from './time-range';
 
 type ActivityViewMode = 'overview' | 'timeline';
 
@@ -71,7 +72,7 @@ interface NormalizedTpsModelSeries {
 }
 
 interface ScatterPointMeta {
-  idx: number;
+  header: string;
   ttft: number;
   totDur: number;
   stream: number;
@@ -1721,44 +1722,98 @@ function attachTpsTooltipListeners(
   });
 }
 
+const MAX_SCATTER_DOM_POINTS = 800;
+
+function formatLatencyTurnHeader(ts: number, fallbackIdx: number): string {
+  if (ts > 1_000_000_000) {
+    const d = new Date(ts * 1000);
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    return `Turn · ${formatLocalDateKey(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+  return `Turn #${fallbackIdx}`;
+}
+
 export function renderLatencyTtftDistributionChart(
-  activeSessionData: SessionAnalyticsData | null
+  overview: GlobalAnalyticsOverview | null,
+  range: TimeRangeOption,
+  activeSessionData: SessionAnalyticsData | null,
+  customStart = '',
+  customEnd = '',
+  now = new Date()
 ): void {
   const chartWrapper = document.getElementById('analytics-latency-ttft-chart');
   if (!chartWrapper) return;
 
   const title = 'Turn Latency vs. TTFT Distribution';
-  const subtitle = '(Active Session)';
-  const steps = activeSessionData?.steps || [];
-
-  if (steps.length === 0) {
-    renderEmptyChartCard(
-      chartWrapper,
-      title,
-      'No interaction turn latency metrics available',
-      subtitle
-    );
-    return;
-  }
+  const isSession = range === 'session';
+  const subtitle = isSession ? '(Active Session)' : `(${getRangeDisplayTitle(range)})`;
 
   const validPoints: Array<Omit<ScatterPointMeta, 'cx' | 'cy'>> = [];
   const ttftList: number[] = [];
   const latList: number[] = [];
 
-  for (const st of steps) {
-    const dur = st.totDur > 0 ? st.totDur : st.ttft + st.stream;
-    if (st.ttft > 0 && dur > 0) {
-      validPoints.push({
-        idx: st.idx + 1,
-        ttft: st.ttft,
-        totDur: dur,
-        stream: st.stream,
-        outTok: st.outTok,
-        speed: Math.round(computeStepTps(st.outTok, st.ttft, st.stream, st.totDur).displayTps)
-      });
-      ttftList.push(st.ttft);
-      latList.push(dur);
+  if (isSession) {
+    const steps = activeSessionData?.steps || [];
+    if (steps.length === 0) {
+      renderEmptyChartCard(
+        chartWrapper,
+        title,
+        'No interaction turn latency metrics available',
+        subtitle
+      );
+      return;
     }
+
+    for (const st of steps) {
+      const dur = st.totDur > 0 ? st.totDur : st.ttft + st.stream;
+      if (st.ttft > 0 && dur > 0) {
+        validPoints.push({
+          header: `Session Turn #${st.idx + 1}`,
+          ttft: st.ttft,
+          totDur: dur,
+          stream: st.stream,
+          outTok: st.outTok,
+          speed: Math.round(computeStepTps(st.outTok, st.ttft, st.stream, st.totDur).displayTps)
+        });
+        ttftList.push(st.ttft);
+        latList.push(dur);
+      }
+    }
+  } else {
+    const dateSet = new Set(getFilterDatesForRange(range, customStart, customEnd, now));
+    const rangeSamples: TurnLatencySample[] = [];
+    for (const item of overview?.timeRangeSeries || []) {
+      if (dateSet.has(item.date) && item.latencySamples && item.latencySamples.length > 0) {
+        rangeSamples.push(...item.latencySamples);
+      }
+    }
+    rangeSamples.sort((a, b) => a.ts - b.ts);
+
+    if (rangeSamples.length === 0) {
+      renderEmptyChartCard(
+        chartWrapper,
+        title,
+        'No interaction turn latency metrics recorded in this range',
+        subtitle
+      );
+      return;
+    }
+
+    rangeSamples.forEach((s, idx) => {
+      const dur = s.totDur > 0 ? s.totDur : s.ttft + s.stream;
+      if (s.ttft > 0 && dur > 0) {
+        validPoints.push({
+          header: formatLatencyTurnHeader(s.ts, idx + 1),
+          ttft: s.ttft,
+          totDur: dur,
+          stream: s.stream,
+          outTok: s.outTok,
+          speed: s.speed
+        });
+        ttftList.push(s.ttft);
+        latList.push(dur);
+      }
+    });
   }
 
   if (validPoints.length === 0) {
@@ -1833,11 +1888,20 @@ export function renderLatencyTtftDistributionChart(
   const p50Svg = renderRefGroup('P50', '#3B82F6', p50Ttft, p50Lat, 'chart-ref-p50');
   const p95Svg = renderRefGroup('P95', '#F59E0B', p95Ttft, p95Lat, 'chart-ref-p95');
 
+  const inBoundsPoints = validPoints.filter((p) => p.ttft <= maxX && p.totDur <= maxY);
+  const totalInBoundsCount = inBoundsPoints.length;
+  const pointsToPlot =
+    totalInBoundsCount <= MAX_SCATTER_DOM_POINTS
+      ? inBoundsPoints
+      : Array.from(
+          { length: MAX_SCATTER_DOM_POINTS },
+          (_, i) => inBoundsPoints[Math.floor((i * totalInBoundsCount) / MAX_SCATTER_DOM_POINTS)]
+        );
+
   const plottedPoints: ScatterPointMeta[] = [];
   let pointsSvg = '';
 
-  for (const p of validPoints) {
-    if (p.ttft > maxX || p.totDur > maxY) continue;
+  for (const p of pointsToPlot) {
     const cx = paddingLeft + (p.ttft / maxX) * chartWidth;
     const cy = paddingTop + chartHeight - (p.totDur / maxY) * chartHeight;
     const ptIdx = plottedPoints.length;
@@ -1848,21 +1912,21 @@ export function renderLatencyTtftDistributionChart(
   const html = `
     <div class="chart-header">
       <div class="chart-header-left">
-        <h3 class="chart-title">${title}<span class="chart-subtitle">${subtitle}</span></h3>
+        <h3 class="chart-title">${title}<span class="chart-subtitle">${escapeHtml(subtitle)}</span></h3>
       </div>
-      <div class="scatter-legend">
-        <div class="scatter-legend-item">
-          <span class="scatter-legend-dot" style="background: #00A67E;"></span>
-          <span>Turns (${formatFullNumber(plottedPoints.length)})</span>
-        </div>
-        <div class="scatter-legend-item">
-          <span class="scatter-legend-line" style="border-color: #3B82F6;"></span>
-          <span style="color: #3B82F6; font-weight: 500;">P50 (${p50Ttft.toFixed(1)}s · ${p50Lat.toFixed(1)}s)</span>
-        </div>
-        <div class="scatter-legend-item">
-          <span class="scatter-legend-line" style="border-color: #F59E0B;"></span>
-          <span style="color: #F59E0B; font-weight: 500;">P95 (${p95Ttft.toFixed(1)}s · ${p95Lat.toFixed(1)}s)</span>
-        </div>
+    </div>
+    <div class="scatter-legend">
+      <div class="scatter-legend-item">
+        <span class="scatter-legend-dot" style="background: #00A67E;"></span>
+        <span>Turns (${formatFullNumber(totalInBoundsCount)})</span>
+      </div>
+      <div class="scatter-legend-item">
+        <span class="scatter-legend-line" style="border-color: #3B82F6;"></span>
+        <span style="color: #3B82F6; font-weight: 500;">P50 (${p50Ttft.toFixed(1)}s · ${p50Lat.toFixed(1)}s)</span>
+      </div>
+      <div class="scatter-legend-item">
+        <span class="scatter-legend-line" style="border-color: #F59E0B;"></span>
+        <span style="color: #F59E0B; font-weight: 500;">P95 (${p95Ttft.toFixed(1)}s · ${p95Lat.toFixed(1)}s)</span>
       </div>
     </div>
     <div class="chart-body" style="position: relative;">
@@ -1888,7 +1952,7 @@ export function renderLatencyTtftDistributionChart(
     !setRenderedHtmlIfChanged(
       chartWrapper,
       html,
-      `${html}\0${plottedPoints.length}:${scatterSum.toFixed(2)}`
+      `${html}\0${range}:${totalInBoundsCount}:${plottedPoints.length}:${scatterSum.toFixed(2)}`
     )
   ) {
     return;
@@ -1919,7 +1983,7 @@ function attachLatencyScatterTooltipListeners(
       }
 
       tooltip.innerHTML = `
-        <div class="tooltip-header">Session Turn #${pt.idx}</div>
+        <div class="tooltip-header">${escapeHtml(pt.header)}</div>
         <div class="tooltip-row">
           <span class="tooltip-dot" style="background: #3B82F6"></span>
           <span class="tooltip-label">TTFT:</span>

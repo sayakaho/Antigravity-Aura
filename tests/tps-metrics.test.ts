@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { renderModelTpsChart } from '../src/panel/analytics/charts';
+import {
+  renderLatencyTtftDistributionChart,
+  renderModelTpsChart
+} from '../src/panel/analytics/charts';
 import {
   computeApiCostAndSavings,
   computeProcessedColumns,
@@ -470,5 +473,114 @@ describe('Unified TPS & Analytics Metrics', () => {
     }
     expect(fakeTpsContainer.innerHTML).toContain('#1');
     expect(fakeTpsContainer.innerHTML).not.toContain('tps-legend-bar');
+  });
+
+  test('renderLatencyTtftDistributionChart re-renders across session and historical time ranges', () => {
+    const overview = makeOverviewFixture();
+    overview.timeRangeSeries[0].latencySamples = [
+      { ts: 1793500000, ttft: 1.0, totDur: 3.0, stream: 2.0, outTok: 200, speed: 100 }
+    ];
+    overview.timeRangeSeries[1].latencySamples = [
+      { ts: 1794190000, ttft: 4.0, totDur: 8.0, stream: 4.0, outTok: 400, speed: 100 },
+      { ts: 1794190300, ttft: 6.0, totDur: 12.0, stream: 6.0, outTok: 600, speed: 100 }
+    ];
+
+    const session: SessionAnalyticsData = {
+      cascadeId: '00000000-0000-0000-0000-000000000003',
+      totalTokens: { input: 100, output: 100, cacheRead: 0, thinking: 0, total: 200 },
+      totalRequests: 1,
+      cacheEfficiency: 0,
+      avgTtft: 2.0,
+      avgTokPerSec: 100,
+      steps: [
+        {
+          idx: 0,
+          inTok: 100,
+          outTok: 100,
+          cacheRead: 0,
+          ctx: 100,
+          thinkTok: 0,
+          respTok: 100,
+          ttft: 2.0,
+          stream: 3.0,
+          totDur: 5.0
+        }
+      ]
+    };
+
+    let ptHandler: (() => void) | null = null;
+    const fakePt = {
+      getAttribute: (name: string) => (name === 'data-pt-idx' ? '0' : null),
+      addEventListener: (evt: string, fn: () => void) => {
+        if (evt === 'mouseenter') ptHandler = fn;
+      }
+    };
+    const fakeTooltip = { innerHTML: '', style: {}, offsetWidth: 190, offsetHeight: 110 };
+    const fakeCursor = { setAttribute: () => {}, style: {} };
+    const fakeContainer = {
+      innerHTML: '',
+      querySelector: (sel: string) =>
+        sel === '#latency-ttft-floating-tooltip'
+          ? fakeTooltip
+          : sel === '#scatter-hover-cursor'
+            ? fakeCursor
+            : sel === '.chart-body'
+              ? {
+                  getBoundingClientRect: () => ({ width: 800, height: 300, left: 0, top: 0 }),
+                  addEventListener: () => {}
+                }
+              : null,
+      querySelectorAll: (sel: string) => (sel === '.latency-scatter-pt' ? [fakePt] : [])
+    };
+
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) =>
+        id === 'analytics-latency-ttft-chart' ? fakeContainer : null
+    };
+
+    const fixedNow = new Date('2026-11-09T12:00:00');
+    try {
+      renderLatencyTtftDistributionChart(overview, 'session', session, '', '', fixedNow);
+      expect(fakeContainer.innerHTML).toContain('(Active Session)');
+      expect(fakeContainer.innerHTML).toContain('Turns (1)');
+      expect(fakeContainer.innerHTML).toContain('P50 (2.0s · 5.0s)');
+      expect(ptHandler).not.toBeNull();
+      (ptHandler as unknown as () => void)();
+      expect(fakeTooltip.innerHTML).toContain('Session Turn #1');
+
+      ptHandler = null;
+      renderLatencyTtftDistributionChart(overview, 'today', session, '', '', fixedNow);
+      expect(fakeContainer.innerHTML).toContain('(Today)');
+      expect(fakeContainer.innerHTML).toContain('Turns (2)');
+      expect(fakeContainer.innerHTML).toContain('P50 (5.0s · 10.0s)');
+      expect(ptHandler).not.toBeNull();
+      (ptHandler as unknown as () => void)();
+      expect(fakeTooltip.innerHTML).toContain('Turn · ');
+
+      renderLatencyTtftDistributionChart(
+        overview,
+        'custom',
+        session,
+        '2026-11-01',
+        '2026-11-01',
+        fixedNow
+      );
+      expect(fakeContainer.innerHTML).toContain('(Custom Range)');
+      expect(fakeContainer.innerHTML).toContain('Turns (1)');
+      expect(fakeContainer.innerHTML).toContain('P50 (1.0s · 3.0s)');
+
+      renderLatencyTtftDistributionChart(overview, 'yesterday', session, '', '', fixedNow);
+      expect(fakeContainer.innerHTML).toContain('(Yesterday)');
+      expect(fakeContainer.innerHTML).toContain(
+        'No interaction turn latency metrics recorded in this range'
+      );
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
   });
 });

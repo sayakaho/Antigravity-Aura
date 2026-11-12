@@ -25,7 +25,8 @@ import type {
   SubagentBreakdownSummary,
   SubagentDailyStat,
   SubagentStatItem,
-  TimedSpeedSample
+  TimedSpeedSample,
+  TurnLatencySample
 } from '../types';
 import {
   extractGenMetadataStep,
@@ -76,6 +77,7 @@ interface CacheEntry {
   hourlyModelStats?: Record<string, Record<string, ModelDailyStat>>;
   tools?: Record<string, number>;
   dailyTools?: Record<string, Record<string, number>>;
+  dailyLatencySamples?: Record<string, TurnLatencySample[]>;
   effOutTok?: number;
   effSec?: number;
   tpsList?: number[];
@@ -88,7 +90,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v11.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v12.json';
 const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache.json',
   'aura_analytics_cache_v1.json',
@@ -100,7 +102,8 @@ const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache_v7.json',
   'aura_analytics_cache_v8.json',
   'aura_analytics_cache_v9.json',
-  'aura_analytics_cache_v10.json'
+  'aura_analytics_cache_v10.json',
+  'aura_analytics_cache_v11.json'
 ];
 
 function createEmptyBreakdown(): TokenBreakdown {
@@ -892,7 +895,8 @@ export class GlobalAnalyticsEngine {
               ttftCount: 0,
               turnDurSum: 0,
               validTurnCount: 0,
-              tpsHist: {}
+              tpsHist: {},
+              latencySamples: []
             };
           }
           dateSeries[dateKey].inputTok += d.inTok;
@@ -900,6 +904,13 @@ export class GlobalAnalyticsEngine {
           dateSeries[dateKey].cacheRead += d.cacheRead;
           dateSeries[dateKey].requests += d.requests;
           mergeBreakdownPerf(dateSeries[dateKey], d);
+          const dayLatencySamples = entry.dailyLatencySamples?.[dateKey];
+          if (dayLatencySamples && dayLatencySamples.length > 0) {
+            if (!dateSeries[dateKey].latencySamples) {
+              dateSeries[dateKey].latencySamples = [];
+            }
+            dateSeries[dateKey].latencySamples!.push(...dayLatencySamples);
+          }
         }
       } else {
         const { dateKey } = formatLocalDateAndHourKeys(
@@ -1266,6 +1277,7 @@ export class GlobalAnalyticsEngine {
       let sValidTurnCount = 0;
       const dailyBreakdown: Record<string, TokenBreakdown> = {};
       const hourlyBreakdown: Record<string, TokenBreakdown> = {};
+      const dailyLatencySamples: Record<string, TurnLatencySample[]> = {};
       const models: Record<string, ModelBucket> = {};
       const dailyModelStats: Record<string, Record<string, ModelDailyStat>> = {};
       const hourlyModelStats: Record<string, Record<string, ModelDailyStat>> = {};
@@ -1302,6 +1314,20 @@ export class GlobalAnalyticsEngine {
         const sec = parsed.stepIdx !== null ? stepTimeMap.get(parsed.stepIdx) : undefined;
         const turnDate = sec ? new Date(sec * 1000) : fallbackDate;
         const { dateKey, hourKey } = formatLocalDateAndHourKeys(turnDate);
+
+        const turnDur = tpsRes.totDur > 0 ? tpsRes.totDur : parsed.ttftSec + parsed.streamSec;
+        if (parsed.ttftSec > 0 && turnDur > 0) {
+          if (!dailyLatencySamples[dateKey]) dailyLatencySamples[dateKey] = [];
+          const turnTs = sec && sec > 1_000_000_000 ? sec : Math.floor(turnDate.getTime() / 1000);
+          dailyLatencySamples[dateKey].push({
+            ts: turnTs > 1_000_000_000 ? turnTs : 0,
+            ttft: Math.round(parsed.ttftSec * 100) / 100,
+            totDur: Math.round(turnDur * 100) / 100,
+            stream: Math.round(parsed.streamSec * 100) / 100,
+            outTok: parsed.outTok,
+            speed: Math.round(tpsRes.displayTps)
+          });
+        }
 
         if (!dailyBreakdown[dateKey]) dailyBreakdown[dateKey] = createEmptyBreakdown();
         recordStepIntoBreakdown(
@@ -1413,6 +1439,7 @@ export class GlobalAnalyticsEngine {
         hourlyModelStats,
         tools,
         dailyTools,
+        dailyLatencySamples,
         effOutTok: sEffOut,
         effSec: sEffSec,
         tpsList: sTpsList,

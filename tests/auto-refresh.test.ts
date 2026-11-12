@@ -294,6 +294,12 @@ describe('GlobalAnalyticsEngine revision, caching & file watching', () => {
       const ov1 = engine.getGlobalOverview();
       const ov2 = engine.getGlobalOverview();
       expect(ov2).toBe(ov1);
+      expect(ov1.timeRangeSeries.length).toBeGreaterThan(0);
+      const allLatencySamples = ov1.timeRangeSeries.flatMap((d) => d.latencySamples || []);
+      expect(allLatencySamples.length).toBe(2);
+      expect(allLatencySamples[0].ttft).toBe(1);
+      expect(allLatencySamples[0].stream).toBe(2);
+      expect(allLatencySamples[0].totDur).toBe(3);
 
       const s1 = engine.getSessionDetails(rootId);
       const s2 = engine.getSessionDetails(rootId);

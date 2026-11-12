@@ -274,6 +274,15 @@ export interface ModelDailyStat {
   requests: number;
 }
 
+export interface TurnLatencySample {
+  ts: number;
+  ttft: number;
+  totDur: number;
+  stream: number;
+  outTok: number;
+  speed: number;
+}
+
 export interface RangePerfFields {
   effOutTok?: number;
   effSec?: number;
@@ -290,6 +299,7 @@ export interface DailySeriesPoint extends RangePerfFields {
   outTok: number;
   cacheRead: number;
   requests: number;
+  latencySamples?: TurnLatencySample[];
 }
 
 export interface HourlySeriesPoint extends RangePerfFields {
