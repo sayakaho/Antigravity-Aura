@@ -20,6 +20,7 @@ import {
   computePercentile,
   positionTooltipNearAnchor,
   renderEmptyChartCard,
+  setRenderedHtmlIfChanged,
   type ChartColumnData
 } from './charts-base';
 import { getFilterDatesForRange, type TimeRangeOption } from './time-range';
@@ -131,12 +132,17 @@ export function buildSessionOverviewSeries(steps: ConversationStepMetric[]): Ove
   });
 }
 
+export interface RenderActivityChartOptions {
+  preserveScroll?: boolean;
+}
+
 export function renderActivityChart(
   columns: ChartColumnData[],
   rangeTitle: string,
   range: TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
-  focusColumnIdx?: number
+  focusColumnIdx?: number,
+  options?: RenderActivityChartOptions
 ): void {
   const chartWrapper = document.getElementById('analytics-activity-chart');
   if (!chartWrapper) return;
@@ -159,7 +165,8 @@ export function renderActivityChart(
       isSession,
       range,
       activeSessionData,
-      focusColumnIdx
+      focusColumnIdx,
+      options?.preserveScroll ?? false
     );
   }
 }
@@ -412,7 +419,7 @@ function renderSessionOverviewArea(
     }
   }
 
-  chartWrapper.innerHTML = `
+  const html = `
     <div class="chart-header">
       <div class="chart-header-left">
         <div class="chart-title">Token Activity (${escapeHtml(rangeTitle)})</div>
@@ -468,6 +475,12 @@ function renderSessionOverviewArea(
       </div>
     </div>
   `;
+
+  const lastStep = steps[steps.length - 1];
+  const dataKey = `${html}\0${session.cascadeId}:${steps.length}:${session.totalTokens.total}:${lastStep?.outTok ?? 0}:${lastStep?.totDur ?? 0}`;
+  if (!setRenderedHtmlIfChanged(chartWrapper, html, dataKey)) {
+    return;
+  }
 
   attachViewModeSwitchListeners(chartWrapper, columns, rangeTitle, range, session);
   attachOverviewScrubberListeners(
@@ -680,7 +693,8 @@ function renderStandardTimelineChart(
   isSession: boolean,
   range: TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
-  focusColumnIdx?: number
+  focusColumnIdx?: number,
+  preserveScroll = false
 ): void {
   const rawMax = columns.reduce((m, d) => Math.max(m, d.inputTok + d.outTok + d.cacheRead), 0);
   const { yMax, yTicks } = computeNiceYScale(rawMax, 1000, 4);
@@ -797,7 +811,21 @@ function renderStandardTimelineChart(
     `
     : '';
 
-  chartWrapper.innerHTML = `
+  const prevStage =
+    preserveScroll &&
+    chartWrapper.innerHTML !== '' &&
+    typeof chartWrapper.querySelector === 'function'
+      ? (chartWrapper.querySelector('#chart-stage-container') as HTMLElement | null)
+      : null;
+  const savedScrollState =
+    prevStage && prevStage.scrollWidth > prevStage.clientWidth
+      ? {
+          scrollLeft: prevStage.scrollLeft,
+          pinnedToRight: prevStage.scrollWidth - prevStage.clientWidth - prevStage.scrollLeft <= 24
+        }
+      : null;
+
+  const html = `
     <div class="chart-header">
       <div class="chart-header-left">
         <div class="chart-title">Token Activity (${escapeHtml(rangeTitle)})</div>
@@ -839,6 +867,16 @@ function renderStandardTimelineChart(
     </div>
   `;
 
+  const colSum = columns.reduce(
+    (sum, c) => sum + c.inputTok + c.outTok + c.cacheRead + c.requests,
+    0
+  );
+  const lastCol = columns[columns.length - 1];
+  const dataKey = `${html}\0${columns.length}:${colSum}:${lastCol?.subText ?? ''}:${focusColumnIdx ?? ''}:${activeSessionData?.cascadeId ?? ''}`;
+  if (!setRenderedHtmlIfChanged(chartWrapper, html, dataKey)) {
+    return;
+  }
+
   if (isSession) {
     attachViewModeSwitchListeners(chartWrapper, columns, rangeTitle, range, activeSessionData);
   }
@@ -859,6 +897,9 @@ function renderStandardTimelineChart(
           const targetCenterPx = (targetCenterSvgX / svgWidth) * stage.scrollWidth;
           const maxScroll = Math.max(0, stage.scrollWidth - stage.clientWidth);
           stage.scrollLeft = Math.max(0, Math.min(maxScroll, targetCenterPx - stage.clientWidth / 2));
+        } else if (savedScrollState && !savedScrollState.pinnedToRight) {
+          const maxScroll = Math.max(0, stage.scrollWidth - stage.clientWidth);
+          stage.scrollLeft = Math.max(0, Math.min(maxScroll, savedScrollState.scrollLeft));
         } else {
           stage.scrollLeft = stage.scrollWidth;
         }
@@ -1572,7 +1613,7 @@ export function renderModelTpsChart(
     })
     .join('');
 
-  chartWrapper.innerHTML = `
+  const html = `
     <div class="chart-header">
       <div class="chart-header-left">
         <h3 class="chart-title">${title}<span class="chart-subtitle">${escapeHtml(subtitle)}</span></h3>
@@ -1593,6 +1634,14 @@ export function renderModelTpsChart(
       <div class="chart-floating-tooltip" id="tps-floating-tooltip" style="display: none;"></div>
     </div>
   `;
+
+  const slotSum = slotMeta.reduce(
+    (sum, s) => sum + s.items.reduce((acc, item) => acc + item.tps + item.reqs, 0),
+    0
+  );
+  if (!setRenderedHtmlIfChanged(chartWrapper, html, `${html}\0${slotMeta.length}:${slotSum}`)) {
+    return;
+  }
 
   attachTpsTooltipListeners(chartWrapper, svgWidth, slotMeta);
 }
@@ -1793,7 +1842,7 @@ export function renderLatencyTtftDistributionChart(
     pointsSvg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2" fill="#00A67E" fill-opacity="0.45" class="latency-scatter-pt" data-pt-idx="${ptIdx}" />`;
   }
 
-  chartWrapper.innerHTML = `
+  const html = `
     <div class="chart-header">
       <div class="chart-header-left">
         <h3 class="chart-title">${title}<span class="chart-subtitle">${subtitle}</span></h3>
@@ -1830,6 +1879,17 @@ export function renderLatencyTtftDistributionChart(
       <div class="chart-floating-tooltip" id="latency-ttft-floating-tooltip" style="display: none;"></div>
     </div>
   `;
+
+  const scatterSum = plottedPoints.reduce((sum, p) => sum + p.ttft + p.totDur + p.speed, 0);
+  if (
+    !setRenderedHtmlIfChanged(
+      chartWrapper,
+      html,
+      `${html}\0${plottedPoints.length}:${scatterSum.toFixed(2)}`
+    )
+  ) {
+    return;
+  }
 
   attachLatencyScatterTooltipListeners(chartWrapper, svgWidth, plottedPoints);
 }

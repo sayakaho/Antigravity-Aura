@@ -380,6 +380,7 @@ export interface SidecarStatusResponse {
   modules: ResolvedRuntimeModules;
   metrics: LiveMetricsPayload | null;
   activeCascadeId?: string;
+  analyticsRevision?: number;
 }
 
 export interface SidecarBridge {

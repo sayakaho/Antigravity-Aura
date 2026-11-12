@@ -8,7 +8,8 @@ import { resolveSummaryProjectInfo, type ResolvedProjectInfo } from '../shared/p
 import {
   buildSessionTreeIndex,
   isSubagentSummary,
-  resolveSubagentAgentName
+  resolveSubagentAgentName,
+  type SessionTreeIndex
 } from '../shared/session';
 import { buildSessionSpeedTimeline, computeStepTps, computeWeightedTps } from '../shared/tps';
 import type {
@@ -235,6 +236,10 @@ function getFileMtimeSec(filePath: string): number {
   }
 }
 
+const SESSION_DB_FILE_RE = /^([0-9a-f-]{36})\.db(?:-(?:wal|journal))?$/i;
+const SUMMARIES_DB_FILE_RE = /^conversation_summaries\.db(?:-(?:wal|journal))?$/i;
+const MAX_SESSION_DETAILS_CACHE_SIZE = 20;
+
 export class GlobalAnalyticsEngine {
   private readonly baseDir: string;
   private readonly cachePath: string;
@@ -243,6 +248,30 @@ export class GlobalAnalyticsEngine {
     string,
     { sig: string; samples: TimedSpeedSample[] }
   >();
+  private readonly sessionDetailsCache = new Map<
+    string,
+    { compositeSig: string; data: SessionAnalyticsData }
+  >();
+  private readonly lastKnownSessionSigs = new Map<string, string>();
+  private lastKnownSummariesSig: string | null = null;
+  private summariesCache: {
+    sig: string;
+    summaries: ConversationSummary[];
+    tree: SessionTreeIndex;
+  } | null = null;
+  private overviewCache: {
+    revision: number;
+    summariesSig: string | null;
+    data: GlobalAnalyticsOverview;
+  } | null = null;
+  private revision = 1;
+  private isWatching = false;
+  private baseWatcher: fs.FSWatcher | null = null;
+  private convWatcher: fs.FSWatcher | null = null;
+  private watchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingWatchDirty = false;
+  private pendingSummariesCheck = false;
+  private readonly pendingConvIds = new Set<string>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private cacheDirty = false;
   private isWritingCache = false;
@@ -253,6 +282,179 @@ export class GlobalAnalyticsEngine {
     this.cachePath = path.join(baseDir, CACHE_FILE_NAME);
     this.cache = this.loadCache();
     this.pruneObsoleteCaches();
+  }
+
+  public getRevision(): number {
+    return this.revision;
+  }
+
+  public startWatching(debounceMs = 400): void {
+    if (this.isWatching) return;
+    this.isWatching = true;
+    const summariesDbPath = path.join(this.baseDir, 'conversation_summaries.db');
+    this.lastKnownSummariesSig = getDbSignature(summariesDbPath);
+
+    if (fs.existsSync(this.baseDir)) {
+      try {
+        this.baseWatcher = fs.watch(this.baseDir, { persistent: false }, (_evt, filename) => {
+          const name = filename ? String(filename) : '';
+          if (!name) {
+            this.pendingSummariesCheck = true;
+            this.ensureConvWatcher(debounceMs);
+            this.scheduleWatchFlush(debounceMs);
+            return;
+          }
+          if (SUMMARIES_DB_FILE_RE.test(name)) {
+            this.pendingSummariesCheck = true;
+            this.scheduleWatchFlush(debounceMs);
+            return;
+          }
+          if (name === 'conversations') {
+            this.ensureConvWatcher(debounceMs);
+            this.pendingWatchDirty = true;
+            this.scheduleWatchFlush(debounceMs);
+          }
+        });
+        this.baseWatcher.on('error', () => {});
+        (this.baseWatcher as { unref?: () => void }).unref?.();
+      } catch {
+        this.baseWatcher = null;
+      }
+    }
+
+    this.ensureConvWatcher(debounceMs);
+  }
+
+  private ensureConvWatcher(debounceMs = 400): void {
+    if (!this.isWatching || this.convWatcher) return;
+    const convDir = path.join(this.baseDir, 'conversations');
+    if (!fs.existsSync(convDir)) return;
+    try {
+      this.convWatcher = fs.watch(convDir, { persistent: false }, (_evt, filename) => {
+        const name = filename ? String(filename) : '';
+        if (!name) {
+          this.pendingWatchDirty = true;
+          this.scheduleWatchFlush(debounceMs);
+          return;
+        }
+        const match = SESSION_DB_FILE_RE.exec(name);
+        if (match) {
+          this.pendingConvIds.add(match[1]);
+          this.scheduleWatchFlush(debounceMs);
+        }
+      });
+      this.convWatcher.on('error', () => {});
+      (this.convWatcher as { unref?: () => void }).unref?.();
+    } catch {
+      this.convWatcher = null;
+    }
+  }
+
+  private scheduleWatchFlush(debounceMs = 400): void {
+    if (this.watchDebounceTimer) {
+      clearTimeout(this.watchDebounceTimer);
+    }
+    this.watchDebounceTimer = setTimeout(() => {
+      this.watchDebounceTimer = null;
+      this.flushWatchChanges();
+    }, debounceMs);
+    this.watchDebounceTimer.unref?.();
+  }
+
+  private flushWatchChanges(): void {
+    let changed = this.pendingWatchDirty;
+    this.pendingWatchDirty = false;
+
+    if (this.pendingSummariesCheck) {
+      this.pendingSummariesCheck = false;
+      const nextSumSig = getDbSignature(path.join(this.baseDir, 'conversation_summaries.db'));
+      if (nextSumSig !== this.lastKnownSummariesSig) {
+        this.lastKnownSummariesSig = nextSumSig;
+        changed = true;
+      }
+    }
+
+    if (this.pendingConvIds.size > 0) {
+      const convDir = path.join(this.baseDir, 'conversations');
+      const ids = Array.from(this.pendingConvIds);
+      this.pendingConvIds.clear();
+      for (const convId of ids) {
+        const nextSig = getDbSignature(path.join(convDir, `${convId}.db`));
+        const prevSig = this.lastKnownSessionSigs.get(convId) ?? null;
+        if (nextSig !== prevSig) {
+          if (nextSig === null) {
+            this.lastKnownSessionSigs.delete(convId);
+          } else {
+            this.lastKnownSessionSigs.set(convId, nextSig);
+          }
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      this.revision += 1;
+    }
+  }
+
+  public notifySessionSignature(convId: string, sig: string | null): boolean {
+    if (!convId) return false;
+    const prevSig = this.lastKnownSessionSigs.get(convId) ?? null;
+    if (prevSig === sig) return false;
+    if (sig === null) {
+      this.lastKnownSessionSigs.delete(convId);
+    } else {
+      this.lastKnownSessionSigs.set(convId, sig);
+    }
+    this.revision += 1;
+    return true;
+  }
+
+  private recordObservedSessionSignature(convId: string, sig: string): void {
+    const prevSig = this.lastKnownSessionSigs.get(convId);
+    if (prevSig === undefined) {
+      this.lastKnownSessionSigs.set(convId, sig);
+      return;
+    }
+    if (prevSig !== sig) {
+      this.notifySessionSignature(convId, sig);
+    }
+  }
+
+  public dispose(): void {
+    this.isWatching = false;
+    if (this.watchDebounceTimer) {
+      clearTimeout(this.watchDebounceTimer);
+      this.watchDebounceTimer = null;
+    }
+    if (this.baseWatcher) {
+      try {
+        this.baseWatcher.close();
+      } catch {}
+      this.baseWatcher = null;
+    }
+    if (this.convWatcher) {
+      try {
+        this.convWatcher.close();
+      } catch {}
+      this.convWatcher = null;
+    }
+    this.pendingConvIds.clear();
+    this.flushCache();
+  }
+
+  private setSessionDetailsCache(
+    convId: string,
+    entry: { compositeSig: string; data: SessionAnalyticsData }
+  ): void {
+    if (this.sessionDetailsCache.has(convId)) {
+      this.sessionDetailsCache.delete(convId);
+    }
+    this.sessionDetailsCache.set(convId, entry);
+    if (this.sessionDetailsCache.size > MAX_SESSION_DETAILS_CACHE_SIZE) {
+      const oldestKey = this.sessionDetailsCache.keys().next().value;
+      if (oldestKey) this.sessionDetailsCache.delete(oldestKey);
+    }
   }
 
   private pruneObsoleteCaches(): void {
@@ -337,12 +539,28 @@ export class GlobalAnalyticsEngine {
     }
   }
 
-  public getSummaries(): ConversationSummary[] {
+  private getSummariesWithTree(): {
+    summaries: ConversationSummary[];
+    tree: SessionTreeIndex;
+    sig: string | null;
+  } {
     const dbPath = path.join(this.baseDir, 'conversation_summaries.db');
-    if (!fs.existsSync(dbPath)) return [];
+    const sig = getDbSignature(dbPath);
+    if (!sig) {
+      this.summariesCache = null;
+      this.lastKnownSummariesSig = null;
+      return { summaries: [], tree: buildSessionTreeIndex([]), sig: null };
+    }
+
+    if (this.summariesCache && this.summariesCache.sig === sig) {
+      return this.summariesCache;
+    }
 
     const db = openDb(dbPath);
-    if (!db) return [];
+    if (!db) {
+      if (this.summariesCache) return this.summariesCache;
+      return { summaries: [], tree: buildSessionTreeIndex([]), sig: null };
+    }
 
     try {
       const rows = db
@@ -354,7 +572,7 @@ export class GlobalAnalyticsEngine {
         `
         )
         .all();
-      return (rows || []).map((r) => ({
+      const summaries = (rows || []).map((r) => ({
         conversationId: String(r.conversation_id || ''),
         title: String(r.title || ''),
         stepCount: Number(r.step_count || 0),
@@ -366,14 +584,22 @@ export class GlobalAnalyticsEngine {
         parentConversationId: String(r.parent_conversation_id || ''),
         nestingDepth: Number(r.nesting_depth || 0)
       }));
+      const tree = buildSessionTreeIndex(summaries);
+      this.summariesCache = { sig, summaries, tree };
+      this.lastKnownSummariesSig = sig;
+      return this.summariesCache;
     } catch (err) {
       console.error('[Aura Analytics] Error reading summaries:', err);
-      return [];
+      return { summaries: [], tree: buildSessionTreeIndex([]), sig: null };
     } finally {
       try {
         db.close();
       } catch {}
     }
+  }
+
+  public getSummaries(): ConversationSummary[] {
+    return [...this.getSummariesWithTree().summaries];
   }
 
   public getSummaryById(
@@ -484,10 +710,20 @@ export class GlobalAnalyticsEngine {
     }
   }
 
-  public getGlobalOverview(): GlobalAnalyticsOverview {
+  public getGlobalOverview(force = false): GlobalAnalyticsOverview {
     const convDir = path.join(this.baseDir, 'conversations');
-    const summaries = this.getSummaries();
-    const sessionTree = buildSessionTreeIndex(summaries);
+    const { summaries, tree: sessionTree, sig: summariesSig } = this.getSummariesWithTree();
+
+    if (
+      !force &&
+      this.isWatching &&
+      this.overviewCache &&
+      this.overviewCache.revision === this.revision &&
+      this.overviewCache.summariesSig === summariesSig
+    ) {
+      return this.overviewCache.data;
+    }
+
     const homeDir = os.homedir();
     let cacheUpdated = false;
 
@@ -523,6 +759,7 @@ export class GlobalAnalyticsEngine {
       const dbPath = path.join(convDir, `${convId}.db`);
       const sig = getDbSignature(dbPath);
       if (!sig) continue;
+      this.recordObservedSessionSignature(convId, sig);
 
       let entry = this.cache.sessions[convId];
       if (!entry || entry.sig !== sig) {
@@ -937,7 +1174,7 @@ export class GlobalAnalyticsEngine {
         a.agentName.localeCompare(b.agentName)
     );
 
-    return {
+    const result: GlobalAnalyticsOverview = {
       totalConversations: globalRootSessionIds.size,
       totalRequests,
       totalTokens: {
@@ -966,6 +1203,12 @@ export class GlobalAnalyticsEngine {
       subagentDistribution,
       dailySubagentStats: globalDailySubagentStats
     };
+    this.overviewCache = {
+      revision: this.revision,
+      summariesSig,
+      data: result
+    };
+    return result;
   }
 
   private parseSessionCacheEntry(
@@ -1263,22 +1506,46 @@ export class GlobalAnalyticsEngine {
     }
   }
 
-  public getSessionDetails(convId: string): SessionAnalyticsData | null {
+  public getSessionDetails(convId: string, force = false): SessionAnalyticsData | null {
     if (!convId || !/^[0-9a-f-]{36}$/i.test(convId)) return null;
-    const dbPath = path.join(this.baseDir, 'conversations', `${convId}.db`);
-    if (!fs.existsSync(dbPath)) return null;
+    const convDir = path.join(this.baseDir, 'conversations');
+    const dbPath = path.join(convDir, `${convId}.db`);
+    const mainSig = getDbSignature(dbPath);
+    if (!mainSig) {
+      this.sessionDetailsCache.delete(convId);
+      this.lastKnownSessionSigs.delete(convId);
+      return null;
+    }
+
+    const { tree: sessionTree } = this.getSummariesWithTree();
+    const descendantIds = sessionTree.collectDescendantIds(convId);
+    const subSigParts: string[] = [];
+    for (const subId of descendantIds) {
+      const subSig = getDbSignature(path.join(convDir, `${subId}.db`));
+      subSigParts.push(`${subId}:${subSig ?? 'missing'}`);
+    }
+    const compositeSig = `${mainSig}|${subSigParts.join(',')}`;
+
+    if (!force) {
+      const cachedDetails = this.sessionDetailsCache.get(convId);
+      if (cachedDetails && cachedDetails.compositeSig === compositeSig) {
+        this.sessionDetailsCache.delete(convId);
+        this.sessionDetailsCache.set(convId, cachedDetails);
+        return cachedDetails.data;
+      }
+    }
 
     const db = openDb(dbPath);
     if (!db) return null;
 
     try {
       const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
-
-      const summaries = this.getSummaries();
-      const sessionTree = buildSessionTreeIndex(summaries);
-      const descendantIds = sessionTree.collectDescendantIds(convId);
       const mainSummaryMeta = sessionTree.summaryById.get(convId);
-      if ((!rows || rows.length === 0) && descendantIds.length === 0) return null;
+      if ((!rows || rows.length === 0) && descendantIds.length === 0) {
+        this.sessionDetailsCache.delete(convId);
+        return null;
+      }
+      this.recordObservedSessionSignature(convId, mainSig);
 
       const mainFallbackTsSec =
         parseEpochSecFromIso(mainSummaryMeta?.lastModifiedTime) || getFileMtimeSec(dbPath);
@@ -1409,7 +1676,6 @@ export class GlobalAnalyticsEngine {
 
       let totalRequests = steps.length;
       const sessionSubagentMap: Record<string, SubagentStatItem> = {};
-      const convDir = path.join(this.baseDir, 'conversations');
       let cacheUpdated = false;
 
       for (const subId of descendantIds) {
@@ -1417,6 +1683,7 @@ export class GlobalAnalyticsEngine {
         const subDbPath = path.join(convDir, `${subId}.db`);
         const sig = getDbSignature(subDbPath);
         if (!sig) continue;
+        this.recordObservedSessionSignature(subId, sig);
 
         let subEntry = this.cache.sessions[subId];
         if (!subEntry || subEntry.sig !== sig) {
@@ -1602,7 +1869,7 @@ export class GlobalAnalyticsEngine {
         : undefined;
       const speedTimeline = buildSessionSpeedTimeline(allSpeedSamples);
 
-      return {
+      const result: SessionAnalyticsData = {
         cascadeId: convId,
         project,
         totalTokens: {
@@ -1625,6 +1892,8 @@ export class GlobalAnalyticsEngine {
         subagents,
         speedTimeline
       };
+      this.setSessionDetailsCache(convId, { compositeSig, data: result });
+      return result;
     } catch (err) {
       console.error('[Aggregator] getSessionDetails error:', err);
       return null;

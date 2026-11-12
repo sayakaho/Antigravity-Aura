@@ -1,5 +1,6 @@
 import { buildSessionAnalyticsEndpoint } from '../../shared/session';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../../types';
+import { type AnalyticsRefreshMode } from './auto-refresh';
 import {
   ANALYTICS_RANGE_STORAGE_KEY,
   PROJECT_SCOPE_STORAGE_KEY,
@@ -27,6 +28,12 @@ import {
 } from './metrics';
 import { getRangeDisplayTitle, type TimeRangeOption } from './time-range';
 
+export interface RefreshAnalyticsOptions {
+  mode?: AnalyticsRefreshMode;
+  force?: boolean;
+  preserveScroll?: boolean;
+}
+
 const initialRangeState = loadAnalyticsRangeState();
 let rawOverview: GlobalAnalyticsOverview | null = null;
 let currentRange: TimeRangeOption = initialRangeState.range;
@@ -37,15 +44,17 @@ let activeSessionData: SessionAnalyticsData | null = null;
 let rangeListenersBound = false;
 let refreshSeq = 0;
 let activeRefreshPromise: Promise<void> | null = null;
-let pendingRefresh = false;
+let pendingRefreshOptions: Required<RefreshAnalyticsOptions> | null = null;
+let overviewDirty = false;
 
 export function getActiveSessionId(): string | null {
   return activeSessionData?.cascadeId ?? null;
 }
 
-export async function fetchOverview(): Promise<GlobalAnalyticsOverview | null> {
+export async function fetchOverview(force = false): Promise<GlobalAnalyticsOverview | null> {
   try {
-    const res = await window.sidecar.fetch('/api/analytics/overview', { method: 'GET' });
+    const endpoint = force ? '/api/analytics/overview?force=1' : '/api/analytics/overview';
+    const res = await window.sidecar.fetch(endpoint, { method: 'GET' });
     if (!res.ok) return null;
     const json = (await res.json()) as { ok?: boolean; data?: GlobalAnalyticsOverview };
     return json.ok && json.data ? json.data : null;
@@ -55,14 +64,14 @@ export async function fetchOverview(): Promise<GlobalAnalyticsOverview | null> {
   }
 }
 
-async function fetchActiveSessionState(): Promise<{
+async function fetchActiveSessionState(force = false): Promise<{
   resolved: boolean;
   data: SessionAnalyticsData | null;
 }> {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const convId = urlParams.get('conversationId') || window.sidecar?.conversationId || '';
-    const endpoint = buildSessionAnalyticsEndpoint(convId);
+    const endpoint = buildSessionAnalyticsEndpoint(convId, force);
     const res = await window.sidecar.fetch(endpoint, { method: 'GET' });
     if (!res.ok) return { resolved: false, data: null };
     const json = (await res.json()) as { ok?: boolean; data?: SessionAnalyticsData };
@@ -76,9 +85,18 @@ async function fetchActiveSessionState(): Promise<{
   }
 }
 
-export async function fetchActiveSession(): Promise<SessionAnalyticsData | null> {
-  const result = await fetchActiveSessionState();
+export async function fetchActiveSession(force = false): Promise<SessionAnalyticsData | null> {
+  const result = await fetchActiveSessionState(force);
   return result.data;
+}
+
+async function ensureFreshOverviewIfDirty(): Promise<void> {
+  if (!overviewDirty && rawOverview) return;
+  const overview = await fetchOverview();
+  if (overview) {
+    rawOverview = overview;
+    overviewDirty = false;
+  }
 }
 
 function syncCustomDateInputs(): void {
@@ -111,7 +129,8 @@ function updateProjectScopeControlUI(scope: ProjectScopeMode): void {
 
 function renderRangeDependentViews(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption
+  range: TimeRangeOption,
+  preserveScroll = false
 ): void {
   const processed = computeProcessedColumns(
     overview,
@@ -121,7 +140,14 @@ function renderRangeDependentViews(
     customEndDate
   );
   renderMetricCards(processed, range, overview, activeSessionData, customStartDate, customEndDate);
-  renderActivityChart(processed.columns, getRangeDisplayTitle(range), range, activeSessionData);
+  renderActivityChart(
+    processed.columns,
+    getRangeDisplayTitle(range),
+    range,
+    activeSessionData,
+    undefined,
+    { preserveScroll }
+  );
   renderModelDistribution(overview, range, activeSessionData, customStartDate, customEndDate);
   renderSubagentDistribution(
     overview,
@@ -164,9 +190,11 @@ async function applyExternalRangeState(next: AnalyticsRangeState): Promise<void>
     if (sessionRes.resolved) {
       activeSessionData = sessionRes.data;
     }
+  } else if (overviewDirty) {
+    await ensureFreshOverviewIfDirty();
   }
 
-  if (rawOverview) {
+  if (rawOverview && currentRange === next.range) {
     renderRangeDependentViews(rawOverview, currentRange);
   }
 }
@@ -182,55 +210,138 @@ export async function applyTimeRangeFilter(range: TimeRangeOption): Promise<void
       activeSessionData = sessionRes.data;
     }
   }
+  if (range !== 'session' && overviewDirty) {
+    await ensureFreshOverviewIfDirty();
+  }
 
-  if (rawOverview) {
+  if (rawOverview && currentRange === range) {
     renderRangeDependentViews(rawOverview, range);
   }
 }
 
-async function runRefreshPass(): Promise<void> {
+function normalizeRefreshOptions(
+  options: RefreshAnalyticsOptions = {}
+): Required<RefreshAnalyticsOptions> {
+  return {
+    mode: options.mode ?? 'manual',
+    force: options.force ?? false,
+    preserveScroll: options.preserveScroll ?? false
+  };
+}
+
+function mergeRefreshOptions(
+  a: Required<RefreshAnalyticsOptions> | null,
+  b: Required<RefreshAnalyticsOptions>
+): Required<RefreshAnalyticsOptions> {
+  if (!a) return b;
+  const mode: AnalyticsRefreshMode =
+    a.mode === 'manual' || b.mode === 'manual'
+      ? 'manual'
+      : a.mode === 'initial' || b.mode === 'initial'
+        ? 'initial'
+        : 'auto';
+  return {
+    mode,
+    force: a.force || b.force,
+    preserveScroll: a.preserveScroll && b.preserveScroll
+  };
+}
+
+async function runRefreshPass(initialOptions: Required<RefreshAnalyticsOptions>): Promise<void> {
   const refreshBtn = document.getElementById('btn-refresh-analytics');
-  refreshBtn?.classList.add('loading');
+  const liveStatus = document.getElementById('analytics-live-status');
+  let nextOptions: Required<RefreshAnalyticsOptions> | null = initialOptions;
+  let usedSpinner = false;
+  let usedLivePulse = false;
 
   try {
-    do {
-      pendingRefresh = false;
-      const seq = ++refreshSeq;
-      const [overview, sessionRes] = await Promise.all([
-        fetchOverview(),
-        fetchActiveSessionState()
-      ]);
+    while (nextOptions) {
+      const opts: Required<RefreshAnalyticsOptions> = nextOptions;
+      nextOptions = null;
 
-      if (seq !== refreshSeq || pendingRefresh) {
-        continue;
+      if (opts.mode !== 'auto') {
+        usedSpinner = true;
+        refreshBtn?.classList.add('loading');
+      } else {
+        usedLivePulse = true;
+        liveStatus?.classList.add('is-updating');
       }
 
-      if (overview) rawOverview = overview;
-      if (sessionRes.resolved) activeSessionData = sessionRes.data;
+      const seq = ++refreshSeq;
+      const canDeferOverview =
+        opts.mode === 'auto' &&
+        !opts.force &&
+        currentRange === 'session' &&
+        currentProjectScope === 'follow' &&
+        rawOverview !== null &&
+        activeSessionData !== null;
+
+      if (canDeferOverview) {
+        overviewDirty = true;
+      }
+
+      const [overview, sessionRes] = await Promise.all([
+        canDeferOverview ? Promise.resolve(null) : fetchOverview(opts.force),
+        fetchActiveSessionState(opts.force)
+      ]);
+
+      if (!canDeferOverview && overview) {
+        rawOverview = overview;
+        overviewDirty = false;
+      }
+      if (sessionRes.resolved) {
+        activeSessionData = sessionRes.data;
+      }
+
+      if (seq !== refreshSeq || pendingRefreshOptions) {
+        const queued = pendingRefreshOptions;
+        pendingRefreshOptions = null;
+        if (queued) {
+          nextOptions = {
+            mode: queued.mode,
+            force: queued.force,
+            preserveScroll: opts.preserveScroll && queued.preserveScroll
+          };
+        }
+        continue;
+      }
 
       updateRangeControlUI(currentRange);
       updateProjectScopeControlUI(currentProjectScope);
       if (rawOverview) {
-        renderRangeDependentViews(rawOverview, currentRange);
+        renderRangeDependentViews(rawOverview, currentRange, opts.preserveScroll);
       }
-    } while (pendingRefresh);
+
+      if (pendingRefreshOptions) {
+        nextOptions = pendingRefreshOptions;
+        pendingRefreshOptions = null;
+      }
+    }
   } finally {
-    if (refreshBtn) {
+    if (usedSpinner && refreshBtn) {
       setTimeout(() => {
         if (!activeRefreshPromise) {
           refreshBtn.classList.remove('loading');
         }
       }, 300);
     }
+    if (usedLivePulse && liveStatus) {
+      setTimeout(() => {
+        if (!activeRefreshPromise) {
+          liveStatus.classList.remove('is-updating');
+        }
+      }, 300);
+    }
   }
 }
 
-export async function refreshAnalytics(): Promise<void> {
+export async function refreshAnalytics(options: RefreshAnalyticsOptions = {}): Promise<void> {
+  const normalized = normalizeRefreshOptions(options);
   if (activeRefreshPromise) {
-    pendingRefresh = true;
+    pendingRefreshOptions = mergeRefreshOptions(pendingRefreshOptions, normalized);
     return activeRefreshPromise;
   }
-  activeRefreshPromise = runRefreshPass().finally(() => {
+  activeRefreshPromise = runRefreshPass(normalized).finally(() => {
     activeRefreshPromise = null;
   });
   return activeRefreshPromise;
@@ -250,6 +361,20 @@ function applyProjectScope(scope: ProjectScopeMode): void {
       customEndDate
     );
   }
+  if (scope === 'all-time' && overviewDirty) {
+    void ensureFreshOverviewIfDirty().then(() => {
+      if (rawOverview && currentProjectScope === 'all-time') {
+        renderProjectDistribution(
+          rawOverview,
+          currentRange,
+          activeSessionData,
+          currentProjectScope,
+          customStartDate,
+          customEndDate
+        );
+      }
+    });
+  }
 }
 
 function applyExternalProjectScope(nextScope: ProjectScopeMode): void {
@@ -265,6 +390,20 @@ function applyExternalProjectScope(nextScope: ProjectScopeMode): void {
       customStartDate,
       customEndDate
     );
+  }
+  if (nextScope === 'all-time' && overviewDirty) {
+    void ensureFreshOverviewIfDirty().then(() => {
+      if (rawOverview && currentProjectScope === 'all-time') {
+        renderProjectDistribution(
+          rawOverview,
+          currentRange,
+          activeSessionData,
+          currentProjectScope,
+          customStartDate,
+          customEndDate
+        );
+      }
+    });
   }
 }
 

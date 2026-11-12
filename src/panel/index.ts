@@ -3,6 +3,7 @@
  */
 
 import type { SidecarStatusResponse } from '../types';
+import { AnalyticsAutoRefreshController } from './analytics/auto-refresh';
 import { getActiveSessionId, initTimeRangeControls, refreshAnalytics } from './analytics/index';
 import {
   PANEL_TAB_STORAGE_KEY,
@@ -14,7 +15,117 @@ import {
 import { bindSettingsControls, loadConfig, loadSystemFonts, showToast } from './settings';
 import { initThemeListener, syncTheme } from './theme-sync';
 
-let onSessionActivated: ((cascadeId: string) => void) | null = null;
+interface StatusUpdatePayload {
+  analyticsRevision?: number;
+  activeCascadeId: string;
+}
+
+const INTERACTIVE_ANALYTICS_HOVER_SELECTOR =
+  '#analytics-activity-chart .chart-stage, #analytics-model-tps-chart .chart-body, #analytics-latency-ttft-chart .chart-body, #overview-hit-legend-trigger, .project-path-pill[data-tooltip-path]';
+
+let onStatusUpdate: ((payload: StatusUpdatePayload) => void) | null = null;
+
+function bindAnalyticsInteractionTracking(
+  viewAnalytics: HTMLElement | null,
+  autoRefresh: AnalyticsAutoRefreshController,
+  isAnalyticsTabActive: () => boolean
+): void {
+  if (!viewAnalytics) return;
+
+  let hoverActive = false;
+  let pointerDownActive = false;
+  let scrollActive = false;
+  let scrollIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const syncInteractionState = () => {
+    autoRefresh.onInteractionChange(hoverActive || pointerDownActive || scrollActive);
+  };
+
+  const clearScrollTimer = () => {
+    if (scrollIdleTimer) {
+      clearTimeout(scrollIdleTimer);
+      scrollIdleTimer = null;
+    }
+  };
+
+  const markScrollActive = () => {
+    if (!isAnalyticsTabActive()) return;
+    scrollActive = true;
+    syncInteractionState();
+    clearScrollTimer();
+    scrollIdleTimer = setTimeout(() => {
+      scrollIdleTimer = null;
+      scrollActive = false;
+      syncInteractionState();
+    }, 350);
+  };
+
+  viewAnalytics.addEventListener('pointerover', (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    const nextHover = Boolean(target?.closest(INTERACTIVE_ANALYTICS_HOVER_SELECTOR));
+    if (nextHover !== hoverActive) {
+      hoverActive = nextHover;
+      syncInteractionState();
+    }
+  });
+
+  viewAnalytics.addEventListener('pointerout', (e) => {
+    if (!hoverActive) return;
+    const related = e.relatedTarget instanceof Element ? e.relatedTarget : null;
+    if (!related || !viewAnalytics.contains(related) || !related.closest(INTERACTIVE_ANALYTICS_HOVER_SELECTOR)) {
+      hoverActive = false;
+      syncInteractionState();
+    }
+  });
+
+  viewAnalytics.addEventListener('pointerleave', () => {
+    hoverActive = false;
+    pointerDownActive = false;
+    syncInteractionState();
+  });
+
+  viewAnalytics.addEventListener('pointerdown', () => {
+    pointerDownActive = true;
+    syncInteractionState();
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!pointerDownActive) return;
+    pointerDownActive = false;
+    syncInteractionState();
+  });
+
+  window.addEventListener('pointercancel', () => {
+    if (!pointerDownActive) return;
+    pointerDownActive = false;
+    syncInteractionState();
+  });
+
+  window.addEventListener('blur', () => {
+    if (!hoverActive && !pointerDownActive && !scrollActive) return;
+    hoverActive = false;
+    pointerDownActive = false;
+    scrollActive = false;
+    clearScrollTimer();
+    syncInteractionState();
+  });
+
+  viewAnalytics.addEventListener('wheel', markScrollActive, { passive: true });
+  document.addEventListener(
+    'scroll',
+    (e) => {
+      const target = e.target;
+      if (
+        target === document ||
+        target === document.documentElement ||
+        (target instanceof Element && target.classList.contains('chart-stage-scrollable'))
+      ) {
+        markScrollActive();
+      }
+    },
+    { capture: true, passive: true }
+  );
+}
 
 export async function updateStatus(): Promise<void> {
   try {
@@ -46,9 +157,11 @@ export async function updateStatus(): Promise<void> {
         : typeof data.metrics?.cascadeId === 'string'
           ? data.metrics.cascadeId
           : '';
-    if (nextCascadeId) {
-      onSessionActivated?.(nextCascadeId);
-    }
+    onStatusUpdate?.({
+      analyticsRevision:
+        typeof data.analyticsRevision === 'number' ? data.analyticsRevision : undefined,
+      activeCascadeId: nextCascadeId
+    });
   } catch (err) {
     console.error('updateStatus failed:', err);
   }
@@ -64,8 +177,14 @@ async function initApp(): Promise<void> {
   const viewSettings = document.getElementById('view-settings');
 
   let activeTab: PanelTab = loadPanelTabState();
-  let lastKnownCascadeId = '';
   let lastWorkspaceSig: string | null = null;
+
+  const autoRefresh = new AnalyticsAutoRefreshController({
+    initialTabActive: activeTab === 'analytics',
+    initialHidden: typeof document !== 'undefined' ? document.hidden : false,
+    interactionGraceMs: 250,
+    onRefresh: (req) => refreshAnalytics(req)
+  });
 
   const applyTabUI = (tab: PanelTab) => {
     activeTab = tab;
@@ -77,9 +196,11 @@ async function initApp(): Promise<void> {
   };
 
   const switchTab = (tab: PanelTab) => {
-    applyTabUI(tab);
-    savePanelTabState(tab);
-    if (tab === 'analytics') void refreshAnalytics();
+    if (tab !== activeTab) {
+      applyTabUI(tab);
+      savePanelTabState(tab);
+    }
+    autoRefresh.onTabChange(tab === 'analytics');
   };
 
   // 首个 await 前同步还原 Tab 与时间范围控件状态，避免从默认状态闪跳
@@ -89,28 +210,31 @@ async function initApp(): Promise<void> {
     document.documentElement.classList.remove('aura-preload');
   });
 
-  onSessionActivated = (nextCascadeId: string) => {
-    const currentRenderedId = getActiveSessionId();
-    const changed =
-      (lastKnownCascadeId !== '' && nextCascadeId !== lastKnownCascadeId) ||
-      (currentRenderedId !== null && currentRenderedId !== nextCascadeId);
-    lastKnownCascadeId = nextCascadeId;
-    if (changed && activeTab === 'analytics') {
-      void refreshAnalytics();
-    }
+  onStatusUpdate = (snapshot) => {
+    autoRefresh.onStatusSnapshot({
+      analyticsRevision: snapshot.analyticsRevision,
+      activeCascadeId: snapshot.activeCascadeId,
+      renderedSessionId: getActiveSessionId()
+    });
   };
 
   tabAnalytics?.addEventListener('click', () => switchTab('analytics'));
   tabSettings?.addEventListener('click', () => switchTab('settings'));
 
   document.getElementById('btn-refresh-analytics')?.addEventListener('click', () => {
-    void refreshAnalytics();
+    autoRefresh.triggerManualRefresh();
   });
+
+  bindAnalyticsInteractionTracking(
+    viewAnalytics,
+    autoRefresh,
+    () => activeTab === 'analytics'
+  );
 
   const syncExternalTabState = (nextTab: PanelTab) => {
     if (nextTab === activeTab) return;
     applyTabUI(nextTab);
-    if (nextTab === 'analytics') void refreshAnalytics();
+    autoRefresh.onTabChange(nextTab === 'analytics');
   };
 
   window.addEventListener('storage', (event) => {
@@ -122,7 +246,11 @@ async function initApp(): Promise<void> {
   });
   window.addEventListener('focus', () => syncExternalTabState(loadPanelTabState()));
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) syncExternalTabState(loadPanelTabState());
+    autoRefresh.onVisibilityChange(document.hidden);
+    if (!document.hidden) {
+      syncExternalTabState(loadPanelTabState());
+      void updateStatus();
+    }
   });
 
   bindSettingsControls();
@@ -165,18 +293,19 @@ async function initApp(): Promise<void> {
       } else {
         lastWorkspaceSig = nextSig;
       }
-      if (activeTab === 'analytics') void refreshAnalytics();
+      autoRefresh.onWorkspaceChange();
     });
   }
 
-  setInterval(() => void updateStatus(), 3000);
+  setInterval(() => {
+    if (!document.hidden) {
+      void updateStatus();
+    }
+  }, 2500);
 
-  await Promise.allSettled([
-    loadSystemFonts(),
-    loadConfig(),
-    updateStatus(),
-    activeTab === 'analytics' ? refreshAnalytics() : Promise.resolve()
-  ]);
+  autoRefresh.triggerInitialLoad();
+
+  await Promise.allSettled([loadSystemFonts(), loadConfig(), updateStatus()]);
 }
 
 if (document.readyState === 'loading') {

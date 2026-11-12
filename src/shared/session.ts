@@ -20,11 +20,16 @@ export function resolveAnalyticsSessionId(
     : '';
 }
 
-export function buildSessionAnalyticsEndpoint(fallbackId?: string | null): string {
+export function buildSessionAnalyticsEndpoint(
+  fallbackId?: string | null,
+  force = false
+): string {
   const cleanFallback = typeof fallbackId === 'string' ? fallbackId.trim() : '';
-  return cleanFallback
-    ? `/api/analytics/session?fallbackId=${encodeURIComponent(cleanFallback)}`
-    : '/api/analytics/session';
+  const params = new URLSearchParams();
+  if (cleanFallback) params.set('fallbackId', cleanFallback);
+  if (force) params.set('force', '1');
+  const query = params.toString();
+  return query ? `/api/analytics/session?${query}` : '/api/analytics/session';
 }
 
 export function isSubagentSummary(

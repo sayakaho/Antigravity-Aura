@@ -73,6 +73,25 @@ export function buildYAxisGridSvg(opts: {
   return { linesSvg, textsSvg };
 }
 
+const renderedHtmlCache = new WeakMap<object, string>();
+
+export function setRenderedHtmlIfChanged(
+  el: HTMLElement,
+  html: string,
+  cacheKey = html
+): boolean {
+  if (renderedHtmlCache.get(el) === cacheKey && el.innerHTML !== '') {
+    return false;
+  }
+  renderedHtmlCache.set(el, cacheKey);
+  el.innerHTML = html;
+  return true;
+}
+
+export function clearRenderedHtmlCache(el: HTMLElement): void {
+  renderedHtmlCache.delete(el);
+}
+
 export function renderEmptyChartCard(
   chartWrapper: HTMLElement,
   title: string,
@@ -82,14 +101,17 @@ export function renderEmptyChartCard(
   const subtitleHtml = subtitle
     ? `<span class="chart-subtitle">${escapeHtml(subtitle)}</span>`
     : '';
-  chartWrapper.innerHTML = `
+  setRenderedHtmlIfChanged(
+    chartWrapper,
+    `
     <div class="chart-header">
       <div class="chart-header-left">
         <h3 class="chart-title">${escapeHtml(title)}${subtitleHtml}</h3>
       </div>
     </div>
     <div class="chart-empty">${escapeHtml(emptyMsg)}</div>
-  `;
+  `
+  );
 }
 
 export function positionTooltipNearAnchor(opts: {

@@ -29,7 +29,11 @@ import type {
 } from '../../types';
 import type { ProjectScopeMode } from '../panel-state';
 import { showToast } from '../settings';
-import type { ChartColumnData } from './charts-base';
+import {
+  clearRenderedHtmlCache,
+  setRenderedHtmlIfChanged,
+  type ChartColumnData
+} from './charts-base';
 import {
   generateContinuousDateList,
   getFilterDatesForRange,
@@ -491,7 +495,9 @@ export function renderMetricCards(
         ? Math.round(totalTok / totalReq)
         : 0;
 
-  container.innerHTML = `
+  setRenderedHtmlIfChanged(
+    container,
+    `
     <div class="kpi-hero-card">
       <div class="hero-left">
         <div class="kpi-label-row">
@@ -597,7 +603,8 @@ export function renderMetricCards(
         <div class="kpi-value-md">$${actualCost.toFixed(2)}</div>
       </div>
     </div>
-  `;
+  `
+  );
 }
 
 const PROJECT_TOOLTIP_ID = 'project-path-tooltip';
@@ -933,7 +940,6 @@ export function renderProjectDistribution(
   if (!container) return;
 
   bindProjectContainerEvents(container);
-  hideProjectTooltipImmediately();
 
   const projects = computeProjectDistributionItems(
     overview,
@@ -951,7 +957,9 @@ export function renderProjectDistribution(
         : scope === 'follow'
           ? 'No workspace activity recorded in this range'
           : 'No workspace activity recorded';
-    container.innerHTML = `<div class="chart-empty">${emptyMsg}</div>`;
+    if (setRenderedHtmlIfChanged(container, `<div class="chart-empty">${emptyMsg}</div>`)) {
+      hideProjectTooltipImmediately();
+    }
     return;
   }
 
@@ -1011,7 +1019,7 @@ export function renderProjectDistribution(
     })
     .join('');
 
-  container.innerHTML = `
+  const nextHtml = `
     <div class="project-distribution-summary">
       <span class="project-summary-text"><strong>${formatFullNumber(projects.length)}</strong> ${workspaceWord} · <strong>${formatFullNumber(totalSessions)}</strong> ${totalSessionWord} · <strong>${formatCompactNumber(totalTokens)}</strong> tokens</span>
       <span class="project-scope-badge">${escapeHtml(scopeLabel)}</span>
@@ -1020,6 +1028,9 @@ export function renderProjectDistribution(
       ${rowsHtml}
     </div>
   `;
+  if (setRenderedHtmlIfChanged(container, nextHtml)) {
+    hideProjectTooltipImmediately();
+  }
 }
 
 export function renderModelDistribution(
@@ -1122,30 +1133,35 @@ export function renderModelDistribution(
   );
 
   if (models.length === 0) {
-    container.innerHTML = '<div class="chart-empty">No model usage recorded in this range</div>';
+    setRenderedHtmlIfChanged(
+      container,
+      '<div class="chart-empty">No model usage recorded in this range</div>'
+    );
     return;
   }
 
   const maxTokens = Math.max(...models.map((m) => m.totalTokens), 1);
   const usedColors = new Set<string>();
 
-  container.innerHTML = models
-    .map((m, idx) => {
-      const pct = Math.max(3, Math.round((m.totalTokens / maxTokens) * 100));
-      const color = getModelColor(m.modelId || m.modelName, idx, usedColors);
-      const speedBadge = m.avgTps > 0 ? `<span class="model-speed-badge">${m.avgTps} tok/s</span>` : '';
-      const rawTotal = m.inputTok + m.cacheRead;
-      const cacheRate = rawTotal > 0 ? Math.round((m.cacheRead / rawTotal) * 100) : 0;
-      const tokenParts = [
-        `Cache: ${cacheRate}% (${formatCompactNumber(m.cacheRead)})`,
-        `Out: ${formatCompactNumber(m.outTok)}`,
-        `In: ${formatCompactNumber(m.inputTok)}`
-      ];
-      if (m.thinkTok > 0) {
-        tokenParts.push(`Think: ${formatCompactNumber(m.thinkTok)}`);
-      }
+  setRenderedHtmlIfChanged(
+    container,
+    models
+      .map((m, idx) => {
+        const pct = Math.max(3, Math.round((m.totalTokens / maxTokens) * 100));
+        const color = getModelColor(m.modelId || m.modelName, idx, usedColors);
+        const speedBadge = m.avgTps > 0 ? `<span class="model-speed-badge">${m.avgTps} tok/s</span>` : '';
+        const rawTotal = m.inputTok + m.cacheRead;
+        const cacheRate = rawTotal > 0 ? Math.round((m.cacheRead / rawTotal) * 100) : 0;
+        const tokenParts = [
+          `Cache: ${cacheRate}% (${formatCompactNumber(m.cacheRead)})`,
+          `Out: ${formatCompactNumber(m.outTok)}`,
+          `In: ${formatCompactNumber(m.inputTok)}`
+        ];
+        if (m.thinkTok > 0) {
+          tokenParts.push(`Think: ${formatCompactNumber(m.thinkTok)}`);
+        }
 
-      return `
+        return `
         <div class="model-stat-row">
           <div class="model-meta">
             <div class="model-title-line">
@@ -1167,8 +1183,9 @@ export function renderModelDistribution(
           </div>
         </div>
       `;
-    })
-    .join('');
+      })
+      .join('')
+  );
 }
 
 export function renderToolDistribution(
@@ -1218,7 +1235,10 @@ export function renderToolDistribution(
   }
 
   if (tools.length === 0) {
-    container.innerHTML = '<div class="chart-empty">No tool executions recorded in this range</div>';
+    setRenderedHtmlIfChanged(
+      container,
+      '<div class="chart-empty">No tool executions recorded in this range</div>'
+    );
     return;
   }
 
@@ -1249,14 +1269,17 @@ export function renderToolDistribution(
     })
     .join('');
 
-  container.innerHTML = `
+  setRenderedHtmlIfChanged(
+    container,
+    `
     <div class="tool-distribution-summary">
       <span class="tool-summary-text">Total Invocations: <strong>${formatFullNumber(totalAll)}</strong></span>
     </div>
     <div class="tool-distribution-grid">
       ${itemsHtml}
     </div>
-  `;
+  `
+  );
 }
 
 export function computeSubagentBreakdown(
@@ -1387,6 +1410,7 @@ export function renderSubagentDistribution(
 
   if (!breakdown || breakdown.items.length === 0) {
     if (section) section.style.display = 'none';
+    clearRenderedHtmlCache(container);
     container.innerHTML = '';
     return;
   }
@@ -1446,7 +1470,9 @@ export function renderSubagentDistribution(
     })
     .join('');
 
-  container.innerHTML = `
+  setRenderedHtmlIfChanged(
+    container,
+    `
     <div class="subagent-distribution-summary">
       <div class="subagent-summary-legend">
         <span class="subagent-legend-item">
@@ -1467,5 +1493,6 @@ export function renderSubagentDistribution(
     <div class="subagent-distribution-grid">
       ${rowsHtml}
     </div>
-  `;
+  `
+  );
 }

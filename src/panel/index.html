@@ -63,14 +63,20 @@
       <!-- Action Bar -->
       <div class="analytics-toolbar">
         <div class="toolbar-title">Global Conversation Intelligence</div>
-        <button class="btn-action btn-sm" id="btn-refresh-analytics">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <polyline points="1 20 1 14 7 14"></polyline>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-          </svg>
-          <span>Refresh</span>
-        </button>
+        <div class="analytics-toolbar-actions">
+          <span class="analytics-live-pill" id="analytics-live-status" title="Auto-updates when telemetry changes">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span>Live</span>
+          </span>
+          <button class="btn-action btn-sm" id="btn-refresh-analytics">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       <!-- KPI Summary Grid -->

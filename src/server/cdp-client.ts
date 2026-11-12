@@ -96,12 +96,21 @@ function fetchTargets(port: number): Promise<CdpTargetDescriptor[]> {
   });
 }
 
+export interface CdpManagerOptions {
+  onSessionDbChange?: (cascadeId: string, sig: string) => void;
+}
+
 export class CdpManager {
   private readonly attachedTargets = new Map<string, AttachedTargetEntry>();
+  private readonly onSessionDbChange?: (cascadeId: string, sig: string) => void;
   private lastDetectedPort: number | null = null;
   private lastGlobalActiveCascadeId = '';
   private latestMetrics: LiveMetricsPayload | null = null;
   private isSyncing = false;
+
+  constructor(options?: CdpManagerOptions) {
+    this.onSessionDbChange = options?.onSessionDbChange;
+  }
 
   public getTargetCount(): number {
     return this.attachedTargets.size;
@@ -338,6 +347,9 @@ export class CdpManager {
           if (!activeCascadeId) return;
 
           const dbSig = getDbSignature(path.join(CONVERSATIONS_DIR, `${activeCascadeId}.db`));
+          if (dbSig) {
+            this.onSessionDbChange?.(activeCascadeId, dbSig);
+          }
           const sessionKey = `${activeCascadeId}:${dbSig}`;
           if (!force && sessionKey === lastPushedHash) return;
 

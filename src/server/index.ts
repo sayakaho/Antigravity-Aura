@@ -67,7 +67,12 @@ initDataDirectory();
 rebuildBundleIfNeeded(true);
 
 const analyticsEngine = new GlobalAnalyticsEngine(ANTIGRAVITY_DATA_DIR);
-const cdpManager = new CdpManager();
+analyticsEngine.startWatching();
+const cdpManager = new CdpManager({
+  onSessionDbChange: (cascadeId, sig) => {
+    analyticsEngine.notifySessionSignature(cascadeId, sig);
+  }
+});
 const app = new SidecarApp();
 
 app.page('/', () =>
@@ -114,11 +119,16 @@ app.api(
   'GET'
 );
 
+function isForceRefreshQuery(data?: Record<string, unknown>): boolean {
+  const raw = data?.force;
+  return raw === true || raw === '1' || raw === 'true';
+}
+
 app.api(
   '/api/analytics/overview',
-  () => {
+  (data?: Record<string, unknown>) => {
     try {
-      return { ok: true, data: analyticsEngine.getGlobalOverview() };
+      return { ok: true, data: analyticsEngine.getGlobalOverview(isForceRefreshQuery(data)) };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -134,7 +144,7 @@ app.api(
       return { ok: false, error: 'No active session detected' };
     }
     try {
-      const sessionData = analyticsEngine.getSessionDetails(rawId);
+      const sessionData = analyticsEngine.getSessionDetails(rawId, isForceRefreshQuery(data));
       if (!sessionData) {
         return { ok: false, error: 'No metrics found for this session' };
       }
@@ -191,7 +201,8 @@ app.api(
       preset: snap.config.presets.light,
       modules: snap.modules,
       metrics: cdpManager.getLatestMetrics(),
-      activeCascadeId: cdpManager.getLastActiveCascadeId()
+      activeCascadeId: cdpManager.getLastActiveCascadeId(),
+      analyticsRevision: analyticsEngine.getRevision()
     };
   },
   'GET'
@@ -303,7 +314,7 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
     stopped = true;
     if (syncTimer) clearTimeout(syncTimer);
     cdpManager.closeAll();
-    analyticsEngine.flushCache();
+    analyticsEngine.dispose();
     void app.close().then(() => process.exit(0));
   });
 }
