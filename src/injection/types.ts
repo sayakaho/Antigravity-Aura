@@ -1,4 +1,4 @@
-import type { BootPayload, LiveMetricsPayload, SelectorsConfig } from '../types';
+import type { AuraConfig, BootPayload, LiveMetricsPayload, SelectorsConfig } from '../types';
 
 export interface OrigTextRecord {
   origRaw: string;
@@ -52,7 +52,11 @@ export interface AuraGlobals {
   __ag_watched_cascade_id?: string;
   __ag_last_metrics?: LiveMetricsPayload | null;
   __ag_render_metrics?: ((payload: LiveMetricsPayload | null) => void) | null;
-  __ag_metrics_config?: { enabled: boolean; selectors: SelectorsConfig };
+  __ag_metrics_config?: {
+    enabled: boolean;
+    selectors: SelectorsConfig;
+    language?: AuraConfig['language'];
+  };
   __ag_metrics_ro?: ResizeObserver | null;
   __ag_pill_resize_observer?: ResizeObserver | null;
   __agRequestMetrics?: (cascadeId: string) => void;

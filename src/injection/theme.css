@@ -977,23 +977,78 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-pill:hover {
 }
 
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip {
-  background-color: #262523 !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background-color: var(--card, #262523) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
   color: #ECE6D8 !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
 }
 
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-hdr {
-  color: #FFFFFF !important;
-  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+  color: #F5F2EB !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-badge {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #B6B0A6 !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-kpi {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-kpi-lbl,
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-kpi-unit,
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-lbl {
-  color: #948F85 !important;
+  color: #9A958B !important;
 }
 
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-kpi-val,
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-num,
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-val {
-  color: #FFFFFF !important;
+  color: #F5F2EB !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-kpi-sub,
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-muted,
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-dot,
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-ico {
+  color: #8E887E !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-tag {
+  background-color: rgba(217, 119, 87, 0.16) !important;
+  color: #F09374 !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-progress {
+  background-color: rgba(255, 255, 255, 0.09) !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-progress-fill.ag-ctx-ok {
+  background-color: #52A87E !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-progress-fill.ag-ctx-warn {
+  background-color: #F59E0B !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-progress-fill.ag-ctx-crit {
+  background-color: #E05D52 !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-ctx-warn:not(.ag-tt-progress-fill) {
+  color: #F59E0B !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-ctx-crit:not(.ag-tt-progress-fill) {
+  color: #E05D52 !important;
+}
+
+html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-footer {
+  border-top-color: rgba(255, 255, 255, 0.09) !important;
+  color: #7A746C !important;
 }
 
 html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
@@ -1083,17 +1138,19 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
 #ag-live-metrics-tooltip {
   position: fixed;
   z-index: 2147483647;
-  min-width: 340px;
-  max-width: 450px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  box-sizing: border-box;
+  min-width: 416px;
+  max-width: 460px;
+  width: max-content;
+  padding: 11px 13px 10px;
+  border-radius: 10px;
   background-color: var(--card, #F9F7F2) !important;
-  border: 1px solid var(--card-border, rgba(0, 0, 0, 0.35)) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
-  font-family: var(--ag-cfg-font-sans, var(--font-sans, system-ui)) !important;
+  border: 1px solid rgba(31, 30, 29, 0.16) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  font-family: 'Anthropic Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
   font-variant-numeric: tabular-nums;
   font-size: 11px !important;
-  line-height: 1.55 !important;
+  line-height: 1.45 !important;
   color: var(--foreground, #1F1E1D) !important;
   text-align: left;
   white-space: normal;
@@ -1102,6 +1159,10 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   pointer-events: none;
   transform: translateY(4px);
   transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+}
+
+#ag-live-metrics-tooltip * {
+  box-sizing: border-box;
 }
 
 #ag-live-metrics-tooltip[data-visible="1"] {
@@ -1114,35 +1175,205 @@ html[data-ag-color-scheme="dark"] #ag-live-metrics-tooltip .ag-tt-accent {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-weight: 600 !important;
   font-size: 11px !important;
-  color: #0A0A0A !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.14);
-  padding-bottom: 4px;
-  margin-bottom: 6px;
+  color: #1A1918 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.09);
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-title {
+  letter-spacing: -0.01em;
+}
+
+#ag-live-metrics-tooltip .ag-tt-badge {
+  font-family: var(--ag-cfg-font-mono, 'Anthropic Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.055);
+  color: #57534E !important;
+  white-space: nowrap;
 }
 
 #ag-live-metrics-tooltip .ag-tt-sec {
-  margin-top: 8px;
+  margin-top: 10px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-kpi {
+  padding: 6px 7px;
+  border-radius: 7px;
+  background-color: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  min-width: 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-kpi-lbl {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  color: #6E6A63 !important;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#ag-live-metrics-tooltip .ag-tt-kpi-val {
+  font-family: var(--ag-cfg-font-mono, 'Anthropic Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: #111110 !important;
+  line-height: 1.25 !important;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-tt-kpi-unit {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  color: #6E6A63 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-kpi-sub {
+  font-size: 10px !important;
+  font-variant-numeric: tabular-nums;
+  color: #78736C !important;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#ag-live-metrics-tooltip .ag-tt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4.5px;
 }
 
 #ag-live-metrics-tooltip .ag-tt-row {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  align-items: baseline;
+  gap: 12px;
   font-size: 11px !important;
   font-weight: 450 !important;
 }
 
 #ag-live-metrics-tooltip .ag-tt-lbl {
-  color: #57534E !important;
+  color: #6E6A63 !important;
   flex-shrink: 0;
 }
 
 #ag-live-metrics-tooltip .ag-tt-val {
-  color: #0A0A0A !important;
+  display: block;
+  color: #1F1E1D !important;
   font-weight: 500 !important;
   text-align: right;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-tt-chip {
+  display: inline;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-tt-ico {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-right: 3px;
+  flex-shrink: 0;
+  color: #78736C !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-num {
+  font-family: var(--ag-cfg-font-mono, 'Anthropic Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace) !important;
+  color: #111110 !important;
+  font-weight: 600 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-muted {
+  font-family: var(--ag-cfg-font-mono, 'Anthropic Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace) !important;
+  font-size: 10.5px !important;
+  font-weight: 400 !important;
+  color: #78736C !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-dot {
+  color: #A8A299 !important;
+  margin: 0 5px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-tag {
+  font-family: var(--ag-cfg-font-mono, 'Anthropic Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace) !important;
+  display: inline-block;
+  vertical-align: baseline;
+  line-height: 1.35;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background-color: rgba(217, 119, 87, 0.12);
+  color: #A64B2E !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-waterline {
+  margin-bottom: 6px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-progress {
+  height: 4px;
+  width: 100%;
+  border-radius: 999px;
+  background-color: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
+#ag-live-metrics-tooltip .ag-tt-progress-fill.ag-ctx-ok {
+  background-color: #3D8B68;
+}
+
+#ag-live-metrics-tooltip .ag-tt-progress-fill.ag-ctx-warn {
+  background-color: #C87314;
+}
+
+#ag-live-metrics-tooltip .ag-tt-progress-fill.ag-ctx-crit {
+  background-color: #DC2626;
+}
+
+#ag-live-metrics-tooltip .ag-ctx-warn:not(.ag-tt-progress-fill) {
+  color: #B45309 !important;
+}
+
+#ag-live-metrics-tooltip .ag-ctx-crit:not(.ag-tt-progress-fill) {
+  color: #DC2626 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-footer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+  font-size: 10px !important;
+  color: #8A847C !important;
+  text-align: center;
 }
 
 #ag-live-metrics-tooltip .ag-tt-accent {

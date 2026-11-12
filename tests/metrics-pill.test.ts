@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 class MockClassList {
   private readonly items: Set<string>;
@@ -471,6 +475,167 @@ describe('toggleAuraSidecar', () => {
         clearInterval(agGlobal.__ag_metrics_route_watcher);
         agGlobal.__ag_metrics_route_watcher = null;
       }
+    }
+  });
+
+  test('localizes #ag-live-metrics-pill aria-label and removes conflicting native title on re-injection', async () => {
+    const { normalizeAuraConfig } = await import('../src/shared/config-schema');
+    const { initMetricsCapsule } = await import('../src/injection/metrics-pill');
+    const { agGlobal } = await import('../src/injection/types');
+
+    const pill = new MockElement({
+      id: 'ag-live-metrics-pill',
+      attrs: { title: '点击展开 / 折叠 Aura Dashboard 侧边栏' },
+      offsetWidth: 120,
+      offsetHeight: 24
+    });
+    mockDoc.elements.push(pill);
+
+    try {
+      const selectors = normalizeAuraConfig({}).selectors;
+      initMetricsCapsule(true, selectors, 'default');
+      expect(pill.hasAttribute('title')).toBe(false);
+      expect(pill.getAttribute('aria-label')).toBe('Click to toggle Aura Dashboard sidebar');
+
+      initMetricsCapsule(true, selectors, 'zh-CN');
+      expect(pill.hasAttribute('title')).toBe(false);
+      expect(pill.getAttribute('aria-label')).toBe('点击展开或折叠 Aura Dashboard 侧边栏');
+    } finally {
+      if (agGlobal.__ag_metrics_route_watcher) {
+        clearInterval(agGlobal.__ag_metrics_route_watcher);
+        agGlobal.__ag_metrics_route_watcher = null;
+      }
+    }
+  });
+});
+
+function encodeVarint(val: number | bigint): Buffer {
+  let n = BigInt(val);
+  const bytes: number[] = [];
+  while (n >= 0x80n) {
+    bytes.push(Number((n & 0x7fn) | 0x80n));
+    n >>= 7n;
+  }
+  bytes.push(Number(n));
+  return Buffer.from(bytes);
+}
+
+function encodeFieldVarint(fieldNum: number, val: number | bigint): Buffer {
+  return Buffer.concat([encodeVarint((fieldNum << 3) | 0), encodeVarint(val)]);
+}
+
+function encodeFieldBytes(fieldNum: number, payload: Buffer | string): Buffer {
+  const buf = typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload;
+  return Buffer.concat([encodeVarint((fieldNum << 3) | 2), encodeVarint(buf.length), buf]);
+}
+
+function buildGenMetadataBlob(opts: {
+  inTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  respTok: number;
+  ttftSec: number;
+  streamSec: number;
+}): Buffer {
+  const usage = Buffer.concat([
+    encodeFieldVarint(2, opts.inTok),
+    encodeFieldVarint(3, opts.outTok),
+    encodeFieldVarint(5, opts.cacheRead),
+    encodeFieldVarint(9, opts.thinkTok),
+    encodeFieldVarint(10, opts.respTok)
+  ]);
+  const ttft = encodeFieldVarint(1, opts.ttftSec);
+  const stream = encodeFieldVarint(1, opts.streamSec);
+  const chat = Buffer.concat([
+    encodeFieldBytes(4, usage),
+    encodeFieldBytes(11, ttft),
+    encodeFieldBytes(12, stream)
+  ]);
+  return encodeFieldBytes(1, chat);
+}
+
+describe('parseConversationMetrics localization & layout', () => {
+  test('renders KPI grid + progress bar in English and invalidates cache when language or contextLimit changes', async () => {
+    const { normalizeAuraConfig } = await import('../src/shared/config-schema');
+    const { parseConversationMetrics } = await import('../src/server/metrics-capsule');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-capsule-test-'));
+    const cascadeId = '22222222-2222-2222-2222-222222222222';
+    const dbPath = path.join(tmpDir, `${cascadeId}.db`);
+
+    try {
+      const db = new DatabaseSync(dbPath);
+      db.exec(`
+        CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER);
+        CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);
+      `);
+      db.prepare('INSERT INTO steps (idx, step_type) VALUES (?, ?)').run(0, 14);
+      db.prepare('INSERT INTO steps (idx, step_type) VALUES (?, ?)').run(1, 15);
+      db.prepare('INSERT INTO steps (idx, step_type) VALUES (?, ?)').run(2, 15);
+      db.prepare('INSERT INTO gen_metadata (idx, data) VALUES (?, ?)').run(
+        0,
+        buildGenMetadataBlob({
+          inTok: 2000,
+          outTok: 500,
+          cacheRead: 18000,
+          thinkTok: 200,
+          respTok: 300,
+          ttftSec: 1,
+          streamSec: 2
+        })
+      );
+      db.prepare('INSERT INTO gen_metadata (idx, data) VALUES (?, ?)').run(
+        1,
+        buildGenMetadataBlob({
+          inTok: 6000,
+          outTok: 1200,
+          cacheRead: 122000,
+          thinkTok: 700,
+          respTok: 500,
+          ttftSec: 2,
+          streamSec: 4
+        })
+      );
+      db.close();
+
+      const enCfg = normalizeAuraConfig({ language: 'default' });
+      const enPayload = parseConversationMetrics(cascadeId, tmpDir, enCfg);
+      expect(enPayload?.hasData).toBe(true);
+      expect(enPayload?.tooltipHtml).toContain('ag-tt-kpi-grid');
+      expect(enPayload?.tooltipHtml).toContain('ag-tt-progress-fill');
+      expect(enPayload?.tooltipHtml).toContain('Latest Call');
+      expect(enPayload?.tooltipHtml).toContain('Gen #2 · 2 steps');
+      expect(enPayload?.tooltipHtml).toContain('1 turn · 2 calls');
+      expect(enPayload?.tooltipHtml).toContain('Click pill to toggle Aura Dashboard');
+      expect(enPayload?.tooltipHtml).toContain('class="ag-tt-ico"');
+      expect(enPayload?.tooltipHtml).toContain('aria-label="new"');
+      expect(enPayload?.tooltipHtml).toContain('aria-label="cached"');
+      expect(enPayload?.tooltipHtml).toContain('aria-label="think"');
+      expect(enPayload?.tooltipHtml).toContain('aria-label="resp"');
+      expect(enPayload?.tooltipHtml).not.toMatch(/[\u4e00-\u9fa5]/);
+
+      // Same DB signature, switched to zh-CN: must bypass stale English cache
+      const zhCfg = normalizeAuraConfig({ language: 'zh-CN' });
+      const zhPayload = parseConversationMetrics(cascadeId, tmpDir, zhCfg);
+      expect(zhPayload?.tooltipHtml).toContain('本轮最新调用');
+      expect(zhPayload?.tooltipHtml).toContain('Gen #2 · 2 步');
+      expect(zhPayload?.tooltipHtml).toContain('1 轮提问 · 2 次调用');
+      expect(zhPayload?.tooltipHtml).toContain('压缩水位线');
+      expect(zhPayload?.tooltipHtml).toContain('aria-label="新增"');
+      expect(zhPayload?.tooltipHtml).toContain('aria-label="缓存"');
+      expect(zhPayload?.tooltipHtml).toContain('aria-label="思考"');
+      expect(zhPayload?.tooltipHtml).toContain('aria-label="正文"');
+      expect(zhPayload?.tooltipHtml).toContain('点击胶囊切换 Aura Dashboard 侧边栏');
+
+      // Same DB signature, different contextLimit: must recalculate percentage and waterline class
+      const tightCfg = normalizeAuraConfig({ language: 'default', contextLimit: 150000 });
+      const tightPayload = parseConversationMetrics(cascadeId, tmpDir, tightCfg);
+      expect(tightPayload?.ctxPct).toBe(85);
+      expect(tightPayload?.tooltipHtml).toContain('ag-ctx-warn');
+      expect(tightPayload?.tooltipHtml).toContain('width: 85%');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 });

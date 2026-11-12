@@ -1,4 +1,4 @@
-import type { LiveMetricsPayload, SelectorsConfig } from '../types';
+import type { AuraConfig, LiveMetricsPayload, SelectorsConfig } from '../types';
 import { agGlobal } from './types';
 
 function extractCascadeId(): string {
@@ -284,6 +284,17 @@ export function toggleAuraSidecar(): void {
   }
 }
 
+function getPillAriaLabel(language?: AuraConfig['language']): string {
+  return language === 'zh-CN'
+    ? '点击展开或折叠 Aura Dashboard 侧边栏'
+    : 'Click to toggle Aura Dashboard sidebar';
+}
+
+function syncPillAccessibility(pill: HTMLElement, language?: AuraConfig['language']): void {
+  pill.removeAttribute('title');
+  pill.setAttribute('aria-label', getPillAriaLabel(language));
+}
+
 function bindMetricsPillHandlers(pill: HTMLElement): void {
   pill.onclick = (e: MouseEvent) => {
     e?.stopPropagation?.();
@@ -295,9 +306,10 @@ function bindMetricsPillHandlers(pill: HTMLElement): void {
     const tt = ensureMetricsTooltip();
     if (!tt || !tt.innerHTML) return;
     const r = pill.getBoundingClientRect();
-    const ttWidth = Math.min(440, Math.max(370, tt.offsetWidth || 400));
+    const ttWidth = Math.min(460, Math.max(416, tt.offsetWidth || 416));
+    const ttHeight = tt.offsetHeight || 240;
     const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
-    const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
+    const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - ttHeight - 12);
     tt.style.left = `${left}px`;
     tt.style.bottom = `${Math.max(8, bottomPx)}px`;
     tt.setAttribute('data-visible', '1');
@@ -308,23 +320,28 @@ function bindMetricsPillHandlers(pill: HTMLElement): void {
   };
 }
 
-function createMetricsPillElement(): HTMLElement {
+function createMetricsPillElement(language?: AuraConfig['language']): HTMLElement {
   const pill = document.createElement('div');
   pill.id = 'ag-live-metrics-pill';
   pill.setAttribute('data-v', '4');
   pill.setAttribute('data-ag-row-mode', 'middle');
-  pill.setAttribute('title', '点击展开 / 折叠 Aura Dashboard 侧边栏');
+  syncPillAccessibility(pill, language);
   pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
   bindMetricsPillHandlers(pill);
   return pill;
 }
 
-export function initMetricsCapsule(enabled: boolean, selectors: SelectorsConfig): (forceLayout?: boolean) => HTMLElement | null {
-  agGlobal.__ag_metrics_config = { enabled, selectors };
+export function initMetricsCapsule(
+  enabled: boolean,
+  selectors: SelectorsConfig,
+  language: AuraConfig['language'] = 'default'
+): (forceLayout?: boolean) => HTMLElement | null {
+  agGlobal.__ag_metrics_config = { enabled, selectors, language };
 
   // Rebind existing DOM pill on hot re-injection so click never stays attached to a stale closure.
   const existingPill = document.getElementById('ag-live-metrics-pill');
   if (existingPill) {
+    syncPillAccessibility(existingPill, language);
     bindMetricsPillHandlers(existingPill);
   }
 
@@ -359,11 +376,12 @@ export function initMetricsCapsule(enabled: boolean, selectors: SelectorsConfig)
 
     let pill = document.getElementById('ag-live-metrics-pill');
     if (!pill) {
-      pill = createMetricsPillElement();
+      pill = createMetricsPillElement(cfg.language);
       leftGroup.appendChild(pill);
       return pill;
     }
 
+    syncPillAccessibility(pill, cfg.language);
     bindMetricsPillHandlers(pill);
     pill.setAttribute('data-ag-row-mode', 'middle');
     if (bottomRow.getAttribute('data-ag-row-mode') !== 'middle') {

@@ -143,7 +143,7 @@ function bootstrap(): void {
   agGlobal.__ag_patch_version = patchVersion;
 
   // 4. 输入栏性能指标胶囊
-  const ensureMetricsPill = initMetricsCapsule(modules.metrics !== false, selectors);
+  const ensureMetricsPill = initMetricsCapsule(modules.metrics !== false, selectors, boot.language || 'default');
 
   // 5. 界面汉化引擎
   const dict = initI18n(modules.i18n === true, boot.i18nDict || {}, selectors.excludeI18n, patchVersion);
