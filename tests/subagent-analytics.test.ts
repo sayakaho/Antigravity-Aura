@@ -679,6 +679,12 @@ describe('Subagent session tree & analytics integration', () => {
       expect(session!.steps.length).toBe(3);
       expect(session!.totalRequests).toBe(4);
       expect(session!.sessionTurns).toBe(2);
+
+      const overview = engine.getGlobalOverview();
+      const dayBucket = overview.timeRangeSeries.find((d) => d.date === '2026-11-10');
+      expect(dayBucket?.userTurns).toBe(2);
+      const hourBucket = overview.hourlySeries?.find((h) => h.hourKey === '2026-11-10 10:00');
+      expect(hourBucket?.userTurns).toBe(2);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

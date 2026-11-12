@@ -77,6 +77,8 @@ interface CacheEntry {
   hourlyModelStats?: Record<string, Record<string, ModelDailyStat>>;
   tools?: Record<string, number>;
   dailyTools?: Record<string, Record<string, number>>;
+  dailyUserTurns?: Record<string, number>;
+  hourlyUserTurns?: Record<string, number>;
   dailyLatencySamples?: Record<string, TurnLatencySample[]>;
   effOutTok?: number;
   effSec?: number;
@@ -90,7 +92,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v12.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v13.json';
 const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache.json',
   'aura_analytics_cache_v1.json',
@@ -103,7 +105,8 @@ const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache_v8.json',
   'aura_analytics_cache_v9.json',
   'aura_analytics_cache_v10.json',
-  'aura_analytics_cache_v11.json'
+  'aura_analytics_cache_v11.json',
+  'aura_analytics_cache_v12.json'
 ];
 
 function createEmptyBreakdown(): TokenBreakdown {
@@ -888,7 +891,9 @@ export class GlobalAnalyticsEngine {
               inputTok: 0,
               outTok: 0,
               cacheRead: 0,
+              thinkTok: 0,
               requests: 0,
+              userTurns: 0,
               effOutTok: 0,
               effSec: 0,
               ttftSum: 0,
@@ -902,6 +907,7 @@ export class GlobalAnalyticsEngine {
           dateSeries[dateKey].inputTok += d.inTok;
           dateSeries[dateKey].outTok += d.outTok;
           dateSeries[dateKey].cacheRead += d.cacheRead;
+          dateSeries[dateKey].thinkTok = (dateSeries[dateKey].thinkTok || 0) + (d.thinkTok || 0);
           dateSeries[dateKey].requests += d.requests;
           mergeBreakdownPerf(dateSeries[dateKey], d);
           const dayLatencySamples = entry.dailyLatencySamples?.[dateKey];
@@ -945,19 +951,23 @@ export class GlobalAnalyticsEngine {
             inputTok: 0,
             outTok: 0,
             cacheRead: 0,
+            thinkTok: 0,
             requests: 0,
+            userTurns: 0,
             effOutTok: 0,
             effSec: 0,
             ttftSum: 0,
             ttftCount: 0,
             turnDurSum: 0,
             validTurnCount: 0,
-            tpsHist: {}
+            tpsHist: {},
+            latencySamples: []
           };
         }
         dateSeries[dateKey].inputTok += entry.inTok;
         dateSeries[dateKey].outTok += entry.outTok;
         dateSeries[dateKey].cacheRead += entry.cacheRead;
+        dateSeries[dateKey].thinkTok = (dateSeries[dateKey].thinkTok || 0) + entry.thinkTok;
         dateSeries[dateKey].requests += convReq;
       }
 
@@ -969,7 +979,9 @@ export class GlobalAnalyticsEngine {
               inputTok: 0,
               outTok: 0,
               cacheRead: 0,
+              thinkTok: 0,
               requests: 0,
+              userTurns: 0,
               effOutTok: 0,
               effSec: 0,
               ttftSum: 0,
@@ -982,6 +994,7 @@ export class GlobalAnalyticsEngine {
           hourSeries[hourKey].inputTok += h.inTok;
           hourSeries[hourKey].outTok += h.outTok;
           hourSeries[hourKey].cacheRead += h.cacheRead;
+          hourSeries[hourKey].thinkTok = (hourSeries[hourKey].thinkTok || 0) + (h.thinkTok || 0);
           hourSeries[hourKey].requests += h.requests;
           mergeBreakdownPerf(hourSeries[hourKey], h);
         }
@@ -995,7 +1008,9 @@ export class GlobalAnalyticsEngine {
             inputTok: 0,
             outTok: 0,
             cacheRead: 0,
+            thinkTok: 0,
             requests: 0,
+            userTurns: 0,
             effOutTok: 0,
             effSec: 0,
             ttftSum: 0,
@@ -1008,7 +1023,59 @@ export class GlobalAnalyticsEngine {
         hourSeries[hourKey].inputTok += entry.inTok;
         hourSeries[hourKey].outTok += entry.outTok;
         hourSeries[hourKey].cacheRead += entry.cacheRead;
+        hourSeries[hourKey].thinkTok = (hourSeries[hourKey].thinkTok || 0) + entry.thinkTok;
         hourSeries[hourKey].requests += convReq;
+      }
+
+      if (!isSubagent && entry.dailyUserTurns) {
+        for (const [dateKey, turnCnt] of Object.entries(entry.dailyUserTurns)) {
+          if (!turnCnt) continue;
+          if (!dateSeries[dateKey]) {
+            dateSeries[dateKey] = {
+              date: dateKey,
+              inputTok: 0,
+              outTok: 0,
+              cacheRead: 0,
+              thinkTok: 0,
+              requests: 0,
+              userTurns: 0,
+              effOutTok: 0,
+              effSec: 0,
+              ttftSum: 0,
+              ttftCount: 0,
+              turnDurSum: 0,
+              validTurnCount: 0,
+              tpsHist: {},
+              latencySamples: []
+            };
+          }
+          dateSeries[dateKey].userTurns = (dateSeries[dateKey].userTurns || 0) + turnCnt;
+        }
+      }
+
+      if (!isSubagent && entry.hourlyUserTurns) {
+        for (const [hourKey, turnCnt] of Object.entries(entry.hourlyUserTurns)) {
+          if (!turnCnt) continue;
+          if (!hourSeries[hourKey]) {
+            hourSeries[hourKey] = {
+              hourKey,
+              inputTok: 0,
+              outTok: 0,
+              cacheRead: 0,
+              thinkTok: 0,
+              requests: 0,
+              userTurns: 0,
+              effOutTok: 0,
+              effSec: 0,
+              ttftSum: 0,
+              ttftCount: 0,
+              turnDurSum: 0,
+              validTurnCount: 0,
+              tpsHist: {}
+            };
+          }
+          hourSeries[hourKey].userTurns = (hourSeries[hourKey].userTurns || 0) + turnCnt;
+        }
       }
 
       if (entry.models) {
@@ -1239,6 +1306,8 @@ export class GlobalAnalyticsEngine {
       const stepTimeMap = new Map<number, number>();
       const tools: Record<string, number> = {};
       const dailyTools: Record<string, Record<string, number>> = {};
+      const dailyUserTurns: Record<string, number> = {};
+      const hourlyUserTurns: Record<string, number> = {};
       const fallbackDate = lastModifiedTime ? new Date(lastModifiedTime) : new Date(stMtimeMs);
 
       try {
@@ -1246,6 +1315,13 @@ export class GlobalAnalyticsEngine {
         for (const sr of stepRows || []) {
           const ts = extractTimestampFromStepMeta(sr.metadata);
           if (ts) stepTimeMap.set(Number(sr.idx), ts);
+
+          if (sr.step_type === 14) {
+            const stepDate = ts ? new Date(ts * 1000) : fallbackDate;
+            const { dateKey, hourKey } = formatLocalDateAndHourKeys(stepDate);
+            dailyUserTurns[dateKey] = (dailyUserTurns[dateKey] || 0) + 1;
+            hourlyUserTurns[hourKey] = (hourlyUserTurns[hourKey] || 0) + 1;
+          }
 
           if (sr.step_type === 132 && sr.step_payload) {
             const toolName = extractToolInfo(sr.step_payload);
@@ -1439,6 +1515,8 @@ export class GlobalAnalyticsEngine {
         hourlyModelStats,
         tools,
         dailyTools,
+        dailyUserTurns,
+        hourlyUserTurns,
         dailyLatencySamples,
         effOutTok: sEffOut,
         effSec: sEffSec,

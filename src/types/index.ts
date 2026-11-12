@@ -298,7 +298,9 @@ export interface DailySeriesPoint extends RangePerfFields {
   inputTok: number;
   outTok: number;
   cacheRead: number;
+  thinkTok?: number;
   requests: number;
+  userTurns?: number;
   latencySamples?: TurnLatencySample[];
 }
 
@@ -307,7 +309,9 @@ export interface HourlySeriesPoint extends RangePerfFields {
   inputTok: number;
   outTok: number;
   cacheRead: number;
+  thinkTok?: number;
   requests: number;
+  userTurns?: number;
 }
 
 export interface GlobalAnalyticsOverview {

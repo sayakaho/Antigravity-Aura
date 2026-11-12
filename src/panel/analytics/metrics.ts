@@ -46,6 +46,7 @@ export interface ProcessedRangeMetrics {
   columns: ChartColumnData[];
   totalTokens: { input: number; output: number; cacheRead: number; thinking: number; total: number };
   totalRequests: number;
+  userTurns: number;
   cacheEfficiency: number;
   avgTtft: number;
   avgTokPerSec: number;
@@ -155,6 +156,7 @@ export function computeProcessedColumns(
         columns: [],
         totalTokens: { input: 0, output: 0, cacheRead: 0, thinking: 0, total: 0 },
         totalRequests: 0,
+        userTurns: 0,
         cacheEfficiency: 0,
         avgTtft: 0,
         avgTokPerSec: 0,
@@ -183,6 +185,7 @@ export function computeProcessedColumns(
       columns,
       totalTokens: s.totalTokens,
       totalRequests: s.totalRequests,
+      userTurns: s.sessionTurns ?? s.steps.length,
       cacheEfficiency: s.cacheEfficiency,
       avgTtft: s.avgTtft,
       avgTokPerSec: s.avgTokPerSec,
@@ -213,9 +216,13 @@ export function computeProcessedColumns(
       };
     }
 
+    let thinkTok = 0;
+    let userTurns = 0;
     for (const hItem of overview.hourlySeries || []) {
       if (hItem.hourKey && hItem.hourKey.startsWith(targetDate)) {
         matchedHourlyBuckets.push(hItem);
+        thinkTok += hItem.thinkTok || 0;
+        userTurns += hItem.userTurns || 0;
         const key = hItem.hourKey.slice(0, 16);
         if (hourlyMap[key]) {
           hourlyMap[key].inputTok += hItem.inputTok;
@@ -249,10 +256,11 @@ export function computeProcessedColumns(
         input: inTok,
         output: outTok,
         cacheRead: cacheTok,
-        thinking: overview.totalTokens.thinking,
+        thinking: thinkTok,
         total: totalTok
       },
       totalRequests: reqs,
+      userTurns,
       cacheEfficiency: efficiency,
       avgTtft: perf.avgTtft,
       avgTokPerSec: perf.avgTokPerSec,
@@ -274,9 +282,15 @@ export function computeProcessedColumns(
   const endMs = new Date(`${endDate}T00:00:00`).getTime();
   const daySpan = Math.round((endMs - startMs) / 86400000);
 
+  let thinkTok = 0;
+  let userTurns = 0;
   const matchedDailyBuckets: DailySeriesPoint[] = [];
   for (const dStr of dateList) {
-    if (dateMap[dStr]) matchedDailyBuckets.push(dateMap[dStr]);
+    if (dateMap[dStr]) {
+      matchedDailyBuckets.push(dateMap[dStr]);
+      thinkTok += dateMap[dStr].thinkTok || 0;
+      userTurns += dateMap[dStr].userTurns || 0;
+    }
   }
 
   let columns: ChartColumnData[];
@@ -341,10 +355,11 @@ export function computeProcessedColumns(
       input: inTok,
       output: outTok,
       cacheRead: cacheTok,
-      thinking: overview.totalTokens.thinking,
+      thinking: thinkTok,
       total: totalTok
     },
     totalRequests: reqs,
+    userTurns,
     cacheEfficiency: efficiency,
     avgTtft: perf.avgTtft,
     avgTokPerSec: perf.avgTokPerSec,
@@ -370,32 +385,34 @@ export function computeApiCostAndSavings(
   let actualCost = 0;
   let baselineCost = 0;
 
-  if (range === 'session' && activeSessionData) {
-    const sessionModels = (activeSessionData.models || []).filter(
-      (m) => m.inputTok + m.outTok + m.cacheRead > 0 && !m.modelName.toLowerCase().includes('unknown')
-    );
-    if (sessionModels.length > 0) {
-      for (const m of sessionModels) {
-        const rates = getModelPricingRates(m.modelId || m.modelName);
-        actualCost +=
-          (m.inputTok * rates.inputRate +
-            m.outTok * rates.outputRate +
-            m.cacheRead * rates.cacheRate) /
+  if (range === 'session') {
+    if (activeSessionData) {
+      const sessionModels = (activeSessionData.models || []).filter(
+        (m) => m.inputTok + m.outTok + m.cacheRead > 0 && !m.modelName.toLowerCase().includes('unknown')
+      );
+      if (sessionModels.length > 0) {
+        for (const m of sessionModels) {
+          const rates = getModelPricingRates(m.modelId || m.modelName);
+          actualCost +=
+            (m.inputTok * rates.inputRate +
+              m.outTok * rates.outputRate +
+              m.cacheRead * rates.cacheRate) /
+            1_000_000;
+          baselineCost +=
+            ((m.inputTok + m.cacheRead) * rates.inputRate + m.outTok * rates.outputRate) / 1_000_000;
+        }
+      } else {
+        const rates = getModelPricingRates('gemini-3.8-flash');
+        actualCost =
+          (metrics.totalTokens.input * rates.inputRate +
+            metrics.totalTokens.output * rates.outputRate +
+            metrics.totalTokens.cacheRead * rates.cacheRate) /
           1_000_000;
-        baselineCost +=
-          ((m.inputTok + m.cacheRead) * rates.inputRate + m.outTok * rates.outputRate) / 1_000_000;
+        baselineCost =
+          ((metrics.totalTokens.input + metrics.totalTokens.cacheRead) * rates.inputRate +
+            metrics.totalTokens.output * rates.outputRate) /
+          1_000_000;
       }
-    } else {
-      const rates = getModelPricingRates('gemini-3.8-flash');
-      actualCost =
-        (metrics.totalTokens.input * rates.inputRate +
-          metrics.totalTokens.output * rates.outputRate +
-          metrics.totalTokens.cacheRead * rates.cacheRate) /
-        1_000_000;
-      baselineCost =
-        ((metrics.totalTokens.input + metrics.totalTokens.cacheRead) * rates.inputRate +
-          metrics.totalTokens.output * rates.outputRate) /
-        1_000_000;
     }
   } else if (overview?.dailyModelStats) {
     const dates = getFilterDatesForRange(range, customStart, customEnd);
@@ -487,7 +504,7 @@ export function renderMetricCards(
   const isSession = range === 'session' && !!activeSessionData;
   const turnsCount = isSession
     ? (activeSessionData!.sessionTurns ?? activeSessionData!.steps.length)
-    : overview?.totalConversations || 0;
+    : metrics.userTurns;
   const reqWord = totalReq === 1 ? 'request' : 'requests';
   const turnWord = turnsCount === 1 ? 'turn' : 'turns';
   const avgPerTurn =
@@ -1047,10 +1064,7 @@ export function renderModelDistribution(
 
   let models: ModelTokenStat[] = [];
   if (range === 'session') {
-    models =
-      activeSessionData?.models && activeSessionData.models.length > 0
-        ? activeSessionData.models
-        : overview.modelDistribution || [];
+    models = activeSessionData?.models ? [...activeSessionData.models] : [];
   } else {
     const dates = getFilterDatesForRange(range, customStart, customEnd);
     const statsMap: Record<
@@ -1135,10 +1149,11 @@ export function renderModelDistribution(
   );
 
   if (models.length === 0) {
-    setRenderedHtmlIfChanged(
-      container,
-      '<div class="chart-empty">No model usage recorded in this range</div>'
-    );
+    const emptyMsg =
+      range === 'session'
+        ? 'No model usage recorded in this session'
+        : 'No model usage recorded in this range';
+    setRenderedHtmlIfChanged(container, `<div class="chart-empty">${emptyMsg}</div>`);
     return;
   }
 
@@ -1202,10 +1217,7 @@ export function renderToolDistribution(
 
   let tools: ToolStatItem[] = [];
   if (range === 'session') {
-    tools =
-      activeSessionData?.tools && activeSessionData.tools.length > 0
-        ? activeSessionData.tools
-        : overview.toolDistribution || [];
+    tools = activeSessionData?.tools ? [...activeSessionData.tools] : [];
   } else {
     const dates = getFilterDatesForRange(range, customStart, customEnd);
     const countsMap: Record<string, number> = {};
@@ -1237,10 +1249,11 @@ export function renderToolDistribution(
   }
 
   if (tools.length === 0) {
-    setRenderedHtmlIfChanged(
-      container,
-      '<div class="chart-empty">No tool executions recorded in this range</div>'
-    );
+    const emptyMsg =
+      range === 'session'
+        ? 'No tool executions recorded in this session'
+        : 'No tool executions recorded in this range';
+    setRenderedHtmlIfChanged(container, `<div class="chart-empty">${emptyMsg}</div>`);
     return;
   }
 

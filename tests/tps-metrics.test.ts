@@ -7,7 +7,9 @@ import {
   computeApiCostAndSavings,
   computeProcessedColumns,
   computeRangePerf,
-  renderModelDistribution
+  renderMetricCards,
+  renderModelDistribution,
+  renderToolDistribution
 } from '../src/panel/analytics/metrics';
 import {
   alignLocalBucketStartSec,
@@ -575,6 +577,122 @@ describe('Unified TPS & Analytics Metrics', () => {
       expect(fakeContainer.innerHTML).toContain(
         'No interaction turn latency metrics recorded in this range'
       );
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
+  });
+
+  test('range metrics scope userTurns, thinking tokens, and session empty model/tool/cost without global fallback', () => {
+    const overview = makeOverviewFixture();
+    overview.totalConversations = 99;
+    overview.totalTokens.thinking = 777;
+    overview.timeRangeSeries[0].thinkTok = 50;
+    overview.timeRangeSeries[0].userTurns = 3;
+    overview.timeRangeSeries[1].thinkTok = 120;
+    overview.timeRangeSeries[1].userTurns = 5;
+    overview.hourlySeries![0].thinkTok = 120;
+    overview.hourlySeries![0].userTurns = 5;
+    overview.modelDistribution = [
+      {
+        modelId: 'global-only-model',
+        modelName: 'Global Only Model',
+        totalTokens: 1000,
+        inputTok: 500,
+        outTok: 500,
+        cacheRead: 0,
+        thinkTok: 0,
+        requests: 1,
+        avgTps: 100,
+        avgTtft: 1
+      }
+    ];
+    overview.toolDistribution = [
+      {
+        rawName: 'global_tool',
+        name: 'Global Tool',
+        category: 'File',
+        color: '#3B82F6',
+        count: 10,
+        percentage: 100
+      }
+    ];
+
+    const fixedNow = new Date('2026-11-09T12:00:00');
+    const todayMetrics = computeProcessedColumns(overview, 'today', null, '', '', fixedNow);
+    expect(todayMetrics.userTurns).toBe(5);
+    expect(todayMetrics.totalTokens.thinking).toBe(120);
+
+    const day1Metrics = computeProcessedColumns(
+      overview,
+      'custom',
+      null,
+      '2026-11-01',
+      '2026-11-01',
+      fixedNow
+    );
+    expect(day1Metrics.userTurns).toBe(3);
+    expect(day1Metrics.totalTokens.thinking).toBe(50);
+
+    const emptyYesterday = computeProcessedColumns(overview, 'yesterday', null, '', '', fixedNow);
+    expect(emptyYesterday.userTurns).toBe(0);
+    expect(emptyYesterday.totalTokens.thinking).toBe(0);
+
+    const emptySession: SessionAnalyticsData = {
+      cascadeId: '00000000-0000-0000-0000-000000000004',
+      totalTokens: { input: 0, output: 0, cacheRead: 0, thinking: 0, total: 0 },
+      totalRequests: 0,
+      cacheEfficiency: 0,
+      avgTtft: 0,
+      avgTokPerSec: 0,
+      steps: [],
+      models: [],
+      tools: []
+    };
+
+    const sessionCostWithNull = computeApiCostAndSavings(
+      computeProcessedColumns(overview, 'session', null),
+      'session',
+      overview,
+      null
+    );
+    expect(sessionCostWithNull.actualCost).toBe(0);
+
+    const fakeCards = { innerHTML: '' };
+    const fakeModels = { innerHTML: '' };
+    const fakeTools = { innerHTML: '' };
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) =>
+        id === 'analytics-cards-grid'
+          ? fakeCards
+          : id === 'analytics-models-list'
+            ? fakeModels
+            : id === 'analytics-tools-list'
+              ? fakeTools
+              : null
+    };
+
+    try {
+      renderMetricCards(todayMetrics, 'today', overview, emptySession);
+      expect(fakeCards.innerHTML).toContain('5 turns');
+      expect(fakeCards.innerHTML).not.toContain('99 turns');
+      // today total = 4000 + 1000 + 8000 = 13000; 13000 / 5 = 2,600
+      expect(fakeCards.innerHTML).toContain('2,600');
+
+      renderMetricCards(emptyYesterday, 'yesterday', overview, emptySession);
+      expect(fakeCards.innerHTML).toContain('0 turns');
+
+      renderModelDistribution(overview, 'session', emptySession);
+      expect(fakeModels.innerHTML).toContain('No model usage recorded in this session');
+      expect(fakeModels.innerHTML).not.toContain('Global Only Model');
+
+      renderToolDistribution(overview, 'session', emptySession);
+      expect(fakeTools.innerHTML).toContain('No tool executions recorded in this session');
+      expect(fakeTools.innerHTML).not.toContain('Global Tool');
     } finally {
       if (origDocument === undefined) {
         delete (globalThis as { document?: unknown }).document;
