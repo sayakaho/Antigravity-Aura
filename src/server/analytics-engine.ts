@@ -1552,11 +1552,15 @@ export class GlobalAnalyticsEngine {
 
       const mainStepTimeMap = new Map<number, number>();
       const sessionToolsMap: Record<string, number> = {};
+      let sessionTurns = 0;
       try {
         const stepRows = db
           .prepare('SELECT idx, step_type, step_payload, metadata FROM steps')
           .all();
         for (const sr of stepRows || []) {
+          if (sr.step_type === 14) {
+            sessionTurns += 1;
+          }
           const ts = extractTimestampFromStepMeta(sr.metadata);
           if (ts) mainStepTimeMap.set(Number(sr.idx), ts);
 
@@ -1566,6 +1570,12 @@ export class GlobalAnalyticsEngine {
           }
         }
       } catch {
+        try {
+          const turnRow = db
+            .prepare('SELECT COUNT(*) AS cnt FROM steps WHERE step_type = 14')
+            .get();
+          sessionTurns = Number(turnRow?.cnt ?? 0);
+        } catch {}
         try {
           const toolRows = db.prepare('SELECT step_payload FROM steps WHERE step_type = 132').all();
           for (const tr of toolRows || []) {
@@ -1880,6 +1890,7 @@ export class GlobalAnalyticsEngine {
           total: totalIn + totalOut + totalCache
         },
         totalRequests,
+        sessionTurns,
         cacheEfficiency: efficiency,
         avgTtft,
         avgTokPerSec: avgRate,

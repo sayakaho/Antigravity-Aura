@@ -246,6 +246,7 @@ export interface SessionAnalyticsData {
     total: number;
   };
   totalRequests: number;
+  sessionTurns?: number;
   cacheEfficiency: number;
   avgTtft: number;
   avgTokPerSec: number;

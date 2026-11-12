@@ -486,8 +486,10 @@ export function renderMetricCards(
 
   const isSession = range === 'session' && !!activeSessionData;
   const turnsCount = isSession
-    ? activeSessionData!.steps.length
+    ? (activeSessionData!.sessionTurns ?? activeSessionData!.steps.length)
     : overview?.totalConversations || 0;
+  const reqWord = totalReq === 1 ? 'request' : 'requests';
+  const turnWord = turnsCount === 1 ? 'turn' : 'turns';
   const avgPerTurn =
     turnsCount > 0
       ? Math.round(totalTok / turnsCount)
@@ -572,12 +574,12 @@ export function renderMetricCards(
         </div>
         <div>
           <span class="kpi-value-lg">${formatFullNumber(totalReq)}</span>
-          <span class="kpi-unit">requests</span>
+          <span class="kpi-unit">${reqWord}</span>
         </div>
         <div class="cadence-rows">
           <div class="cadence-row">
             <span class="cadence-label">${isSession ? 'Session Turns:' : 'User Conversation Turns:'}</span>
-            <span class="cadence-val">${formatFullNumber(turnsCount)} 轮</span>
+            <span class="cadence-val">${formatFullNumber(turnsCount)} ${turnWord}</span>
           </div>
           <div class="cadence-row">
             <span class="cadence-label">Avg Tokens / Turn:</span>
@@ -1171,7 +1173,7 @@ export function renderModelDistribution(
             </div>
             <div class="model-token-count">
               <span class="model-tokens-strong">${formatCompactNumber(m.totalTokens)}</span> tokens
-              <span class="model-req-count">(${formatFullNumber(m.requests)} reqs)</span>
+              <span class="model-req-count">(${formatFullNumber(m.requests)} ${m.requests === 1 ? 'req' : 'reqs'})</span>
             </div>
           </div>
           <div class="model-bar-track">
@@ -1257,7 +1259,7 @@ export function renderToolDistribution(
               <span class="tool-raw-badge" title="Raw invocation name: ${escapeHtml(t.rawName)}">${escapeHtml(t.rawName)}</span>
             </div>
             <div class="tool-call-count">
-              <span class="tool-count-strong">${formatFullNumber(t.count)}</span> calls
+              <span class="tool-count-strong">${formatFullNumber(t.count)}</span> ${t.count === 1 ? 'call' : 'calls'}
               <span class="tool-pct-badge">${t.percentage.toFixed(1)}%</span>
             </div>
           </div>
@@ -1455,7 +1457,7 @@ export function renderSubagentDistribution(
             </div>
             <div class="project-counts">
               <span class="model-tokens-strong">${formatCompactNumber(item.totalTokens)}</span> tokens
-              <span class="model-req-count">(${formatFullNumber(item.requests)} reqs)</span>
+              <span class="model-req-count">(${formatFullNumber(item.requests)} ${item.requests === 1 ? 'req' : 'reqs'})</span>
               <span class="project-pct-badge">${pctText}</span>
             </div>
           </div>

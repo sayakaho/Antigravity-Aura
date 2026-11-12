@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildSessionOverviewSeries, renderActivityChart } from '../src/panel/analytics/charts';
-import { computeProcessedColumns } from '../src/panel/analytics/metrics';
+import { computeProcessedColumns, renderMetricCards } from '../src/panel/analytics/metrics';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../src/types';
 
 function makeOverviewFixture(): GlobalAnalyticsOverview {
@@ -293,6 +293,55 @@ describe('Session Overview Cache Hit Rate & Timeline Jump', () => {
       expect(overviewBtn).toBeDefined();
       overviewBtn!.cb({ stopPropagation: () => {} });
       expect(fakeChartContainer.innerHTML).toContain('overview-hit-rate-line');
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
+  });
+
+  test('renderMetricCards uses sessionTurns instead of steps.length for Session Turns and Avg Tokens / Turn', () => {
+    const steps = [
+      makeStep(0, 1000, 1000, 200),
+      makeStep(1, 1000, 1000, 200),
+      makeStep(2, 1000, 1000, 200),
+      makeStep(3, 1000, 1000, 200),
+      makeStep(4, 1000, 1000, 200)
+    ];
+    const session: SessionAnalyticsData = {
+      ...makeSessionFixture(steps),
+      totalTokens: { input: 5000, output: 1000, cacheRead: 4000, thinking: 0, total: 10000 },
+      totalRequests: 5,
+      sessionTurns: 2
+    };
+    const overview = makeOverviewFixture();
+    const processed = computeProcessedColumns(overview, 'session', session);
+
+    const fakeCardsGrid = { innerHTML: '', dataset: {} as Record<string, string> };
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) => (id === 'analytics-cards-grid' ? fakeCardsGrid : null)
+    };
+
+    try {
+      renderMetricCards(processed, 'session', overview, session);
+      expect(fakeCardsGrid.innerHTML).toContain('5</span>\n          <span class="kpi-unit">requests</span>');
+      expect(fakeCardsGrid.innerHTML).toContain('Session Turns:');
+      expect(fakeCardsGrid.innerHTML).toContain('2 turns');
+      expect(fakeCardsGrid.innerHTML).toContain('5,000');
+
+      const singleSession: SessionAnalyticsData = { ...session, totalRequests: 1, sessionTurns: 1 };
+      const singleProcessed = computeProcessedColumns(overview, 'session', singleSession);
+      renderMetricCards(singleProcessed, 'session', overview, singleSession);
+      expect(fakeCardsGrid.innerHTML).toContain('1</span>\n          <span class="kpi-unit">request</span>');
+      expect(fakeCardsGrid.innerHTML).toContain('1 turn');
+
+      const zeroTurnSession: SessionAnalyticsData = { ...session, sessionTurns: 0 };
+      renderMetricCards(processed, 'session', overview, zeroTurnSession);
+      expect(fakeCardsGrid.innerHTML).toContain('0 turns');
+      expect(fakeCardsGrid.innerHTML).toContain('2,000');
     } finally {
       if (origDocument === undefined) {
         delete (globalThis as { document?: unknown }).document;

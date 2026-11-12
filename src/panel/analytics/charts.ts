@@ -992,7 +992,10 @@ function attachStandardTimelineTooltipListeners(
           <span class="tooltip-label">Total Tokens</span>
           <span class="tooltip-val">${formatFullNumber(total)}</span>
         </div>
-        <div class="tooltip-subline">${formatFullNumber(total > 0 ? col.requests || 1 : col.requests)} generation requests${col.subText ? ' · ' + escapeHtml(col.subText) : ''}</div>
+        <div class="tooltip-subline">${(() => {
+          const reqCount = total > 0 ? col.requests || 1 : col.requests;
+          return `${formatFullNumber(reqCount)} ${reqCount === 1 ? 'generation request' : 'generation requests'}`;
+        })()}${col.subText ? ' · ' + escapeHtml(col.subText) : ''}</div>
       `;
 
       tooltip.style.display = 'block';
@@ -1674,7 +1677,7 @@ function attachTpsTooltipListeners(
                   <div class="tooltip-row">
                     <span class="tooltip-dot" style="background: ${escapeHtml(m.color)}"></span>
                     <span class="tooltip-label">${escapeHtml(m.model)}</span>
-                    <span class="tooltip-val">${m.tps} tok/s (${formatFullNumber(m.reqs)} reqs)</span>
+                    <span class="tooltip-val">${m.tps} tok/s (${formatFullNumber(m.reqs)} ${m.reqs === 1 ? 'req' : 'reqs'})</span>
                   </div>
                 `
               )

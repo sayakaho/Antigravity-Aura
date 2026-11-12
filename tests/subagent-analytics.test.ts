@@ -606,4 +606,81 @@ describe('Subagent session tree & analytics integration', () => {
       }
     }
   });
+
+  test('getSessionDetails counts step_type=14 user turns on the main session separately from requests', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-session-turns-'));
+    const convDir = path.join(tmpDir, 'conversations');
+    fs.mkdirSync(convDir, { recursive: true });
+
+    const rootId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const subId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    const wsUri = 'file:///Users/oren/WorkSpace/Apps/demo';
+    const epochSec = Math.floor(new Date('2026-11-10T10:00:00').getTime() / 1000);
+
+    try {
+      const sumDb = new DatabaseSync(path.join(tmpDir, 'conversation_summaries.db'));
+      sumDb.exec(`
+        CREATE TABLE conversation_summaries (
+          conversation_id TEXT PRIMARY KEY,
+          title TEXT,
+          step_count INTEGER,
+          last_modified_time TEXT,
+          project_id TEXT,
+          agent_name TEXT,
+          workspace_uris TEXT,
+          status TEXT,
+          parent_conversation_id TEXT,
+          nesting_depth INTEGER
+        );
+      `);
+      const ins = sumDb.prepare(`
+        INSERT INTO conversation_summaries (
+          conversation_id, title, step_count, last_modified_time,
+          project_id, agent_name, workspace_uris, status,
+          parent_conversation_id, nesting_depth
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      ins.run(rootId, 'Main Task', 6, '2026-11-10T10:00:00', 'proj-1', '', wsUri, 'IDLE', '', 0);
+      ins.run(subId, 'Sub Task', 3, '2026-11-10T10:01:00', 'proj-1', 'research', wsUri, 'IDLE', rootId, 1);
+      sumDb.close();
+
+      const rootDbPath = path.join(convDir, `${rootId}.db`);
+      createConvDb(
+        rootDbPath,
+        [
+          { inTok: 100, outTok: 20, cacheRead: 200, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', stepIdx: 1 },
+          { inTok: 100, outTok: 20, cacheRead: 200, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', stepIdx: 2 },
+          { inTok: 100, outTok: 20, cacheRead: 200, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', stepIdx: 4 }
+        ],
+        [],
+        epochSec
+      );
+      const rootDb = new DatabaseSync(rootDbPath);
+      rootDb.prepare('INSERT INTO steps (idx, step_type, step_payload, metadata) VALUES (?, ?, ?, ?)').run(0, 14, Buffer.alloc(0), buildStepMetaBlob(epochSec));
+      rootDb.prepare('INSERT INTO steps (idx, step_type, step_payload, metadata) VALUES (?, ?, ?, ?)').run(3, 14, Buffer.alloc(0), buildStepMetaBlob(epochSec));
+      rootDb.close();
+
+      const subDbPath = path.join(convDir, `${subId}.db`);
+      createConvDb(
+        subDbPath,
+        [
+          { inTok: 50, outTok: 10, cacheRead: 100, modelId: 'gemini-3.8-flash-s', modelName: 'Gemini 3.8 Flash (High)', stepIdx: 1 }
+        ],
+        [],
+        epochSec
+      );
+      const subDb = new DatabaseSync(subDbPath);
+      subDb.prepare('INSERT INTO steps (idx, step_type, step_payload, metadata) VALUES (?, ?, ?, ?)').run(0, 14, Buffer.alloc(0), buildStepMetaBlob(epochSec));
+      subDb.close();
+
+      const engine = new GlobalAnalyticsEngine(tmpDir);
+      const session = engine.getSessionDetails(rootId);
+      expect(session).not.toBeNull();
+      expect(session!.steps.length).toBe(3);
+      expect(session!.totalRequests).toBe(4);
+      expect(session!.sessionTurns).toBe(2);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
