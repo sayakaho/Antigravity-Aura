@@ -485,12 +485,16 @@ export function renderMetricCards(
   const inTok = metrics.totalTokens.input;
   const outTok = metrics.totalTokens.output;
   const cacheTok = metrics.totalTokens.cacheRead;
+  const thinkTok = metrics.totalTokens.thinking || 0;
+  const respTok = Math.max(0, outTok - thinkTok);
   const totalReq = metrics.totalRequests;
 
   const safeTotal = totalTok > 0 ? totalTok : 1;
   const cachePercent = ((cacheTok / safeTotal) * 100).toFixed(1);
   const inPercent = ((inTok / safeTotal) * 100).toFixed(1);
+  const thinkPercent = ((thinkTok / safeTotal) * 100).toFixed(1);
   const outPercent = ((outTok / safeTotal) * 100).toFixed(1);
+  const respPercent = ((respTok / safeTotal) * 100).toFixed(1);
 
   const { actualCost } = computeApiCostAndSavings(
     metrics,
@@ -518,49 +522,65 @@ export function renderMetricCards(
     container,
     `
     <div class="kpi-hero-card">
-      <div class="hero-left">
-        <div class="kpi-label-row">
-          <span>Total Tokens Processed</span>
-        </div>
+      <div class="kpi-label-row">
+        <span>Total Tokens Processed</span>
+      </div>
+
+      <div class="hero-body-row">
         <div class="kpi-hero-value">
           <span>${formatFullNumber(totalTok)}</span>
           <span class="kpi-approx-unit">~${formatCompactNumber(totalTok)}</span>
         </div>
-        <div class="hero-ratio-wrapper">
-          <div class="kpi-ratio-bar">
-            <div class="kpi-ratio-seg-cache" style="width: ${cachePercent}%;"></div>
-            <div class="kpi-ratio-seg-input" style="width: ${inPercent}%;"></div>
-            <div class="kpi-ratio-seg-output" style="width: ${outPercent}%;"></div>
+
+        <div class="kpi-breakdown-list">
+          <div class="kpi-breakdown-row">
+            <div class="kpi-breakdown-key">
+              <span class="kpi-dot kpi-dot-input"></span>
+              <span>Input:</span>
+            </div>
+            <div class="kpi-breakdown-stat">
+              <span class="kpi-breakdown-val">${formatFullNumber(inTok)}</span>
+              <span class="kpi-breakdown-pct">(${inPercent}%)</span>
+            </div>
           </div>
-          <div class="ratio-labels">
-            <span>Cache Read (${cachePercent}%)</span>
-            <span>Input (${inPercent}%) · Output (${outPercent}%)</span>
+          <div class="kpi-breakdown-row">
+            <div class="kpi-breakdown-key">
+              <span class="kpi-dot kpi-dot-cache"></span>
+              <span>Cache Read:</span>
+            </div>
+            <div class="kpi-breakdown-stat">
+              <span class="kpi-breakdown-val">${formatFullNumber(cacheTok)}</span>
+              <span class="kpi-breakdown-pct">(${cachePercent}%)</span>
+            </div>
+          </div>
+          <div class="kpi-breakdown-row">
+            <div class="kpi-breakdown-key">
+              <span class="kpi-dot kpi-dot-think"></span>
+              <span>Thinking:</span>
+            </div>
+            <div class="kpi-breakdown-stat">
+              <span class="kpi-breakdown-val">${formatFullNumber(thinkTok)}</span>
+              <span class="kpi-breakdown-pct">(${thinkPercent}%)</span>
+            </div>
+          </div>
+          <div class="kpi-breakdown-row">
+            <div class="kpi-breakdown-key">
+              <span class="kpi-dot kpi-dot-output"></span>
+              <span>Output:</span>
+            </div>
+            <div class="kpi-breakdown-stat">
+              <span class="kpi-breakdown-val">${formatFullNumber(outTok)}</span>
+              <span class="kpi-breakdown-pct">(${outPercent}%)</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="kpi-breakdown-list">
-        <div class="kpi-breakdown-row">
-          <div class="kpi-breakdown-key">
-            <span class="kpi-dot kpi-dot-input"></span>
-            <span>Input:</span>
-          </div>
-          <span class="kpi-breakdown-val">${formatFullNumber(inTok)}</span>
-        </div>
-        <div class="kpi-breakdown-row">
-          <div class="kpi-breakdown-key">
-            <span class="kpi-dot kpi-dot-cache"></span>
-            <span>Cache Read:</span>
-          </div>
-          <span class="kpi-breakdown-val">${formatFullNumber(cacheTok)}</span>
-        </div>
-        <div class="kpi-breakdown-row">
-          <div class="kpi-breakdown-key">
-            <span class="kpi-dot kpi-dot-output"></span>
-            <span>Output:</span>
-          </div>
-          <span class="kpi-breakdown-val">${formatFullNumber(outTok)}</span>
-        </div>
+      <div class="kpi-ratio-bar">
+        <div class="kpi-ratio-seg-cache" style="width: ${cachePercent}%;"></div>
+        <div class="kpi-ratio-seg-input" style="width: ${inPercent}%;"></div>
+        <div class="kpi-ratio-seg-think" style="width: ${thinkPercent}%;"></div>
+        <div class="kpi-ratio-seg-output" style="width: ${respPercent}%;"></div>
       </div>
     </div>
 

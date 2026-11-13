@@ -617,21 +617,27 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   margin-bottom: 22px;
 }
 
-/* Row 1: Hero Full-Width Card */
+/* Row 1: Hero Full-Width Card (Three-Row Layout: Header -> Total & Breakdown -> Full-width Ratio Bar) */
 .kpi-hero-card {
   background: color-mix(in srgb, var(--aura-card-bg) 93%, var(--aura-primary) 7%);
   border: 1px solid color-mix(in srgb, var(--aura-border) 70%, var(--aura-primary) 30%);
   border-radius: 12px;
   padding: 18px 24px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 36px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .kpi-hero-card:hover {
   border-color: color-mix(in srgb, var(--aura-border) 50%, var(--aura-primary) 50%);
+}
+
+.hero-body-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .hero-left {
@@ -661,7 +667,7 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
 
 /* Micro Segmented Ratio Bar */
 .kpi-ratio-bar {
-  height: 4px;
+  height: 5px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.08);
   display: flex;
@@ -670,22 +676,22 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
 }
 .kpi-ratio-seg-cache { background: #00A67E; }
 .kpi-ratio-seg-input { background: #818CF8; }
+.kpi-ratio-seg-think { background: #C084FC; }
 .kpi-ratio-seg-output { background: var(--aura-primary); }
 
-/* Key-Value Breakdown List (Compact, Right-aligned, Shifted Left with Comfortable Margin) */
+/* Key-Value Breakdown List (Compact, Right-aligned with Percentage Tags) */
 .kpi-breakdown-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 216px;
-  justify-self: end;
-  margin-right: 36px;
+  min-width: 250px;
 }
 
 .kpi-breakdown-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   font-size: 13px;
 }
 
@@ -695,6 +701,21 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   gap: 7px;
   color: var(--aura-fg-muted);
   font-weight: 500;
+}
+
+.kpi-breakdown-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.kpi-breakdown-pct {
+  font-family: var(--aura-font-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--aura-fg-muted);
+  min-width: 44px;
+  text-align: right;
 }
 
 .kpi-dot {
@@ -859,9 +880,13 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
 
 @media (max-width: 680px) {
   .kpi-hero-card {
-    grid-template-columns: 1fr;
     gap: 12px;
-    padding: 18px 20px;
+    padding: 16px 18px;
+  }
+  .hero-body-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
   .hero-left {
     width: 100%;
@@ -879,6 +904,7 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   .kpi-breakdown-list {
     width: 100%;
     max-width: 100%;
+    min-width: 100%;
     margin-right: 0;
     justify-self: stretch;
     border-top: 1px solid color-mix(in srgb, var(--aura-border) 60%, transparent);

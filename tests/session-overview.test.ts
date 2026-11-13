@@ -342,6 +342,34 @@ describe('Session Overview Cache Hit Rate & Timeline Jump', () => {
       renderMetricCards(processed, 'session', overview, zeroTurnSession);
       expect(fakeCardsGrid.innerHTML).toContain('0 turns');
       expect(fakeCardsGrid.innerHTML).toContain('2,000');
+
+      // Verify Thinking metric rendered between Cache Read and Output in kpi-breakdown-list
+      const thinkingSession: SessionAnalyticsData = {
+        ...session,
+        totalTokens: { input: 19218, output: 672, cacheRead: 14606, thinking: 420, total: 34496 }
+      };
+      const thinkingProcessed = computeProcessedColumns(overview, 'session', thinkingSession);
+      renderMetricCards(thinkingProcessed, 'session', overview, thinkingSession);
+
+      const html = fakeCardsGrid.innerHTML;
+      expect(html).toContain('kpi-dot-think');
+      expect(html).toContain('<span>Thinking:</span>');
+      expect(html).toContain('420');
+      expect(html).toContain('hero-body-row');
+      expect(html).toContain('kpi-ratio-seg-think');
+      expect(html).toContain('class="kpi-breakdown-pct"');
+      expect(html).toContain('(55.7%)');
+      expect(html).toContain('(42.3%)');
+      expect(html).toContain('(1.2%)');
+      expect(html).toContain('(1.9%)');
+
+      const cacheReadIdx = html.indexOf('<span>Cache Read:</span>');
+      const thinkingIdx = html.indexOf('<span>Thinking:</span>');
+      const outputIdx = html.indexOf('<span>Output:</span>');
+
+      expect(cacheReadIdx).toBeGreaterThan(0);
+      expect(thinkingIdx).toBeGreaterThan(cacheReadIdx);
+      expect(outputIdx).toBeGreaterThan(thinkingIdx);
     } finally {
       if (origDocument === undefined) {
         delete (globalThis as { document?: unknown }).document;
