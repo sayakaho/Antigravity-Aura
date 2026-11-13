@@ -197,7 +197,7 @@ function renderStickyYAxis(yTicks: number[], yMax: number, paddingTop: number, c
     const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
     yAxisSvg += `
       <text x="40" y="${y + 3.5}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${escapeHtml(formatCompactNumber(tickVal))}</text>
-      <line x1="43" y1="${y}" x2="48" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.7' : '0.3'}" />
+      <line x1="43" y1="${y}" x2="48" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.75' : '0.55'}" />
     `;
   }
   return yAxisSvg;
@@ -208,7 +208,7 @@ function renderStickyPercentYAxis(paddingTop: number, chartHeight: number): stri
   let axisSvg = '';
   for (const pct of ticks) {
     const y = paddingTop + chartHeight - (pct / 100) * chartHeight;
-    axisSvg += `<line x1="0" y1="${y}" x2="5" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${pct === 0 ? '0.6' : '0.25'}" />`;
+    axisSvg += `<line x1="0" y1="${y}" x2="5" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${pct === 0 ? '0.75' : '0.55'}" />`;
     if (pct === 0 || pct === 50 || pct === 100) {
       axisSvg += `<text x="8" y="${y + 3.5}" text-anchor="start" font-size="10" font-family="var(--aura-font-mono)" fill="#F59E0B" opacity="0.72">${pct}%</text>`;
     }
@@ -349,7 +349,8 @@ function renderSessionOverviewArea(
   let gridSvg = '';
   for (const tickVal of yTicks) {
     const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
-    gridSvg += `<line x1="${paddingLeft}" y1="${y}" x2="${paddingLeft + chartWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />`;
+    const isZero = tickVal === 0;
+    gridSvg += `<line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${paddingLeft + chartWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? '0.75' : '0.55'}" />`;
   }
 
   let areaD = '';
@@ -718,7 +719,8 @@ function renderStandardTimelineChart(
   let gridSvg = '';
   for (const tickVal of yTicks) {
     const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
-    gridSvg += `<line x1="0" y1="${y}" x2="${svgWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.6' : '0.2'}" />`;
+    const isZero = tickVal === 0;
+    gridSvg += `<line class="chart-grid-line" x1="0" y1="${y}" x2="${svgWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? '0.75' : '0.55'}" />`;
   }
 
   let defsSvg = '<defs>';
@@ -1221,12 +1223,12 @@ export function renderModelTpsChart(
     );
   const isHourly = range === 'today' || range === 'yesterday';
 
-  const svgWidth = 800;
+  const svgWidth = 600;
   const svgHeight = 220;
-  const paddingLeft = 45;
-  const paddingRight = 20;
+  const paddingLeft = 10;
+  const paddingRight = 10;
   const paddingTop = 24;
-  const paddingBottom = 28;
+  const paddingBottom = 30;
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
 
@@ -1524,16 +1526,15 @@ export function renderModelTpsChart(
     }
   }
 
-  const yTicks = [0, maxTps * 0.25, maxTps * 0.5, maxTps * 0.75, maxTps];
-  const { linesSvg: yAxisLinesSvg, textsSvg: yAxisTextsSvg } = buildYAxisGridSvg({
-    yTicks,
-    yMax: maxTps,
-    paddingLeft,
-    paddingRight,
-    paddingTop,
-    svgWidth,
-    chartHeight
-  });
+  const { yMax, yTicks } = computeNiceYScale(maxTps, 60, 4);
+  const yAxisSvg = renderStickyYAxis(yTicks, yMax, paddingTop, chartHeight);
+
+  let gridSvg = '';
+  for (const tickVal of yTicks) {
+    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
+    const isZero = tickVal === 0;
+    gridSvg += `<line class="chart-grid-line" x1="0" y1="${y}" x2="${svgWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? '0.75' : '0.55'}" />`;
+  }
 
   let pathsSvg = '';
   let dotsSvg = '';
@@ -1612,7 +1613,7 @@ export function renderModelTpsChart(
   const stepXForBand = chartWidth / Math.max(1, totalSlots - 1);
   const hoverBandsSvg = slotMeta
     .map((slot, idx) => {
-      const bandX = Math.max(paddingLeft, slot.centerX - stepXForBand / 2);
+      const bandX = Math.max(0, slot.centerX - stepXForBand / 2);
       return `<rect class="tps-hover-slot" x="${bandX.toFixed(1)}" y="${paddingTop}" width="${stepXForBand.toFixed(1)}" height="${chartHeight}" fill="transparent" data-slot-idx="${idx}" />`;
     })
     .join('');
@@ -1624,18 +1625,24 @@ export function renderModelTpsChart(
       </div>
     </div>
     ${legendHtml}
-    <div class="chart-body" style="position: relative;">
-      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="analytics-svg" id="tps-svg-element">
-        ${yAxisLinesSvg}
-        ${yAxisTextsSvg}
-        ${gapDividersSvg}
-        ${xLabelsSvg}
-        ${pathsSvg}
-        ${dotsSvg}
-        <line id="tps-scrubber-line" x1="0" y1="${paddingTop}" x2="0" y2="${paddingTop + chartHeight}" stroke="var(--aura-border-focus, #3B82F6)" stroke-width="1.5" stroke-dasharray="2 2" style="display: none; pointer-events: none;" />
-        ${hoverBandsSvg}
-      </svg>
-      <div class="chart-floating-tooltip" id="tps-floating-tooltip" style="display: none;"></div>
+    <div class="chart-layout-root">
+      <div class="chart-y-axis-sticky">
+        <svg viewBox="0 0 48 ${svgHeight}" class="y-axis-svg">${yAxisSvg}</svg>
+      </div>
+      <div class="chart-viewport-wrapper">
+        <div class="chart-stage chart-body" id="tps-stage-container">
+          <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="analytics-svg" id="tps-svg-element">
+            ${gridSvg}
+            ${gapDividersSvg}
+            ${xLabelsSvg}
+            ${pathsSvg}
+            ${dotsSvg}
+            <line id="tps-scrubber-line" x1="0" y1="${paddingTop}" x2="0" y2="${paddingTop + chartHeight}" stroke="var(--aura-border-focus, #3B82F6)" stroke-width="1.5" stroke-dasharray="2 2" style="display: none; pointer-events: none;" />
+            ${hoverBandsSvg}
+          </svg>
+          <div class="chart-floating-tooltip" id="tps-floating-tooltip" style="display: none;"></div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -1655,7 +1662,8 @@ function attachTpsTooltipListeners(
   svgWidth: number,
   slotMeta: TpsSlotMeta[]
 ): void {
-  const stage = chartWrapper.querySelector('.chart-body') as HTMLElement | null;
+  const stage = (chartWrapper.querySelector('.chart-stage') ||
+    chartWrapper.querySelector('.chart-body')) as HTMLElement | null;
   const scrubber = chartWrapper.querySelector('#tps-scrubber-line') as SVGLineElement | null;
   const tooltip = chartWrapper.querySelector('#tps-floating-tooltip') as HTMLElement | null;
   if (!stage || !tooltip || !scrubber) return;

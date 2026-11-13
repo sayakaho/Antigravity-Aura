@@ -1169,7 +1169,9 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   display: block;
 }
 
-#analytics-svg-element {
+.chart-stage .analytics-svg,
+#analytics-svg-element,
+#tps-svg-element {
   height: 220px;
 }
 
@@ -2022,6 +2024,10 @@ html[data-theme="dark"] .chart-shared-hover-band {
 .latency-scatter-pt:hover {
   r: 4.5;
   fill-opacity: 0.95;
+}
+
+.chart-grid-line {
+  pointer-events: none;
 }
 
 .chart-ref-line {

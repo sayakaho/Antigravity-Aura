@@ -60,12 +60,13 @@ export function buildYAxisGridSvg(opts: {
   let linesSvg = '';
   let textsSvg = '';
   const suffix = opts.unitSuffix || '';
-  const zeroOp = opts.axisOpacityZero ?? '0.6';
-  const gridOp = opts.axisOpacityGrid ?? '0.25';
+  const zeroOp = opts.axisOpacityZero ?? '0.75';
+  const gridOp = opts.axisOpacityGrid ?? '0.55';
 
   for (const tickVal of opts.yTicks) {
     const y = opts.paddingTop + opts.chartHeight - (tickVal / opts.yMax) * opts.chartHeight;
-    linesSvg += `<line x1="${opts.paddingLeft}" y1="${y.toFixed(1)}" x2="${opts.svgWidth - opts.paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" stroke-dasharray="3 3" opacity="${tickVal === 0 ? zeroOp : gridOp}" />`;
+    const isZero = tickVal === 0;
+    linesSvg += `<line class="chart-grid-line" x1="${opts.paddingLeft}" y1="${y.toFixed(1)}" x2="${opts.svgWidth - opts.paddingRight}" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? zeroOp : gridOp}" />`;
     const labelText = suffix ? `${Math.round(tickVal)}${suffix}` : formatCompactNumber(tickVal);
     textsSvg += `<text x="${opts.paddingLeft - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${escapeHtml(labelText)}</text>`;
   }

@@ -1177,14 +1177,15 @@ export function renderModelDistribution(
     return;
   }
 
-  const maxTokens = Math.max(...models.map((m) => m.totalTokens), 1);
+  const totalModelTokens = models.reduce((sum, m) => sum + m.totalTokens, 0);
   const usedColors = new Set<string>();
 
   setRenderedHtmlIfChanged(
     container,
     models
       .map((m, idx) => {
-        const pct = Math.max(3, Math.round((m.totalTokens / maxTokens) * 100));
+        const sharePct = totalModelTokens > 0 ? (m.totalTokens / totalModelTokens) * 100 : 0;
+        const pct = m.totalTokens > 0 ? Math.max(0.5, Math.round(sharePct * 10) / 10) : 0;
         const color = getModelColor(m.modelId || m.modelName, idx, usedColors);
         const speedBadge = m.avgTps > 0 ? `<span class="model-speed-badge">${m.avgTps} tok/s</span>` : '';
         const rawTotal = m.inputTok + m.cacheRead;

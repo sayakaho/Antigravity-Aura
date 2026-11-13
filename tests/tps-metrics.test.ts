@@ -278,6 +278,10 @@ describe('Unified TPS & Analytics Metrics', () => {
     expect(html).toContain('class="model-token-summary">Cache: 0% (0) · Out: 581 · In: 14k · Think: 482</span>');
     expect(html).toContain('<span class="model-speed-badge">122 tok/s</span>');
 
+    // Confirm progress bar fills according to global total token share rather than 100% for #1
+    expect(html).toContain('style="width: 54.2%;');
+    expect(html).toContain('style="width: 45.8%;');
+
     const firstRow = html.split('class="model-stat-row"')[1] || '';
     const titleSection = firstRow.split('class="model-bar-track"')[0] || '';
     const footerSection = firstRow.split('class="model-chips"')[1] || '';
@@ -434,6 +438,9 @@ describe('Unified TPS & Analytics Metrics', () => {
     const html = fakeTpsContainer.innerHTML;
     expect(html).toContain('30s Buckets · Stream · E2E');
     expect(html).toContain('class="tps-legend-bar"');
+    expect(html).toContain('class="chart-layout-root"');
+    expect(html).toContain('class="chart-y-axis-sticky"');
+    expect(html).toContain('class="chart-grid-line"');
     expect(html).toContain('Gemini 3.8 Flash (High) (gemini-3.8-flash-s)');
     expect(html).toContain('Gemini 3.8 Flash (High) (gemini-3.8-flash-n)');
     expect(html).toContain('class="tps-gap-divider"');

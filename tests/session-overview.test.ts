@@ -212,6 +212,8 @@ describe('Session Overview Cache Hit Rate & Timeline Jump', () => {
       expect(overviewHtml).toContain('class="overview-hit-rate-line"');
       expect(overviewHtml).toContain('class="chart-y-axis-sticky chart-y-axis-right"');
       expect(overviewHtml).toContain('Cache Health');
+      expect(overviewHtml).toContain('class="chart-grid-line"');
+      expect(overviewHtml).toContain('stroke-dasharray="3 4"');
       expect(overviewHtml).toContain('class="overview-break-guide"');
       expect(overviewHtml).toContain('class="chart-break-dot" data-turn-idx="15"');
       expect(overviewHtml).toContain('class="chart-floating-tooltip overview-tooltip"');
