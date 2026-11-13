@@ -2,6 +2,23 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.2.3] - 2026-11-13
+
+### Added
+- **Token Analytics Hero Card Redesign**: Restructured the hero card into a three-row layout with top header, dual-column metrics with inline share percentages (e.g. `(55.7%)`), full-width micro-ratio bar, and dedicated `Thinking` token tracking.
+- **Cache Health Strip & Hit-Rate Overlay**: Added a multi-tier cache health strip (`healthy`, `degraded`, `break`) to session overview, hover cache hit % trajectory curve, cache break guide lines, and one-click jump to Timeline.
+- **Telemetry Capsule Layout & Micro-Icons**: Refreshed metrics capsule tooltip with dedicated SVG micro-icons (`new`, `cached`, `think`, `resp`), full i18n support, and breakdown chips.
+- **Event-Driven Auto-Refresh**: Added server-side revision caching with file watching and auto-refresh for live sessions without full-page reloads.
+
+### Changed
+- **Model Speed Trends Axis & Font Alignment**: Aligned `Model Speed Trends` to use the unified 48px sticky Y-axis and matched viewport/font size with `Token Activity`.
+- **Global Token Share Scaling**: Model token consumption progress bars now scale proportionally based on total consumed tokens across models rather than relative to the top model.
+- **Subtle Chart Gridlines**: Enhanced horizontal reference gridlines across all charts with refined dash intervals (`3 4`) and balanced opacity (`0.55`) for clear legibility without overpowering foreground curves.
+
+### Fixed
+- **Analytics SVG Viewport Collapse**: Explicitly locked `.chart-stage .analytics-svg` and `#tps-svg-element` to 220px to eliminate aspect-ratio height collapse, vertical guide line offsets, and bottom dead space.
+- **User Prompt Turn Count & Range Scoping**: Accurately counted user prompt turns for session turns, scoped thinking tokens and empty fallbacks strictly within selected time ranges, and normalized unit plurals.
+
 ## [0.2.2] - 2026-11-10
 
 ### Added

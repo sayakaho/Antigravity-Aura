@@ -1,6 +1,6 @@
 {
   "name": "aura-dashboard",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Antigravity deep performance analytics, Claude-inspired typography, and interface design suite",
   "type": "module",
   "scripts": {
