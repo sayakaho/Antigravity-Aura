@@ -924,10 +924,12 @@ html[data-ag-color-scheme="dark"] .agy-sidebar-row * {
 }
 
 html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"],
+html[data-ag-color-scheme="dark"] .agy-sidebar-row[data-selected="true"],
 html[data-ag-color-scheme="dark"] .bg-sidebar [data-active="true"] {
   background-color: rgba(255, 255, 255, 0.08) !important;
   border-radius: 8px !important;
   text-shadow: none !important;
+  --row-bg: color-mix(in srgb, #ffffff 8%, var(--sidebar)) !important;
 }
 
 html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] span.truncate:first-child,
@@ -941,9 +943,11 @@ html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-
   color: #948F85 !important;
 }
 
-html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"]:not([data-selected="true"]):hover {
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"]:not([data-selected="true"]):hover,
+html[data-ag-color-scheme="dark"] .agy-sidebar-row:not([data-selected="true"]):hover {
   background-color: rgba(255, 255, 255, 0.04) !important;
   border-radius: 8px !important;
+  --row-bg: color-mix(in srgb, #ffffff 4%, var(--sidebar)) !important;
 }
 
 html[data-ag-color-scheme="dark"] .bg-sidebar [class*="text-muted"],

@@ -146,6 +146,23 @@
           <div class="chart-loading">Loading workspaces...</div>
         </div>
       </div>
+
+      <!-- Account Token Breakdown -->
+      <div class="settings-section" id="analytics-accounts-section">
+        <div class="section-header-row">
+          <div class="section-header-meta">
+            <h2 class="section-title">Account Token Consumption</h2>
+            <p class="section-desc">Token consumption, session volume, and timeline distribution tracked across logged-in accounts.</p>
+          </div>
+          <div class="segmented-control mini-segmented" id="accounts-scope-segmented" role="group" aria-label="Account distribution time scope">
+            <button type="button" class="segment-btn" data-scope="follow" aria-pressed="false">Follow Range</button>
+            <button type="button" class="segment-btn" data-scope="all-time" aria-pressed="false">All Time</button>
+          </div>
+        </div>
+        <div class="settings-card padding-card" id="analytics-accounts-list">
+          <div class="chart-loading">Loading account metrics...</div>
+        </div>
+      </div>
     </div>
 
     <!-- VIEW 2: Settings & Preferences -->

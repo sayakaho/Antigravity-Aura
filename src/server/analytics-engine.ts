@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { AccountTracker, isUntrackedAccount } from './account-tracker';
 import { canonicalizeTool, canonicalModelName, resolveCanonicalModelId } from '../shared/catalog';
 import { formatLocalDateAndHourKeys } from '../shared/format';
 import { resolveSummaryProjectInfo, type ResolvedProjectInfo } from '../shared/project';
@@ -13,6 +14,8 @@ import {
 } from '../shared/session';
 import { buildSessionSpeedTimeline, computeStepTps, computeWeightedTps } from '../shared/tps';
 import type {
+  AccountDailyStat,
+  AccountTokenStat,
   ConversationSummary,
   DailySeriesPoint,
   GlobalAnalyticsOverview,
@@ -85,6 +88,7 @@ interface CacheEntry {
   tpsList?: number[];
   turnDurSum?: number;
   validTurnCount?: number;
+  dailyAccountStats?: Record<string, Record<string, AccountDailyStat>>;
 }
 
 interface AnalyticsCache {
@@ -92,7 +96,7 @@ interface AnalyticsCache {
   sessions: Record<string, CacheEntry>;
 }
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v13.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v15.json';
 const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache.json',
   'aura_analytics_cache_v1.json',
@@ -106,7 +110,9 @@ const OBSOLETE_CACHE_FILES = [
   'aura_analytics_cache_v9.json',
   'aura_analytics_cache_v10.json',
   'aura_analytics_cache_v11.json',
-  'aura_analytics_cache_v12.json'
+  'aura_analytics_cache_v12.json',
+  'aura_analytics_cache_v13.json',
+  'aura_analytics_cache_v14.json'
 ];
 
 function createEmptyBreakdown(): TokenBreakdown {
@@ -242,6 +248,40 @@ function getFileMtimeSec(filePath: string): number {
   }
 }
 
+function accumulateAccountDailyStat(
+  target: Record<string, Record<string, AccountDailyStat>>,
+  dateKey: string,
+  account: string,
+  inTok: number,
+  outTok: number,
+  cacheRead: number,
+  thinkTok: number,
+  requests: number,
+  cascadeId?: string
+): void {
+  if (!target[dateKey]) target[dateKey] = {};
+  if (!target[dateKey][account]) {
+    target[dateKey][account] = {
+      account,
+      inTok: 0,
+      outTok: 0,
+      cacheRead: 0,
+      thinkTok: 0,
+      requests: 0,
+      conversationIds: []
+    };
+  }
+  const item = target[dateKey][account];
+  item.inTok += inTok;
+  item.outTok += outTok;
+  item.cacheRead += cacheRead;
+  item.thinkTok += thinkTok;
+  item.requests += requests;
+  if (cascadeId && !item.conversationIds.includes(cascadeId)) {
+    item.conversationIds.push(cascadeId);
+  }
+}
+
 const SESSION_DB_FILE_RE = /^([0-9a-f-]{36})\.db(?:-(?:wal|journal))?$/i;
 const SUMMARIES_DB_FILE_RE = /^conversation_summaries\.db(?:-(?:wal|journal))?$/i;
 const MAX_SESSION_DETAILS_CACHE_SIZE = 20;
@@ -249,6 +289,7 @@ const MAX_SESSION_DETAILS_CACHE_SIZE = 20;
 export class GlobalAnalyticsEngine {
   private readonly baseDir: string;
   private readonly cachePath: string;
+  private readonly accountTracker: AccountTracker;
   private cache: AnalyticsCache;
   private readonly timedSamplesCache = new Map<
     string,
@@ -283,11 +324,25 @@ export class GlobalAnalyticsEngine {
   private isWritingCache = false;
   private writeFailureCount = 0;
 
-  constructor(baseDir: string) {
+  constructor(baseDir: string, accountTracker?: AccountTracker) {
     this.baseDir = baseDir;
     this.cachePath = path.join(baseDir, CACHE_FILE_NAME);
+    this.accountTracker =
+      accountTracker ||
+      new AccountTracker({
+        storageDir: baseDir,
+        onAccountSwitch: () => {
+          this.revision++;
+          this.overviewCache = null;
+          this.sessionDetailsCache.clear();
+        }
+      });
     this.cache = this.loadCache();
     this.pruneObsoleteCaches();
+  }
+
+  public getAccountTracker(): AccountTracker {
+    return this.accountTracker;
   }
 
   public getRevision(): number {
@@ -759,6 +814,7 @@ export class GlobalAnalyticsEngine {
     const globalToolsMap: Record<string, number> = {};
     const globalSubagentMap: Record<string, SubagentStatItem> = {};
     const globalDailySubagentStats: Record<string, Record<string, SubagentDailyStat>> = {};
+    const globalDailyAccountStats: Record<string, Record<string, AccountDailyStat>> = {};
 
     for (const s of summaries) {
       const convId = s.conversationId;
@@ -1163,6 +1219,23 @@ export class GlobalAnalyticsEngine {
           }
         }
       }
+      if (entry.dailyAccountStats) {
+        for (const [dateKey, dayAccounts] of Object.entries(entry.dailyAccountStats)) {
+          for (const [accountKey, st] of Object.entries(dayAccounts)) {
+            accumulateAccountDailyStat(
+              globalDailyAccountStats,
+              dateKey,
+              accountKey,
+              st.inTok,
+              st.outTok,
+              st.cacheRead,
+              st.thinkTok,
+              st.requests,
+              rootConvId || convId
+            );
+          }
+        }
+      }
     }
 
     if (cacheUpdated) {
@@ -1252,6 +1325,53 @@ export class GlobalAnalyticsEngine {
         a.agentName.localeCompare(b.agentName)
     );
 
+    const currentAccount = this.accountTracker.getCurrentAccount();
+    const globalAccountMap: Record<string, AccountTokenStat> = {};
+    const accountSessionIds: Record<string, Set<string>> = {};
+
+    for (const dayAccounts of Object.values(globalDailyAccountStats)) {
+      for (const [acc, st] of Object.entries(dayAccounts)) {
+        if (!globalAccountMap[acc]) {
+          const isUntracked = isUntrackedAccount(acc);
+          globalAccountMap[acc] = {
+            account: acc,
+            totalTokens: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0,
+            conversationCount: 0,
+            isCurrent: !isUntracked && acc === currentAccount,
+            isUntracked
+          };
+          accountSessionIds[acc] = new Set<string>();
+        }
+        const item = globalAccountMap[acc];
+        item.inputTok += st.inTok;
+        item.outTok += st.outTok;
+        item.cacheRead += st.cacheRead;
+        item.thinkTok += st.thinkTok;
+        item.totalTokens += st.inTok + st.outTok + st.cacheRead;
+        item.requests += st.requests;
+        for (const cid of st.conversationIds || []) {
+          accountSessionIds[acc].add(cid);
+        }
+      }
+    }
+
+    for (const [acc, ids] of Object.entries(accountSessionIds)) {
+      if (globalAccountMap[acc]) {
+        globalAccountMap[acc].conversationCount = ids.size;
+      }
+    }
+
+    const accountDistribution = Object.values(globalAccountMap).sort((a, b) => {
+      if (a.isUntracked && !b.isUntracked) return 1;
+      if (!a.isUntracked && b.isUntracked) return -1;
+      return b.totalTokens - a.totalTokens || b.requests - a.requests;
+    });
+
     const result: GlobalAnalyticsOverview = {
       totalConversations: globalRootSessionIds.size,
       totalRequests,
@@ -1279,7 +1399,9 @@ export class GlobalAnalyticsEngine {
       toolDistribution,
       dailyToolStats: globalDailyToolStats,
       subagentDistribution,
-      dailySubagentStats: globalDailySubagentStats
+      dailySubagentStats: globalDailySubagentStats,
+      accountDistribution,
+      dailyAccountStats: globalDailyAccountStats
     };
     this.overviewCache = {
       revision: this.revision,
@@ -1357,6 +1479,7 @@ export class GlobalAnalyticsEngine {
       const models: Record<string, ModelBucket> = {};
       const dailyModelStats: Record<string, Record<string, ModelDailyStat>> = {};
       const hourlyModelStats: Record<string, Record<string, ModelDailyStat>> = {};
+      const dailyAccountStats: Record<string, Record<string, AccountDailyStat>> = {};
 
       for (const r of rows || []) {
         const parsed = extractGenMetadataStep(r.data);
@@ -1494,6 +1617,19 @@ export class GlobalAnalyticsEngine {
           stepEffSec,
           1
         );
+
+        const stepTs = sec && sec > 1_000_000_000 ? sec : Math.floor(turnDate.getTime() / 1000);
+        const account = this.accountTracker.matchAccountForTimestamp(stepTs);
+        accumulateAccountDailyStat(
+          dailyAccountStats,
+          dateKey,
+          account,
+          parsed.inTok,
+          parsed.outTok,
+          parsed.cacheRead,
+          parsed.thinkTok,
+          1
+        );
       }
 
       return {
@@ -1513,6 +1649,7 @@ export class GlobalAnalyticsEngine {
         models,
         dailyModelStats,
         hourlyModelStats,
+        dailyAccountStats,
         tools,
         dailyTools,
         dailyUserTurns,
@@ -1706,6 +1843,8 @@ export class GlobalAnalyticsEngine {
       let sessionValidTurnCount = 0;
       const sessionModelsMap: Record<string, ModelBucket> = {};
       const allSpeedSamples: TimedSpeedSample[] = [];
+      const sessionAccountMap: Record<string, AccountTokenStat> = {};
+      const currentAccount = this.accountTracker.getCurrentAccount();
 
       const steps = (rows || []).map((r) => {
         const parsed = extractGenMetadataStep(r.data);
@@ -1774,6 +1913,32 @@ export class GlobalAnalyticsEngine {
             }
           }
         }
+
+        const stepTs = parsed.stepIdx !== null ? mainStepTimeMap.get(parsed.stepIdx) : undefined;
+        const ts = stepTs && stepTs > 1_000_000_000 ? stepTs : mainFallbackTsSec;
+        const acc = this.accountTracker.matchAccountForTimestamp(ts);
+        const isUntracked = isUntrackedAccount(acc);
+        if (!sessionAccountMap[acc]) {
+          sessionAccountMap[acc] = {
+            account: acc,
+            totalTokens: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0,
+            conversationCount: 1,
+            isCurrent: !isUntracked && acc === currentAccount,
+            isUntracked
+          };
+        }
+        const aItem = sessionAccountMap[acc];
+        aItem.inputTok += parsed.inTok;
+        aItem.outTok += parsed.outTok;
+        aItem.cacheRead += parsed.cacheRead;
+        aItem.thinkTok += parsed.thinkTok;
+        aItem.totalTokens += parsed.inTok + parsed.outTok + parsed.cacheRead;
+        aItem.requests += 1;
 
         return {
           idx: Number(r.idx),
@@ -1901,6 +2066,35 @@ export class GlobalAnalyticsEngine {
         sa.thinkTok += subEntry.thinkTok;
         sa.totalTokens += subTokTotal;
         sa.requests += subReq;
+
+        if (subEntry.dailyAccountStats) {
+          for (const dayAccounts of Object.values(subEntry.dailyAccountStats)) {
+            for (const [acc, st] of Object.entries(dayAccounts)) {
+              if (!sessionAccountMap[acc]) {
+                const isUntracked = isUntrackedAccount(acc);
+                sessionAccountMap[acc] = {
+                  account: acc,
+                  totalTokens: 0,
+                  inputTok: 0,
+                  outTok: 0,
+                  cacheRead: 0,
+                  thinkTok: 0,
+                  requests: 0,
+                  conversationCount: 1,
+                  isCurrent: !isUntracked && acc === currentAccount,
+                  isUntracked
+                };
+              }
+              const aItem = sessionAccountMap[acc];
+              aItem.inputTok += st.inTok;
+              aItem.outTok += st.outTok;
+              aItem.cacheRead += st.cacheRead;
+              aItem.thinkTok += st.thinkTok;
+              aItem.totalTokens += st.inTok + st.outTok + st.cacheRead;
+              aItem.requests += st.requests;
+            }
+          }
+        }
       }
 
       if (cacheUpdated) {
@@ -2004,6 +2198,11 @@ export class GlobalAnalyticsEngine {
         avgTurnLatency,
         steps,
         models,
+        accounts: Object.values(sessionAccountMap).sort((a, b) => {
+          if (a.isUntracked && !b.isUntracked) return 1;
+          if (!a.isUntracked && b.isUntracked) return -1;
+          return b.totalTokens - a.totalTokens;
+        }),
         tools,
         subagents,
         speedTimeline

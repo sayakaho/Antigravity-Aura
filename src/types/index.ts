@@ -168,6 +168,35 @@ export interface ToolStatItem {
   percentage: number;
 }
 
+export interface AccountTimelineEntry {
+  account: string;
+  start: number; // Unix timestamp in seconds
+  end: number | null; // null if currently active
+}
+
+export interface AccountTokenStat {
+  account: string;
+  totalTokens: number;
+  inputTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
+  conversationCount: number;
+  isCurrent?: boolean;
+  isUntracked?: boolean;
+}
+
+export interface AccountDailyStat {
+  account: string;
+  inTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
+  conversationIds: string[];
+}
+
 export interface ModelTokenStat {
   modelId: string;
   modelName: string;
@@ -265,6 +294,7 @@ export interface SessionAnalyticsData {
   avgTurnLatency?: number;
   steps: ConversationStepMetric[];
   models?: ModelTokenStat[];
+  accounts?: AccountTokenStat[];
   tools?: ToolStatItem[];
   subagents?: SubagentBreakdownSummary;
   speedTimeline?: SessionSpeedTimeline;
@@ -352,6 +382,8 @@ export interface GlobalAnalyticsOverview {
   dailyToolStats: Record<string, Record<string, number>>;
   subagentDistribution?: SubagentStatItem[];
   dailySubagentStats?: Record<string, Record<string, SubagentDailyStat>>;
+  accountDistribution?: AccountTokenStat[];
+  dailyAccountStats?: Record<string, Record<string, AccountDailyStat>>;
 }
 
 export interface LiveMetricsPayload {

@@ -5,8 +5,8 @@
   --aura-font-sans: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   --aura-font-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace);
   
-  /* Dark Mode Defaults */
-  --aura-bg: #1B1917;
+  /* Dark Mode Defaults (Matched to Chat Interface Background #1F1E1D) */
+  --aura-bg: #1F1E1D;
   --aura-fg: #EDE8E1;
   --aura-fg-muted: #948F85;
   --aura-card-bg: rgba(255, 255, 255, 0.035);
@@ -25,7 +25,7 @@
 
 :root[data-theme='light'], html[data-theme='light'] {
   color-scheme: light;
-  --aura-bg: #FBF9F5;
+  --aura-bg: #FCFCFB;
   --aura-fg: #1F1E1D;
   --aura-fg-muted: #6B665E;
   --aura-card-bg: #FFFFFF;
@@ -40,10 +40,14 @@
   --aura-chart-hover-band: rgba(0, 0, 0, 0.08);
 }
 
+:root[data-preset='vintage-dark'], html[data-preset='vintage-dark'] {
+  --aura-bg: #171512;
+}
+
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']), html:not([data-theme='dark']) {
     color-scheme: light;
-    --aura-bg: #FBF9F5;
+    --aura-bg: #FCFCFB;
     --aura-fg: #1F1E1D;
     --aura-fg-muted: #6B665E;
     --aura-card-bg: #FFFFFF;
@@ -1246,7 +1250,7 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   height: 5px;
   border-radius: 50%;
   background: #EF4444;
-  border: 1.5px solid var(--aura-bg, #1B1917);
+  border: 1.5px solid var(--aura-bg, #1F1E1D);
   pointer-events: none;
   z-index: 26;
   transform: translate(-50%, -50%);
@@ -1258,7 +1262,7 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   height: 6px;
   border-radius: 50%;
   background: #F59E0B;
-  border: 1.5px solid var(--aura-bg, #1B1917);
+  border: 1.5px solid var(--aura-bg, #1F1E1D);
   pointer-events: none;
   z-index: 26;
   transform: translate(-50%, -50%);
@@ -1510,6 +1514,57 @@ html[data-theme="dark"] .chart-shared-hover-band {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.account-name-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.account-current-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--aura-primary, #6366f1) 16%, transparent);
+  color: var(--aura-primary, #6366f1);
+  border: 1px solid color-mix(in srgb, var(--aura-primary, #6366f1) 32%, transparent);
+  flex-shrink: 0;
+}
+
+.account-details-pill {
+  font-size: 11px;
+  color: var(--aura-fg-muted);
+  font-family: var(--aura-font-mono, monospace);
+  line-height: 1.4;
+}
+
+.account-stat-row-untracked {
+  opacity: 0.82;
+}
+
+.account-untracked-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--aura-control-bg, rgba(255, 255, 255, 0.06));
+  color: var(--aura-fg-muted);
+  border: 1px solid var(--aura-border);
+  flex-shrink: 0;
+}
+
+.account-bar-fill-untracked {
+  background: color-mix(in srgb, var(--aura-border) 75%, var(--aura-fg-muted) 25%) !important;
 }
 
 .project-footer {

@@ -7,6 +7,7 @@ import { toPanelConfigDTO } from '../shared/config-schema';
 import { resolveAnalyticsSessionId } from '../shared/session';
 import type { SidecarStatusResponse } from '../types';
 import { GlobalAnalyticsEngine } from './analytics-engine';
+import { AccountTracker } from './account-tracker';
 import { CdpManager } from './cdp-client';
 import {
   getActiveConfig,
@@ -22,7 +23,8 @@ import {
   EMBEDDED_ASSETS,
   HERE,
   initDataDirectory,
-  readTextSafe
+  readTextSafe,
+  USER_DIR
 } from './paths';
 
 // Defensive fallback for local debugging outside Antigravity host
@@ -66,7 +68,10 @@ const { SidecarApp, Response } = sdk;
 initDataDirectory();
 rebuildBundleIfNeeded(true);
 
-const analyticsEngine = new GlobalAnalyticsEngine(ANTIGRAVITY_DATA_DIR);
+const accountTracker = new AccountTracker({
+  storageDir: USER_DIR
+});
+const analyticsEngine = new GlobalAnalyticsEngine(ANTIGRAVITY_DATA_DIR, accountTracker);
 analyticsEngine.startWatching();
 const cdpManager = new CdpManager({
   onSessionDbChange: (cascadeId, sig) => {
@@ -152,6 +157,20 @@ app.api(
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  },
+  'GET'
+);
+
+app.api(
+  '/api/analytics/accounts',
+  () => {
+    return {
+      ok: true,
+      data: {
+        currentAccount: accountTracker.getCurrentAccount(),
+        timeline: accountTracker.getTimeline()
+      }
+    };
   },
   'GET'
 );

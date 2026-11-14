@@ -2,12 +2,15 @@ import { buildSessionAnalyticsEndpoint } from '../../shared/session';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../../types';
 import { type AnalyticsRefreshMode } from './auto-refresh';
 import {
+  ACCOUNT_SCOPE_STORAGE_KEY,
   ANALYTICS_RANGE_STORAGE_KEY,
   PROJECT_SCOPE_STORAGE_KEY,
+  loadAccountScopeState,
   loadAnalyticsRangeState,
   loadProjectScopeState,
   parseAnalyticsRangeState,
   parseProjectScopeState,
+  saveAccountScopeState,
   saveAnalyticsRangeState,
   saveProjectScopeState,
   type AnalyticsRangeState,
@@ -20,6 +23,7 @@ import {
 } from './charts';
 import {
   computeProcessedColumns,
+  renderAccountDistribution,
   renderMetricCards,
   renderModelDistribution,
   renderProjectDistribution,
@@ -40,6 +44,7 @@ let currentRange: TimeRangeOption = initialRangeState.range;
 let customStartDate = initialRangeState.customStartDate;
 let customEndDate = initialRangeState.customEndDate;
 let currentProjectScope: ProjectScopeMode = loadProjectScopeState();
+let currentAccountScope: ProjectScopeMode = loadAccountScopeState();
 let activeSessionData: SessionAnalyticsData | null = null;
 let rangeListenersBound = false;
 let refreshSeq = 0;
@@ -127,6 +132,15 @@ function updateProjectScopeControlUI(scope: ProjectScopeMode): void {
   });
 }
 
+function updateAccountScopeControlUI(scope: ProjectScopeMode): void {
+  const segmented = document.getElementById('accounts-scope-segmented');
+  segmented?.querySelectorAll('.segment-btn').forEach((btn) => {
+    const isActive = btn.getAttribute('data-scope') === scope;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
 function renderRangeDependentViews(
   overview: GlobalAnalyticsOverview,
   range: TimeRangeOption,
@@ -163,6 +177,14 @@ function renderRangeDependentViews(
     range,
     activeSessionData,
     currentProjectScope,
+    customStartDate,
+    customEndDate
+  );
+  renderAccountDistribution(
+    overview,
+    range,
+    activeSessionData,
+    currentAccountScope,
     customStartDate,
     customEndDate
   );
@@ -314,6 +336,7 @@ async function runRefreshPass(initialOptions: Required<RefreshAnalyticsOptions>)
 
       updateRangeControlUI(currentRange);
       updateProjectScopeControlUI(currentProjectScope);
+      updateAccountScopeControlUI(currentAccountScope);
       if (rawOverview) {
         renderRangeDependentViews(rawOverview, currentRange, opts.preserveScroll);
       }
@@ -383,6 +406,22 @@ function applyProjectScope(scope: ProjectScopeMode): void {
   }
 }
 
+function applyAccountScope(scope: ProjectScopeMode): void {
+  currentAccountScope = scope;
+  saveAccountScopeState(scope);
+  updateAccountScopeControlUI(scope);
+  if (rawOverview) {
+    renderAccountDistribution(
+      rawOverview,
+      currentRange,
+      activeSessionData,
+      currentAccountScope,
+      customStartDate,
+      customEndDate
+    );
+  }
+}
+
 function applyExternalProjectScope(nextScope: ProjectScopeMode): void {
   if (nextScope === currentProjectScope) return;
   currentProjectScope = nextScope;
@@ -417,6 +456,7 @@ export function initTimeRangeControls(): void {
   syncCustomDateInputs();
   updateRangeControlUI(currentRange);
   updateProjectScopeControlUI(currentProjectScope);
+  updateAccountScopeControlUI(currentAccountScope);
 
   if (rangeListenersBound) return;
   rangeListenersBound = true;
@@ -435,6 +475,16 @@ export function initTimeRangeControls(): void {
       const scope = btn.getAttribute('data-scope');
       if (scope === 'follow' || scope === 'all-time') {
         applyProjectScope(scope);
+      }
+    });
+  });
+
+  const accountScopeSegmented = document.getElementById('accounts-scope-segmented');
+  accountScopeSegmented?.querySelectorAll('.segment-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const scope = btn.getAttribute('data-scope');
+      if (scope === 'follow' || scope === 'all-time') {
+        applyAccountScope(scope);
       }
     });
   });

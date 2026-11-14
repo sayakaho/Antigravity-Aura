@@ -15,6 +15,7 @@ import {
 } from '../../shared/format';
 import { computeBucketTps, computeStepTps, computeWeightedTps } from '../../shared/tps';
 import type {
+  AccountTokenStat,
   DailySeriesPoint,
   GlobalAnalyticsOverview,
   HourlySeriesPoint,
@@ -1070,6 +1071,179 @@ export function renderProjectDistribution(
   if (setRenderedHtmlIfChanged(container, nextHtml)) {
     hideProjectTooltipImmediately();
   }
+}
+
+export function computeAccountDistributionItems(
+  overview: GlobalAnalyticsOverview,
+  range: TimeRangeOption,
+  activeSessionData: SessionAnalyticsData | null,
+  scope: ProjectScopeMode = 'follow',
+  customStart = '',
+  customEnd = '',
+  now = new Date()
+): AccountTokenStat[] {
+  if (range === 'session') {
+    if (activeSessionData?.accounts && activeSessionData.accounts.length > 0) {
+      return [...activeSessionData.accounts];
+    }
+    return [];
+  }
+
+  if (scope === 'all-time' || !overview.dailyAccountStats) {
+    return overview.accountDistribution ? [...overview.accountDistribution] : [];
+  }
+
+  const dates = getFilterDatesForRange(range, customStart, customEnd, now);
+  const aggMap = new Map<string, { stat: AccountTokenStat; convIds: Set<string> }>();
+  const currentAccount = overview.accountDistribution?.find((a) => a.isCurrent)?.account;
+
+  for (const d of dates) {
+    const dayAccounts = overview.dailyAccountStats[d];
+    if (!dayAccounts) continue;
+    for (const [acc, st] of Object.entries(dayAccounts)) {
+      let bucket = aggMap.get(acc);
+      if (!bucket) {
+        const isUntracked = acc === 'Untracked (Historical)' || acc.startsWith('Untracked');
+        bucket = {
+          stat: {
+            account: acc,
+            totalTokens: 0,
+            inputTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0,
+            conversationCount: 0,
+            isCurrent: !isUntracked && acc === currentAccount,
+            isUntracked
+          },
+          convIds: new Set<string>()
+        };
+        aggMap.set(acc, bucket);
+      }
+      bucket.stat.inputTok += st.inTok;
+      bucket.stat.outTok += st.outTok;
+      bucket.stat.cacheRead += st.cacheRead;
+      bucket.stat.thinkTok += st.thinkTok;
+      bucket.stat.requests += st.requests;
+      for (const cid of st.conversationIds || []) {
+        bucket.convIds.add(cid);
+      }
+    }
+  }
+
+  return Array.from(aggMap.values())
+    .map(({ stat, convIds }) => ({
+      ...stat,
+      conversationCount: convIds.size,
+      totalTokens: stat.inputTok + stat.outTok + stat.cacheRead
+    }))
+    .filter((a) => a.totalTokens > 0 || a.requests > 0)
+    .sort((a, b) => {
+      if (a.isUntracked && !b.isUntracked) return 1;
+      if (!a.isUntracked && b.isUntracked) return -1;
+      return b.totalTokens - a.totalTokens || b.conversationCount - a.conversationCount;
+    });
+}
+
+export function renderAccountDistribution(
+  overview: GlobalAnalyticsOverview,
+  range: TimeRangeOption,
+  activeSessionData: SessionAnalyticsData | null,
+  scope: ProjectScopeMode = 'follow',
+  customStart = '',
+  customEnd = ''
+): void {
+  const container = document.getElementById('analytics-accounts-list');
+  if (!container) return;
+
+  const accounts = computeAccountDistributionItems(
+    overview,
+    range,
+    activeSessionData,
+    scope,
+    customStart,
+    customEnd
+  );
+
+  if (accounts.length === 0) {
+    const emptyHtml = `
+      <div class="empty-state-card" style="padding: 18px 12px; text-align: center; color: var(--aura-fg-muted); font-size: 13px;">
+        <div style="font-weight: 500; margin-bottom: 4px; color: var(--aura-fg);">No Account Activity</div>
+        <div>Account telemetry will appear here as conversations and tokens are processed.</div>
+      </div>
+    `;
+    setRenderedHtmlIfChanged(container, emptyHtml);
+    return;
+  }
+
+  const totalTokens = accounts.reduce((sum, a) => sum + a.totalTokens, 0);
+  const totalSessions = accounts.reduce((sum, a) => sum + a.conversationCount, 0);
+  const scopeLabel = scope === 'all-time' ? 'All Time' : getRangeDisplayTitle(range);
+  const accountWord = accounts.length === 1 ? 'account' : 'accounts';
+  const sessionWord = totalSessions === 1 ? 'session' : 'sessions';
+
+  const rowsHtml = accounts
+    .map((a) => {
+      const sharePct = totalTokens > 0 ? (a.totalTokens / totalTokens) * 100 : 0;
+      const barPct = a.totalTokens > 0 ? sharePct : 0;
+      const isUntracked = !!a.isUntracked || a.account === 'Untracked (Historical)';
+      const barFillClass = isUntracked
+        ? 'project-bar-fill account-bar-fill-untracked'
+        : a.totalTokens > 0
+          ? 'project-bar-fill project-bar-fill-nonzero'
+          : 'project-bar-fill';
+      const pctText = a.totalTokens > 0 && sharePct < 0.1 ? '<0.1%' : `${sharePct.toFixed(1)}%`;
+      const sWord = a.conversationCount === 1 ? 'session' : 'sessions';
+      const badgeHtml = isUntracked
+        ? '<span class="account-untracked-badge">Pre-tracking</span>'
+        : a.isCurrent
+          ? '<span class="account-current-badge">Active</span>'
+          : '';
+      const pillHtml = isUntracked
+        ? `Historical data prior to account tracking · ${formatFullNumber(a.requests)} req`
+        : `In: ${formatCompactNumber(a.inputTok)} · Out: ${formatCompactNumber(a.outTok)} · Cache: ${formatCompactNumber(a.cacheRead)} · ${formatFullNumber(a.requests)} req`;
+      const rowClass = isUntracked
+        ? 'project-stat-row account-stat-row account-stat-row-untracked'
+        : 'project-stat-row account-stat-row';
+
+      return `
+        <div class="${rowClass}">
+          <div class="project-meta">
+            <div class="account-name-group">
+              <span class="project-name account-name">${escapeHtml(a.account)}</span>
+              ${badgeHtml}
+            </div>
+            <div class="project-counts">
+              <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
+              <span class="project-counts-sep">·</span>
+              <span class="project-tokens-strong">${formatCompactNumber(a.totalTokens)}</span> tokens
+              <span class="project-pct-badge">${pctText}</span>
+            </div>
+          </div>
+          <div class="project-bar-track">
+            <div class="${barFillClass}" style="width: ${barPct.toFixed(2)}%"></div>
+          </div>
+          <div class="project-footer">
+            <span class="account-details-pill">
+              ${pillHtml}
+            </span>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const nextHtml = `
+    <div class="project-distribution-summary">
+      <span class="project-summary-text"><strong>${formatFullNumber(accounts.length)}</strong> ${accountWord} · <strong>${formatFullNumber(totalSessions)}</strong> ${sessionWord} · <strong>${formatCompactNumber(totalTokens)}</strong> tokens</span>
+      <span class="project-scope-badge">${escapeHtml(scopeLabel)}</span>
+    </div>
+    <div class="project-distribution-grid">
+      ${rowsHtml}
+    </div>
+  `;
+  setRenderedHtmlIfChanged(container, nextHtml);
 }
 
 export function renderModelDistribution(
