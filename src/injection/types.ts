@@ -62,7 +62,11 @@ export interface AuraGlobals {
   __agRequestMetrics?: (cascadeId: string) => void;
   __ag_on_session_change?: (cascadeId: string) => void;
   __ag_labs_dev_mode?: boolean;
+  __ag_release_channel?: string;
+  __ag_is_byoa?: boolean;
   __ag_app_config_hooked?: boolean;
+  __ag_adv_arch_params?: Record<string, string | null>;
+  __ag_url_search_params_hooked?: boolean;
   __APP_CONFIG__?: {
     productName?: string;
     csrfToken?: string;

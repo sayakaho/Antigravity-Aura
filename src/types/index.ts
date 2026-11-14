@@ -53,8 +53,17 @@ export interface ResolvedRuntimeModules extends ModulesConfig {
   composerHideArrows: boolean;
 }
 
+export type ReleaseChannelOption = 'stable' | 'dev' | 'dogfood' | 'internal' | 'canary';
+export type HostVariantOption = 'default' | 'antigravity-ide';
+
 export interface AdvancedConfig {
   labsDeveloperMode: boolean;
+  releaseChannel: ReleaseChannelOption;
+  isByoa: boolean;
+  cde: boolean;
+  isEnterpriseDisabled: boolean;
+  hostVariant: HostVariantOption;
+  enableMicrophone: boolean;
   experimentalFlags: Record<string, boolean>;
 }
 

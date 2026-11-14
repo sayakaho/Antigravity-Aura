@@ -432,6 +432,93 @@
                 </label>
               </div>
             </div>
+
+            <!-- Release Channel Track -->
+            <div class="settings-row">
+              <div class="settings-meta">
+                <div class="settings-label">Release Channel Track</div>
+                <div class="settings-sublabel">Select native application update track & internal API capabilities.</div>
+              </div>
+              <div class="settings-control">
+                <select id="select-release-channel" class="select-control">
+                  <option value="stable">Stable (Default)</option>
+                  <option value="dev">Dev</option>
+                  <option value="dogfood">Dogfood</option>
+                  <option value="internal">Internal</option>
+                  <option value="canary">Canary</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Bring Your Own Account (BYOA) -->
+            <div class="settings-row">
+              <div class="settings-meta">
+                <div class="settings-label">Bring Your Own Account (BYOA)</div>
+                <div class="settings-sublabel">Enable independent API key and custom account routing mode.</div>
+              </div>
+              <div class="settings-control">
+                <label class="switch-toggle">
+                  <input type="checkbox" id="toggle-byoa">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Bypass Enterprise Restrictions -->
+            <div class="settings-row">
+              <div class="settings-meta">
+                <div class="settings-label">Bypass Enterprise Restrictions</div>
+                <div class="settings-sublabel">Disable enterprise policy blocks on custom plugins, MCP tools, and external models.</div>
+              </div>
+              <div class="settings-control">
+                <label class="switch-toggle">
+                  <input type="checkbox" id="toggle-enterprise-disabled">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Cloud Development Environment (CDE) -->
+            <div class="settings-row">
+              <div class="settings-meta">
+                <div class="settings-label">Cloud Workstation (CDE) Mode</div>
+                <div class="settings-sublabel">Activate Cloud Development Environment container and terminal integration.</div>
+              </div>
+              <div class="settings-control">
+                <label class="switch-toggle">
+                  <input type="checkbox" id="toggle-cde">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Host Presentation Variant -->
+            <div class="settings-row">
+              <div class="settings-meta">
+                <div class="settings-label">Host Presentation Variant</div>
+                <div class="settings-sublabel">Switch presentation architecture between standalone app and IDE-embedded frame.</div>
+              </div>
+              <div class="settings-control">
+                <select id="select-host-variant" class="select-control">
+                  <option value="default">Standalone Desktop (Default)</option>
+                  <option value="antigravity-ide">Antigravity IDE (Embedded)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Direct Microphone Access -->
+            <div class="settings-row">
+              <div class="settings-meta">
+                <div class="settings-label">Direct Microphone Access</div>
+                <div class="settings-sublabel">Directly grant audio input and voice pipeline streaming privileges.</div>
+              </div>
+              <div class="settings-control">
+                <label class="switch-toggle">
+                  <input type="checkbox" id="toggle-enable-microphone">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>

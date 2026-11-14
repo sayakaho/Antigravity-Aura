@@ -67,15 +67,23 @@ function writeStorageAndNotify(
   }
 }
 
-export function patchAppConfigDevMode(enabled: boolean): void {
+export function patchAppConfig(advanced: Partial<AdvancedConfig>): void {
   if (typeof window === 'undefined') return;
   try {
     const winGlobals = window as unknown as AuraGlobals;
-    winGlobals.__ag_labs_dev_mode = enabled;
+    winGlobals.__ag_labs_dev_mode = advanced.labsDeveloperMode !== false;
+    winGlobals.__ag_release_channel = advanced.releaseChannel;
+    winGlobals.__ag_is_byoa = advanced.isByoa;
 
     let currentConfig = (window as unknown as { __APP_CONFIG__?: Record<string, unknown> }).__APP_CONFIG__;
     if (currentConfig && typeof currentConfig === 'object') {
-      currentConfig.devMode = enabled;
+      currentConfig.devMode = advanced.labsDeveloperMode !== false;
+      if (advanced.releaseChannel) {
+        currentConfig.releaseChannel = advanced.releaseChannel;
+      }
+      if (typeof advanced.isByoa === 'boolean') {
+        currentConfig.isByoa = advanced.isByoa;
+      }
     }
 
     if (!winGlobals.__ag_app_config_hooked) {
@@ -88,21 +96,68 @@ export function patchAppConfigDevMode(enabled: boolean): void {
         },
         set(val: unknown) {
           if (val && typeof val === 'object') {
-            (val as Record<string, unknown>).devMode = winGlobals.__ag_labs_dev_mode === true;
+            const cfg = val as Record<string, unknown>;
+            cfg.devMode = winGlobals.__ag_labs_dev_mode === true;
+            if (winGlobals.__ag_release_channel) {
+              cfg.releaseChannel = winGlobals.__ag_release_channel;
+            }
+            if (typeof winGlobals.__ag_is_byoa === 'boolean') {
+              cfg.isByoa = winGlobals.__ag_is_byoa;
+            }
           }
           currentConfig = val as Record<string, unknown> | undefined;
         }
       });
     }
   } catch (err) {
-    console.warn('[Aura] Failed to patch __APP_CONFIG__.devMode:', err);
+    console.warn('[Aura] Failed to patch __APP_CONFIG__:', err);
   }
 }
 
-export function syncDeveloperSettings(advanced: AdvancedConfig): void {
+export function patchAppConfigDevMode(enabled: boolean): void {
+  patchAppConfig({
+    labsDeveloperMode: enabled
+  });
+}
+
+export function patchUrlArchitectureParams(advanced: Partial<AdvancedConfig>): void {
+  const TargetUrlSearchParams =
+    (typeof window !== 'undefined' && window.URLSearchParams) ||
+    (typeof URLSearchParams !== 'undefined' ? URLSearchParams : null);
+  if (!TargetUrlSearchParams) return;
+  try {
+    const winGlobals = (typeof window !== 'undefined' ? window : globalThis) as unknown as AuraGlobals;
+    winGlobals.__ag_adv_arch_params = {
+      cde: advanced.cde ? 'true' : null,
+      isEnterpriseDisabled: advanced.isEnterpriseDisabled ? 'true' : null,
+      hostVariant:
+        advanced.hostVariant && advanced.hostVariant !== 'default' ? advanced.hostVariant : null,
+      enableMicrophone: advanced.enableMicrophone ? 'true' : null
+    };
+
+    if (!winGlobals.__ag_url_search_params_hooked) {
+      winGlobals.__ag_url_search_params_hooked = true;
+      const originalGet = TargetUrlSearchParams.prototype.get;
+      TargetUrlSearchParams.prototype.get = function (name: string): string | null {
+        const win = (typeof window !== 'undefined' ? window : globalThis) as unknown as AuraGlobals;
+        const overrides = win.__ag_adv_arch_params;
+        if (overrides && Object.prototype.hasOwnProperty.call(overrides, name)) {
+          const val = overrides[name];
+          if (val !== null && val !== undefined) return val;
+        }
+        return originalGet.call(this, name);
+      };
+    }
+  } catch (err) {
+    console.warn('[Aura] Failed to patch URLSearchParams architecture params:', err);
+  }
+}
+
+export function syncDeveloperSettings(advanced: Partial<AdvancedConfig>): void {
   try {
     const labsEnabled = advanced.labsDeveloperMode !== false;
-    patchAppConfigDevMode(labsEnabled);
+    patchAppConfig(advanced);
+    patchUrlArchitectureParams(advanced);
 
     if (typeof window === 'undefined' || !window.localStorage) return;
 
@@ -157,6 +212,6 @@ export function syncDeveloperSettings(advanced: AdvancedConfig): void {
   }
 }
 
-export function setupExperiments(advanced: AdvancedConfig): void {
+export function setupExperiments(advanced: Partial<AdvancedConfig>): void {
   syncDeveloperSettings(advanced);
 }

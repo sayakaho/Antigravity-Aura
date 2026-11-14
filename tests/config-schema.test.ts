@@ -115,5 +115,28 @@ describe('AuraConfig schema normalization & patch validation', () => {
     expect(merged.advanced.experimentalFlags['enable-bottom-terminal-panel']).toBe(true);
     expect(merged.advanced.experimentalFlags['enable-conversation-groups']).toBe(true);
     expect(merged.advanced.experimentalFlags['enable-browser-subagent-webview']).toBe(true);
+    expect(merged.advanced.releaseChannel).toBe('stable');
+    expect(merged.advanced.isByoa).toBe(false);
+    expect(merged.advanced.cde).toBe(false);
+    expect(merged.advanced.isEnterpriseDisabled).toBe(false);
+    expect(merged.advanced.hostVariant).toBe('default');
+    expect(merged.advanced.enableMicrophone).toBe(false);
+
+    const patched = applyConfigPatch(createDefaultConfig(), {
+      advanced: {
+        releaseChannel: 'internal',
+        isByoa: true,
+        cde: true,
+        isEnterpriseDisabled: true,
+        hostVariant: 'antigravity-ide',
+        enableMicrophone: true
+      }
+    });
+    expect(patched.advanced.releaseChannel).toBe('internal');
+    expect(patched.advanced.isByoa).toBe(true);
+    expect(patched.advanced.cde).toBe(true);
+    expect(patched.advanced.isEnterpriseDisabled).toBe(true);
+    expect(patched.advanced.hostVariant).toBe('antigravity-ide');
+    expect(patched.advanced.enableMicrophone).toBe(true);
   });
 });

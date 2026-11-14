@@ -31,6 +31,12 @@
   },
   "advanced": {
     "labsDeveloperMode": true,
+    "releaseChannel": "stable",
+    "isByoa": false,
+    "cde": false,
+    "isEnterpriseDisabled": false,
+    "hostVariant": "default",
+    "enableMicrophone": false,
     "experimentalFlags": {
       "enable-developer-mode": true,
       "enable-context-usage-indicator": true,

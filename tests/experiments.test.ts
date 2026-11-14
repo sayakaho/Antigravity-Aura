@@ -205,4 +205,33 @@ describe('setupExperiments & StorageEvent synchronization', () => {
     });
     expect((win.__APP_CONFIG__ as { devMode: boolean }).devMode).toBe(false);
   });
+
+  test('patches releaseChannel, isByoa, and URLSearchParams architecture switches', async () => {
+    const { setupExperiments } = await import('../src/injection/experiments');
+    const win = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+    win.__APP_CONFIG__ = { productName: 'antigravity', releaseChannel: 'stable', isByoa: false };
+
+    setupExperiments({
+      labsDeveloperMode: true,
+      releaseChannel: 'internal',
+      isByoa: true,
+      cde: true,
+      isEnterpriseDisabled: true,
+      hostVariant: 'antigravity-ide',
+      enableMicrophone: true,
+      experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
+    });
+
+    const cfg = win.__APP_CONFIG__ as { releaseChannel: string; isByoa: boolean };
+    expect(cfg.releaseChannel).toBe('internal');
+    expect(cfg.isByoa).toBe(true);
+
+    const sp = new URLSearchParams('project=123');
+    expect(sp.get('project')).toBe('123');
+    expect(sp.get('cde')).toBe('true');
+    expect(sp.get('isEnterpriseDisabled')).toBe('true');
+    expect(sp.get('hostVariant')).toBe('antigravity-ide');
+    expect(sp.get('enableMicrophone')).toBe('true');
+    expect(sp.get('nonexistent')).toBeNull();
+  });
 });

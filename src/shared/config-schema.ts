@@ -3,7 +3,9 @@ import type {
   PanelConfigDTO,
   ResolvedRuntimeModules,
   SelectorsConfig,
-  AdvancedConfig
+  AdvancedConfig,
+  ReleaseChannelOption,
+  HostVariantOption
 } from '../types';
 
 export const DEFAULT_ALLOWED_ORIGINS = [
@@ -70,6 +72,30 @@ export const DEFAULT_SELECTORS: SelectorsConfig = {
     'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip'
 };
 
+export function normalizeReleaseChannel(
+  val: unknown,
+  fallback: ReleaseChannelOption = 'stable'
+): ReleaseChannelOption {
+  if (typeof val !== 'string') return fallback;
+  const v = val.trim().toLowerCase();
+  if (v === 'dev' || v === 'dogfood' || v === 'internal' || v === 'canary' || v === 'stable') {
+    return v as ReleaseChannelOption;
+  }
+  return fallback;
+}
+
+export function normalizeHostVariant(
+  val: unknown,
+  fallback: HostVariantOption = 'default'
+): HostVariantOption {
+  if (typeof val !== 'string') return fallback;
+  const v = val.trim().toLowerCase();
+  if (v === 'antigravity-ide' || v === 'default') {
+    return v as HostVariantOption;
+  }
+  return fallback;
+}
+
 export function createDefaultConfig(): AuraConfig {
   return {
     enabled: true,
@@ -104,6 +130,12 @@ export function createDefaultConfig(): AuraConfig {
     },
     advanced: {
       labsDeveloperMode: true,
+      releaseChannel: 'stable',
+      isByoa: false,
+      cde: false,
+      isEnterpriseDisabled: false,
+      hostVariant: 'default',
+      enableMicrophone: false,
       experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
     },
     themeVars: {},
@@ -240,6 +272,12 @@ export function normalizeAuraConfig(rawInput: unknown): AuraConfig {
     },
     advanced: {
       labsDeveloperMode: asBool(rawAdv.labsDeveloperMode, def.advanced.labsDeveloperMode),
+      releaseChannel: normalizeReleaseChannel(rawAdv.releaseChannel, def.advanced.releaseChannel),
+      isByoa: asBool(rawAdv.isByoa, def.advanced.isByoa),
+      cde: asBool(rawAdv.cde, def.advanced.cde),
+      isEnterpriseDisabled: asBool(rawAdv.isEnterpriseDisabled, def.advanced.isEnterpriseDisabled),
+      hostVariant: normalizeHostVariant(rawAdv.hostVariant, def.advanced.hostVariant),
+      enableMicrophone: asBool(rawAdv.enableMicrophone, def.advanced.enableMicrophone),
       experimentalFlags
     },
     themeVars,
@@ -388,6 +426,20 @@ export function applyConfigPatch(current: AuraConfig, rawPatch: unknown): AuraCo
     const aObj = assertPlainObject(root.advanced, 'config.advanced');
     const labsDeveloperMode = assertBooleanField(aObj, 'labsDeveloperMode', 'advanced');
     if (labsDeveloperMode !== undefined) nextAdv.labsDeveloperMode = labsDeveloperMode;
+    if ('releaseChannel' in aObj && aObj.releaseChannel !== undefined) {
+      nextAdv.releaseChannel = normalizeReleaseChannel(aObj.releaseChannel, nextAdv.releaseChannel);
+    }
+    const isByoa = assertBooleanField(aObj, 'isByoa', 'advanced');
+    if (isByoa !== undefined) nextAdv.isByoa = isByoa;
+    const cde = assertBooleanField(aObj, 'cde', 'advanced');
+    if (cde !== undefined) nextAdv.cde = cde;
+    const isEnterpriseDisabled = assertBooleanField(aObj, 'isEnterpriseDisabled', 'advanced');
+    if (isEnterpriseDisabled !== undefined) nextAdv.isEnterpriseDisabled = isEnterpriseDisabled;
+    if ('hostVariant' in aObj && aObj.hostVariant !== undefined) {
+      nextAdv.hostVariant = normalizeHostVariant(aObj.hostVariant, nextAdv.hostVariant);
+    }
+    const enableMicrophone = assertBooleanField(aObj, 'enableMicrophone', 'advanced');
+    if (enableMicrophone !== undefined) nextAdv.enableMicrophone = enableMicrophone;
     if ('experimentalFlags' in aObj && aObj.experimentalFlags !== undefined) {
       const fObj = assertPlainObject(aObj.experimentalFlags, 'advanced.experimentalFlags');
       for (const [k, v] of Object.entries(fObj)) {

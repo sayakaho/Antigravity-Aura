@@ -193,6 +193,24 @@ export async function loadConfig(): Promise<void> {
 
     const labsToggle = document.getElementById('toggle-labs-dev-mode') as HTMLInputElement | null;
     if (labsToggle) labsToggle.checked = config.advanced?.labsDeveloperMode !== false;
+
+    const channelSelect = document.getElementById('select-release-channel') as HTMLSelectElement | null;
+    if (channelSelect) channelSelect.value = config.advanced?.releaseChannel || 'stable';
+
+    const byoaToggle = document.getElementById('toggle-byoa') as HTMLInputElement | null;
+    if (byoaToggle) byoaToggle.checked = config.advanced?.isByoa === true;
+
+    const entToggle = document.getElementById('toggle-enterprise-disabled') as HTMLInputElement | null;
+    if (entToggle) entToggle.checked = config.advanced?.isEnterpriseDisabled === true;
+
+    const cdeToggle = document.getElementById('toggle-cde') as HTMLInputElement | null;
+    if (cdeToggle) cdeToggle.checked = config.advanced?.cde === true;
+
+    const hostSelect = document.getElementById('select-host-variant') as HTMLSelectElement | null;
+    if (hostSelect) hostSelect.value = config.advanced?.hostVariant || 'default';
+
+    const micToggle = document.getElementById('toggle-enable-microphone') as HTMLInputElement | null;
+    if (micToggle) micToggle.checked = config.advanced?.enableMicrophone === true;
   } catch (err) {
     console.error('loadConfig failed:', err);
   }
@@ -357,5 +375,35 @@ export function bindSettingsControls(): void {
   const labsToggle = document.getElementById('toggle-labs-dev-mode') as HTMLInputElement | null;
   labsToggle?.addEventListener('change', () => {
     void saveConfig(patchAdvanced({ labsDeveloperMode: labsToggle.checked }));
+  });
+
+  const channelSelect = document.getElementById('select-release-channel') as HTMLSelectElement | null;
+  channelSelect?.addEventListener('change', () => {
+    void saveConfig(patchAdvanced({ releaseChannel: channelSelect.value as any }));
+  });
+
+  const byoaToggle = document.getElementById('toggle-byoa') as HTMLInputElement | null;
+  byoaToggle?.addEventListener('change', () => {
+    void saveConfig(patchAdvanced({ isByoa: byoaToggle.checked }));
+  });
+
+  const entToggle = document.getElementById('toggle-enterprise-disabled') as HTMLInputElement | null;
+  entToggle?.addEventListener('change', () => {
+    void saveConfig(patchAdvanced({ isEnterpriseDisabled: entToggle.checked }));
+  });
+
+  const cdeToggle = document.getElementById('toggle-cde') as HTMLInputElement | null;
+  cdeToggle?.addEventListener('change', () => {
+    void saveConfig(patchAdvanced({ cde: cdeToggle.checked }));
+  });
+
+  const hostSelect = document.getElementById('select-host-variant') as HTMLSelectElement | null;
+  hostSelect?.addEventListener('change', () => {
+    void saveConfig(patchAdvanced({ hostVariant: hostSelect.value as any }));
+  });
+
+  const micToggle = document.getElementById('toggle-enable-microphone') as HTMLInputElement | null;
+  micToggle?.addEventListener('change', () => {
+    void saveConfig(patchAdvanced({ enableMicrophone: micToggle.checked }));
   });
 }
