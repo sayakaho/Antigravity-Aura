@@ -2,6 +2,16 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.2.4] - 2026-11-15
+
+### Added
+- **Account Token Tracking & Temporal Distribution**: Track token consumption, session volume, and timeline distribution across logged-in accounts using `account_timeline.json` and active onboarding credentials.
+- **Data-Driven 5h & Weekly Quota Capacity**: Real-time extraction of 5-hour and weekly quota remaining fractions via Language Server `RetrieveUserQuotaSummary` RPC, dynamically computing true token capacity using incremental differential calibration ($\Delta \text{Tokens} / \Delta Q$).
+- **Persistent Quota Calibration**: Auto-persists calibrated capacities to `plugin_data/aura-dashboard/quota_calibration.json` with weighted EMA smoothing, ensuring immediate availability across reloads and cold starts.
+
+### Fixed
+- **Quota Cold-Start & Scale Invariance**: Completely eliminated hardcoded 500k/3.5M defaults and artificial 10M clamps, preventing skewed estimations when installing mid-cycle or after untracked historical usage.
+
 ## [0.2.3] - 2026-11-13
 
 ### Added
