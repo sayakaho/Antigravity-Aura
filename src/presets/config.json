@@ -27,7 +27,8 @@
   "modules": {
     "deadlockHealer": true,
     "customCss": true,
-    "customJs": true
+    "customJs": true,
+    "activitySummary": true
   },
   "advanced": {
     "labsDeveloperMode": true,

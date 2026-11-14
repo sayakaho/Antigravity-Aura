@@ -59,6 +59,7 @@ export interface AuraGlobals {
   };
   __ag_metrics_ro?: ResizeObserver | null;
   __ag_pill_resize_observer?: ResizeObserver | null;
+  __ag_activity_summary_observer?: MutationObserver | null;
   __agRequestMetrics?: (cascadeId: string) => void;
   __ag_on_session_change?: (cascadeId: string) => void;
   __ag_labs_dev_mode?: boolean;
@@ -78,4 +79,5 @@ export interface AuraGlobals {
   electronNative?: ElectronNativeBridge;
 }
 
-export const agGlobal = window as unknown as Window & AuraGlobals;
+const globalScope = typeof window !== 'undefined' ? window : (globalThis as unknown as Window);
+export const agGlobal = globalScope as unknown as Window & AuraGlobals;

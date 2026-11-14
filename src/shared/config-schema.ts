@@ -126,7 +126,8 @@ export function createDefaultConfig(): AuraConfig {
     modules: {
       deadlockHealer: true,
       customCss: true,
-      customJs: true
+      customJs: true,
+      activitySummary: true
     },
     advanced: {
       labsDeveloperMode: true,
@@ -268,7 +269,8 @@ export function normalizeAuraConfig(rawInput: unknown): AuraConfig {
     modules: {
       deadlockHealer: asBool(rawModules.deadlockHealer, def.modules.deadlockHealer),
       customCss: asBool(rawModules.customCss, def.modules.customCss),
-      customJs: asBool(rawModules.customJs, def.modules.customJs)
+      customJs: asBool(rawModules.customJs, def.modules.customJs),
+      activitySummary: asBool(rawModules.activitySummary, def.modules.activitySummary)
     },
     advanced: {
       labsDeveloperMode: asBool(rawAdv.labsDeveloperMode, def.advanced.labsDeveloperMode),
@@ -413,9 +415,11 @@ export function applyConfigPatch(current: AuraConfig, rawPatch: unknown): AuraCo
     const deadlockHealer = assertBooleanField(mObj, 'deadlockHealer', 'modules');
     const customCss = assertBooleanField(mObj, 'customCss', 'modules');
     const customJs = assertBooleanField(mObj, 'customJs', 'modules');
+    const activitySummary = assertBooleanField(mObj, 'activitySummary', 'modules');
     if (deadlockHealer !== undefined) nextModules.deadlockHealer = deadlockHealer;
     if (customCss !== undefined) nextModules.customCss = customCss;
     if (customJs !== undefined) nextModules.customJs = customJs;
+    if (activitySummary !== undefined) nextModules.activitySummary = activitySummary;
   }
 
   const nextAdv: AdvancedConfig = {
@@ -506,6 +510,7 @@ export function resolveRuntimeModules(cfg: AuraConfig, hasSqlite = true): Resolv
     composerCollinear: cfg.composer.collinear,
     composerHideArrows: cfg.composer.hideArrows,
     deadlockHealer: cfg.modules.deadlockHealer,
+    activitySummary: cfg.modules.activitySummary,
     customCss: cfg.modules.customCss,
     customJs: cfg.modules.customJs
   };

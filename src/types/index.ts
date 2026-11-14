@@ -43,6 +43,7 @@ export interface ModulesConfig {
   deadlockHealer: boolean;
   customCss: boolean;
   customJs: boolean;
+  activitySummary: boolean;
 }
 
 export interface ResolvedRuntimeModules extends ModulesConfig {

@@ -1,3 +1,4 @@
+import { initActivitySummary, uninstallActivitySummary } from './activity-summary';
 import { setupExperiments } from './experiments';
 import { installHealers } from './healer';
 import { initI18n, restoreAllTranslations } from './i18n';
@@ -53,6 +54,8 @@ function uninstallRuntime(patchVersion: string): void {
     clearInterval(agGlobal.__ag_metrics_route_watcher);
     agGlobal.__ag_metrics_route_watcher = null;
   }
+
+  uninstallActivitySummary();
 
   applyThemeVars({});
   const root = document.documentElement;
@@ -147,6 +150,9 @@ function bootstrap(): void {
 
   // 4. 输入栏性能指标胶囊
   const ensureMetricsPill = initMetricsCapsule(modules.metrics !== false, selectors, boot.language || 'default');
+
+  // 5. 折叠操作卡片行为摘要
+  initActivitySummary(modules.activitySummary !== false, boot.language || 'default');
 
   // 6. 界面汉化引擎
   const dict = initI18n(modules.i18n === true, boot.i18nDict || {}, selectors.excludeI18n, patchVersion);
