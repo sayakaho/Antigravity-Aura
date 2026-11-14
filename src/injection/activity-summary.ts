@@ -133,9 +133,7 @@ export function updateButtonSummary(btn: HTMLElement, language: 'default' | 'zh-
 
   if (!badge) {
     badge = document.createElement('span');
-    badge.className = 'ag-activity-summary-badge';
-    badge.style.cssText =
-      'display:inline-flex;align-items:center;margin-left:8px;padding:1px 6px;border-radius:4px;font-size:12px;opacity:0.8;background:rgba(128,128,128,0.14);font-weight:400;white-space:nowrap;letter-spacing:0.01em;';
+    badge.className = 'ag-activity-summary-badge text-muted-foreground';
     const textSpan = btn.querySelector('span');
     if (textSpan) {
       textSpan.after(badge);
@@ -145,12 +143,7 @@ export function updateButtonSummary(btn: HTMLElement, language: 'default' | 'zh-
   }
 
   badge.dataset.agSig = sig;
-  badge.textContent = `· ${text}`;
-  if (counts.failed > 0) {
-    badge.style.color = 'var(--color-danger, #e06c75)';
-  } else {
-    badge.style.color = '';
-  }
+  badge.textContent = ` · ${text}`;
 }
 
 export function initActivitySummary(enabled: boolean, language: 'default' | 'zh-CN' = 'default'): void {
