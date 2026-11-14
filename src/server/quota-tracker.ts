@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AccountQuotaCapacity } from '../types';
 
 export interface UserQuotaBucket {
@@ -22,25 +24,36 @@ export interface RetrieveUserQuotaSummaryResponse {
   };
 }
 
-export interface CachedAccountCaps {
+export interface QuotaObservationPoint {
+  timestamp: number;
+  accountTokens: number;
+  frac5h?: number;
+  fracWeekly?: number;
+}
+
+export interface PersistedCalibrationRecord {
   fiveHourTokens?: number;
   sevenDayTokens?: number;
+  sampleCount5h: number;
+  sampleCountWeekly: number;
+  lastUpdated: number;
+}
+
+export interface QuotaTrackerOptions {
+  storageDir?: string;
+  lsAddress?: string;
+  csrfToken?: string;
+  fetchTimeoutMs?: number;
+  cacheTtlMs?: number;
 }
 
 /**
- * Pure data-driven, symmetric quota capacity calculation.
- * Capacity = tokensConsumed / (1 - remainingFraction)
- * No hardcoded defaults or artificial threshold clamps.
+ * Extracts the actively burning quota group and its 5h/weekly remaining fractions.
  */
-export function computeQuotaCapacity(
-  tokens5h: number,
-  tokens7d: number,
-  quotaSummary: RetrieveUserQuotaSummaryResponse | null,
-  cachedCaps?: CachedAccountCaps
-): AccountQuotaCapacity {
+export function extractActiveQuotaFractions(
+  quotaSummary: RetrieveUserQuotaSummaryResponse | null
+): { frac5h?: number; fracWeekly?: number; activeGroup?: UserQuotaGroup } {
   const groups = quotaSummary?.response?.groups || [];
-
-  // Identify the active group (the group where model requests are actively burning quota)
   let activeGroup: UserQuotaGroup | null = null;
   let minFraction = 1.0;
 
@@ -60,49 +73,16 @@ export function computeQuotaCapacity(
   const bucket5h = activeGroup?.buckets?.find((b) => b.window === '5h');
   const bucketWeekly = activeGroup?.buckets?.find((b) => b.window === 'weekly');
 
-  const frac5h = bucket5h?.remainingFraction;
-  const fracWeekly = bucketWeekly?.remainingFraction;
-
-  let fiveHourTokens = cachedCaps?.fiveHourTokens;
-  let sevenDayTokens = cachedCaps?.sevenDayTokens;
-
-  // 1. Calculate 5-hour window capacity
-  if (typeof frac5h === 'number' && frac5h <= 0.995 && tokens5h > 0) {
-    const consumedRatio = 1 - frac5h;
-    if (consumedRatio > 0.005) {
-      fiveHourTokens = Math.round(tokens5h / consumedRatio);
-    }
-  }
-
-  // 2. Calculate Weekly (7-day) window capacity - completely symmetrical
-  if (typeof fracWeekly === 'number' && fracWeekly <= 0.995 && tokens7d > 0) {
-    const consumedRatio = 1 - fracWeekly;
-    if (consumedRatio > 0.005) {
-      sevenDayTokens = Math.round(tokens7d / consumedRatio);
-    }
-  }
-
-  const isCalibrated = typeof fiveHourTokens === 'number' || typeof sevenDayTokens === 'number';
-
   return {
-    fiveHourTokens,
-    sevenDayTokens,
-    fiveHourUsed: tokens5h,
-    sevenDayUsed: tokens7d,
-    fiveHourFraction: frac5h,
-    weeklyFraction: fracWeekly,
-    status: isCalibrated ? 'calibrated' : 'calibrating'
+    frac5h: bucket5h?.remainingFraction,
+    fracWeekly: bucketWeekly?.remainingFraction,
+    activeGroup: activeGroup || undefined
   };
 }
 
-export interface QuotaTrackerOptions {
-  lsAddress?: string;
-  csrfToken?: string;
-  fetchTimeoutMs?: number;
-  cacheTtlMs?: number;
-}
-
 export class QuotaTracker {
+  private readonly storageDir?: string;
+  private readonly calibrationFilePath?: string;
   private readonly lsAddress: string;
   private readonly csrfToken: string;
   private readonly fetchTimeoutMs: number;
@@ -111,13 +91,22 @@ export class QuotaTracker {
   private latestQuotaSummary: RetrieveUserQuotaSummaryResponse | null = null;
   private lastFetchTime = 0;
   private inFlightFetch: Promise<RetrieveUserQuotaSummaryResponse | null> | null = null;
-  private readonly calibratedCaps = new Map<string, CachedAccountCaps>();
+
+  private readonly baselines = new Map<string, QuotaObservationPoint>();
+  private readonly calibrations = new Map<string, PersistedCalibrationRecord>();
 
   constructor(options?: QuotaTrackerOptions) {
+    this.storageDir = options?.storageDir;
+    this.calibrationFilePath = this.storageDir
+      ? path.join(this.storageDir, 'quota_calibration.json')
+      : undefined;
+
     this.lsAddress = options?.lsAddress || process.env.ANTIGRAVITY_LS_ADDRESS || 'localhost:5387';
     this.csrfToken = options?.csrfToken || process.env.ANTIGRAVITY_CSRF_TOKEN || '';
     this.fetchTimeoutMs = options?.fetchTimeoutMs || 1500;
     this.cacheTtlMs = options?.cacheTtlMs || 20_000;
+
+    this.loadCalibrations();
   }
 
   public getLatestQuotaSummary(): RetrieveUserQuotaSummaryResponse | null {
@@ -127,6 +116,56 @@ export class QuotaTracker {
   public setLatestQuotaSummaryForTesting(summary: RetrieveUserQuotaSummaryResponse | null): void {
     this.latestQuotaSummary = summary;
     this.lastFetchTime = Date.now();
+  }
+
+  public setCalibrationForTesting(account: string, record: PersistedCalibrationRecord): void {
+    this.calibrations.set(account, record);
+  }
+
+  public getCalibrationRecord(account: string): PersistedCalibrationRecord | undefined {
+    return this.calibrations.get(account);
+  }
+
+  private loadCalibrations(): void {
+    if (!this.calibrationFilePath) return;
+    try {
+      if (fs.existsSync(this.calibrationFilePath)) {
+        const raw = fs.readFileSync(this.calibrationFilePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          for (const [acc, rec] of Object.entries(parsed)) {
+            if (rec && typeof rec === 'object') {
+              const r = rec as Partial<PersistedCalibrationRecord>;
+              this.calibrations.set(acc, {
+                fiveHourTokens: typeof r.fiveHourTokens === 'number' ? r.fiveHourTokens : undefined,
+                sevenDayTokens: typeof r.sevenDayTokens === 'number' ? r.sevenDayTokens : undefined,
+                sampleCount5h: typeof r.sampleCount5h === 'number' ? r.sampleCount5h : 0,
+                sampleCountWeekly: typeof r.sampleCountWeekly === 'number' ? r.sampleCountWeekly : 0,
+                lastUpdated: typeof r.lastUpdated === 'number' ? r.lastUpdated : Date.now()
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[QuotaTracker] Failed to load quota_calibration.json:', err);
+    }
+  }
+
+  private saveCalibrations(): void {
+    if (!this.calibrationFilePath || !this.storageDir) return;
+    try {
+      if (!fs.existsSync(this.storageDir)) {
+        fs.mkdirSync(this.storageDir, { recursive: true });
+      }
+      const serializable: Record<string, PersistedCalibrationRecord> = {};
+      for (const [acc, rec] of this.calibrations.entries()) {
+        serializable[acc] = rec;
+      }
+      fs.writeFileSync(this.calibrationFilePath, JSON.stringify(serializable, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[QuotaTracker] Failed to save quota_calibration.json:', err);
+    }
   }
 
   public async fetchQuotaSummary(force = false): Promise<RetrieveUserQuotaSummaryResponse | null> {
@@ -180,26 +219,127 @@ export class QuotaTracker {
     }
   }
 
+  /**
+   * Differential Calibration Algorithm (ΔTokens / ΔQuota)
+   * Captures pure marginal token cost over incremental quota drops.
+   * Completely immune to pre-installation history, untracked gaps, or cross-device consumption.
+   */
+  public recordObservation(
+    account: string,
+    currentAccountTokens: number,
+    frac5h?: number,
+    fracWeekly?: number
+  ): void {
+    const base = this.baselines.get(account);
+    if (!base) {
+      // First baseline entry
+      this.baselines.set(account, {
+        timestamp: Date.now(),
+        accountTokens: currentAccountTokens,
+        frac5h,
+        fracWeekly
+      });
+      return;
+    }
+
+    const deltaTokens = currentAccountTokens - base.accountTokens;
+    let updated = false;
+
+    const record = this.calibrations.get(account) || {
+      sampleCount5h: 0,
+      sampleCountWeekly: 0,
+      lastUpdated: Date.now()
+    };
+
+    // 1. Five Hour Differential Window (ΔTokens / ΔQ_5h)
+    if (typeof base.frac5h === 'number' && typeof frac5h === 'number') {
+      if (frac5h > base.frac5h + 0.05) {
+        // Window reset occurred on server (e.g. from 20% to 100%)
+        base.frac5h = frac5h;
+        base.accountTokens = currentAccountTokens;
+      } else {
+        const deltaQ5h = base.frac5h - frac5h;
+        // Require at least 0.3% quota drop and 100k tokens consumed to filter noise
+        if (deltaQ5h >= 0.003 && deltaTokens >= 100_000) {
+          const measured5h = Math.round(deltaTokens / deltaQ5h);
+          if (measured5h >= 1_000_000 && measured5h <= 10_000_000_000) {
+            if (record.fiveHourTokens && record.sampleCount5h > 0) {
+              record.fiveHourTokens = Math.round(record.fiveHourTokens * 0.7 + measured5h * 0.3);
+            } else {
+              record.fiveHourTokens = measured5h;
+            }
+            record.sampleCount5h++;
+            record.lastUpdated = Date.now();
+            base.frac5h = frac5h;
+            base.accountTokens = currentAccountTokens;
+            updated = true;
+          }
+        }
+      }
+    }
+
+    // 2. Weekly Differential Window (ΔTokens / ΔQ_weekly)
+    if (typeof base.fracWeekly === 'number' && typeof fracWeekly === 'number') {
+      if (fracWeekly > base.fracWeekly + 0.05) {
+        // Weekly window reset occurred on server
+        base.fracWeekly = fracWeekly;
+        base.accountTokens = currentAccountTokens;
+      } else {
+        const deltaQWeekly = base.fracWeekly - fracWeekly;
+        // Require at least 0.2% quota drop and 200k tokens consumed to filter noise
+        if (deltaQWeekly >= 0.002 && deltaTokens >= 200_000) {
+          const measuredWeekly = Math.round(deltaTokens / deltaQWeekly);
+          if (measuredWeekly >= 10_000_000 && measuredWeekly <= 50_000_000_000) {
+            if (record.sevenDayTokens && record.sampleCountWeekly > 0) {
+              record.sevenDayTokens = Math.round(record.sevenDayTokens * 0.7 + measuredWeekly * 0.3);
+            } else {
+              record.sevenDayTokens = measuredWeekly;
+            }
+            record.sampleCountWeekly++;
+            record.lastUpdated = Date.now();
+            base.fracWeekly = fracWeekly;
+            base.accountTokens = currentAccountTokens;
+            updated = true;
+          }
+        }
+      }
+    }
+
+    if (updated) {
+      this.calibrations.set(account, record);
+      this.saveCalibrations();
+    }
+  }
+
   public getAccountQuotaCapacity(
     account: string,
     tokens5h: number,
-    tokens7d: number
+    tokens7d: number,
+    totalAccountTokens?: number
   ): AccountQuotaCapacity {
     const now = Date.now();
     if (now - this.lastFetchTime >= this.cacheTtlMs && !this.inFlightFetch) {
       void this.fetchQuotaSummary();
     }
 
-    const cached = this.calibratedCaps.get(account);
-    const result = computeQuotaCapacity(tokens5h, tokens7d, this.latestQuotaSummary, cached);
+    const { frac5h, fracWeekly } = extractActiveQuotaFractions(this.latestQuotaSummary);
 
-    if (result.fiveHourTokens || result.sevenDayTokens) {
-      this.calibratedCaps.set(account, {
-        fiveHourTokens: result.fiveHourTokens ?? cached?.fiveHourTokens,
-        sevenDayTokens: result.sevenDayTokens ?? cached?.sevenDayTokens
-      });
+    // Drive differential calibration if account tokens are provided
+    if (typeof totalAccountTokens === 'number') {
+      this.recordObservation(account, totalAccountTokens, frac5h, fracWeekly);
     }
 
-    return result;
+    const record = this.calibrations.get(account);
+    const isCalibrated = !!(record?.fiveHourTokens || record?.sevenDayTokens);
+
+    return {
+      fiveHourTokens: record?.fiveHourTokens,
+      sevenDayTokens: record?.sevenDayTokens,
+      fiveHourUsed: tokens5h,
+      sevenDayUsed: tokens7d,
+      fiveHourFraction: frac5h,
+      weeklyFraction: fracWeekly,
+      status: isCalibrated ? 'calibrated' : 'calibrating'
+    };
   }
 }

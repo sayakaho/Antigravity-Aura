@@ -360,7 +360,6 @@ export class GlobalAnalyticsEngine {
   constructor(baseDir: string, accountTracker?: AccountTracker, quotaTracker?: QuotaTracker) {
     this.baseDir = baseDir;
     this.cachePath = path.join(baseDir, CACHE_FILE_NAME);
-    this.quotaTracker = quotaTracker || new QuotaTracker();
     this.accountTracker =
       accountTracker ||
       new AccountTracker({
@@ -370,6 +369,11 @@ export class GlobalAnalyticsEngine {
           this.overviewCache = null;
           this.sessionDetailsCache.clear();
         }
+      });
+    this.quotaTracker =
+      quotaTracker ||
+      new QuotaTracker({
+        storageDir: this.accountTracker.getStorageDir()
       });
     this.cache = this.loadCache();
     this.pruneObsoleteCaches();
@@ -1456,7 +1460,12 @@ export class GlobalAnalyticsEngine {
           }
         }
 
-        item.quotaCapacity = this.quotaTracker.getAccountQuotaCapacity(acc, tokens5h, tokens7d);
+        item.quotaCapacity = this.quotaTracker.getAccountQuotaCapacity(
+          acc,
+          tokens5h,
+          tokens7d,
+          item.totalTokens
+        );
       }
     }
 

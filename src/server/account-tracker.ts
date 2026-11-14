@@ -87,6 +87,10 @@ export class AccountTracker {
     return [...this.timeline];
   }
 
+  public getStorageDir(): string {
+    return this.storageDir;
+  }
+
   private loadTimeline(): void {
     try {
       if (fs.existsSync(this.timelinePath)) {

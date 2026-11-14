@@ -1,21 +1,15 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
-  computeQuotaCapacity,
+  extractActiveQuotaFractions,
   QuotaTracker,
   type RetrieveUserQuotaSummaryResponse
 } from '../src/server/quota-tracker';
 
-describe('QuotaTracker & Symmetric Quota Capacity Calculation', () => {
-  test('returns calibrating status when no summary or consumption is available', () => {
-    const res = computeQuotaCapacity(0, 0, null);
-    expect(res.status).toBe('calibrating');
-    expect(res.fiveHourTokens).toBeUndefined();
-    expect(res.sevenDayTokens).toBeUndefined();
-    expect(res.fiveHourUsed).toBe(0);
-    expect(res.sevenDayUsed).toBe(0);
-  });
-
-  test('computes fiveHourTokens and sevenDayTokens symmetrically from RetrieveUserQuotaSummary', () => {
+describe('QuotaTracker & Differential Calibration (ΔTokens / ΔQ)', () => {
+  test('extractActiveQuotaFractions extracts active burning group correctly', () => {
     const fakeSummary: RetrieveUserQuotaSummaryResponse = {
       response: {
         groups: [
@@ -24,67 +18,29 @@ describe('QuotaTracker & Symmetric Quota Capacity Calculation', () => {
             buckets: [
               {
                 bucketId: 'gemini-weekly',
-                displayName: 'Weekly Limit Remaining',
+                displayName: 'Weekly',
                 window: 'weekly',
-                remainingFraction: 0.819505, // 18.05% consumed
+                remainingFraction: 0.8195,
                 resetTime: '2026-11-21T04:21:33Z'
               },
               {
                 bucketId: 'gemini-5h',
-                displayName: 'Five Hour Limit Remaining',
+                displayName: '5h',
                 window: '5h',
-                remainingFraction: 0.727953, // 27.2047% consumed
+                remainingFraction: 0.728,
                 resetTime: '2026-11-14T14:21:33Z'
               }
             ]
-          }
-        ]
-      }
-    };
-
-    // User scenario: 140.7M tokens used corresponding to 18.05% weekly quota
-    // 5h window: 25M tokens used corresponding to 27.20% 5h quota
-    const tokens5h = 25_000_000;
-    const tokens7d = 140_700_000;
-
-    const res = computeQuotaCapacity(tokens5h, tokens7d, fakeSummary);
-    expect(res.status).toBe('calibrated');
-
-    // 25M / (1 - 0.727953) = 91,895,557 (~92M)
-    expect(res.fiveHourTokens).toBe(Math.round(tokens5h / (1 - 0.727953)));
-    expect(res.fiveHourTokens).toBeGreaterThan(90_000_000);
-
-    // 140.7M / (1 - 0.819505) = 779,523_048 (~780M)
-    expect(res.sevenDayTokens).toBe(Math.round(tokens7d / (1 - 0.819505)));
-    expect(res.sevenDayTokens).toBeGreaterThan(770_000_000);
-
-    expect(res.fiveHourUsed).toBe(tokens5h);
-    expect(res.sevenDayUsed).toBe(tokens7d);
-    expect(res.fiveHourFraction).toBe(0.727953);
-    expect(res.weeklyFraction).toBe(0.819505);
-  });
-
-  test('QuotaTracker caches calibrated capacities across quota resets', () => {
-    const tracker = new QuotaTracker();
-    const fakeSummary: RetrieveUserQuotaSummaryResponse = {
-      response: {
-        groups: [
+          },
           {
-            displayName: 'Gemini Models',
+            displayName: 'Claude and GPT models',
             buckets: [
               {
-                bucketId: 'gemini-weekly',
-                displayName: 'Weekly Limit Remaining',
+                bucketId: '3p-weekly',
+                displayName: 'Weekly',
                 window: 'weekly',
-                remainingFraction: 0.8, // 20% consumed
-                resetTime: '2026-11-21T00:00:00Z'
-              },
-              {
-                bucketId: 'gemini-5h',
-                displayName: 'Five Hour Limit Remaining',
-                window: '5h',
-                remainingFraction: 0.75, // 25% consumed
-                resetTime: '2026-11-14T14:00:00Z'
+                remainingFraction: 1.0,
+                resetTime: '2026-11-21T13:46:57Z'
               }
             ]
           }
@@ -92,35 +48,69 @@ describe('QuotaTracker & Symmetric Quota Capacity Calculation', () => {
       }
     };
 
-    tracker.setLatestQuotaSummaryForTesting(fakeSummary);
+    const res = extractActiveQuotaFractions(fakeSummary);
+    expect(res.frac5h).toBe(0.728);
+    expect(res.fracWeekly).toBe(0.8195);
+    expect(res.activeGroup?.displayName).toBe('Gemini Models');
+  });
 
-    // Initial measurement:
-    // 5h: 20M / 0.25 = 80M
-    // 7d: 140M / 0.2 = 700M
-    const first = tracker.getAccountQuotaCapacity('test@example.com', 20_000_000, 140_000_000);
-    expect(first.status).toBe('calibrated');
-    expect(first.fiveHourTokens).toBe(80_000_000);
-    expect(first.sevenDayTokens).toBe(700_000_000);
+  test('calculates exact capacities via incremental differential and ignores historical base offset', () => {
+    const tmpDir = path.join(os.tmpdir(), `aura-quota-test-${Date.now()}`);
+    const tracker = new QuotaTracker({ storageDir: tmpDir });
 
-    // Simulate quota reset: remainingFraction becomes 1.0 (fresh period, 0% consumed)
-    tracker.setLatestQuotaSummaryForTesting({
-      response: {
-        groups: [
-          {
-            displayName: 'Gemini Models',
-            buckets: [
-              { bucketId: 'gemini-weekly', displayName: 'Weekly', window: 'weekly', remainingFraction: 1.0, resetTime: '' },
-              { bucketId: 'gemini-5h', displayName: '5h', window: '5h', remainingFraction: 1.0, resetTime: '' }
-            ]
-          }
-        ]
-      }
-    });
+    const account = 'user@example.com';
 
-    // Should retain the empirical calibrated 80M and 700M capacities
-    const afterReset = tracker.getAccountQuotaCapacity('test@example.com', 0, 0);
-    expect(afterReset.status).toBe('calibrated');
-    expect(afterReset.fiveHourTokens).toBe(80_000_000);
-    expect(afterReset.sevenDayTokens).toBe(700_000_000);
+    // Step 1: Initial baseline established at 50,000,000 tokens (simulating pre-existing tokens)
+    // with weekly quota at 0.820 (82.0% remaining) and 5h quota at 0.750
+    tracker.recordObservation(account, 50_000_000, 0.75, 0.82);
+
+    let cap = tracker.getAccountQuotaCapacity(account, 10_000_000, 50_000_000);
+    expect(cap.status).toBe('calibrating');
+    expect(cap.sevenDayTokens).toBeUndefined();
+
+    // Step 2: Next turn - account consumed 2,000,000 more tokens (total 52,000,000)
+    // Weekly quota dropped from 0.820 to 0.81744 (delta = 0.00256 = 0.256%)
+    // 5h quota dropped from 0.750 to 0.730 (delta = 0.020 = 2.0%)
+    // Expected weekly: 2,000,000 / 0.00256 = 781,250,000 (~781M)
+    // Expected 5h: 2,000,000 / 0.02 = 100,000,000 (100M)
+    tracker.recordObservation(account, 52_000_000, 0.73, 0.81744);
+
+    cap = tracker.getAccountQuotaCapacity(account, 12_000_000, 52_000_000);
+    expect(cap.status).toBe('calibrated');
+    expect(cap.fiveHourTokens).toBe(100_000_000);
+    expect(cap.sevenDayTokens).toBe(Math.round(2_000_000 / 0.00256));
+    expect(cap.sevenDayTokens).toBeGreaterThan(770_000_000);
+
+    // Step 3: Persistence test - a fresh QuotaTracker with the same storageDir should load the calibrated values
+    const tracker2 = new QuotaTracker({ storageDir: tmpDir });
+    const cap2 = tracker2.getAccountQuotaCapacity(account, 0, 0);
+    expect(cap2.status).toBe('calibrated');
+    expect(cap2.fiveHourTokens).toBe(100_000_000);
+    expect(cap2.sevenDayTokens).toBe(cap.sevenDayTokens);
+
+    // Cleanup
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  test('applies weighted smoothing on subsequent differential measurements', () => {
+    const tracker = new QuotaTracker();
+    const account = 'smooth@example.com';
+
+    // Baseline
+    tracker.recordObservation(account, 10_000_000, 0.8, 0.9);
+
+    // First sample: 1M tokens / 0.01 drop = 100M
+    tracker.recordObservation(account, 11_000_000, 0.79, 0.9);
+    let rec = tracker.getCalibrationRecord(account);
+    expect(rec?.fiveHourTokens).toBe(100_000_000);
+
+    // Second sample: 1.2M tokens / 0.01 drop = 120M
+    // EMA: Math.round(100M * 0.7 + 120M * 0.3) = 70M + 36M = 106M
+    tracker.recordObservation(account, 12_200_000, 0.78, 0.9);
+    rec = tracker.getCalibrationRecord(account);
+    expect(rec?.fiveHourTokens).toBe(106_000_000);
+    expect(rec?.sampleCount5h).toBe(2);
   });
 });
