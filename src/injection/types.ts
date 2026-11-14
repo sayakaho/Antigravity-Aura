@@ -61,6 +61,16 @@ export interface AuraGlobals {
   __ag_pill_resize_observer?: ResizeObserver | null;
   __agRequestMetrics?: (cascadeId: string) => void;
   __ag_on_session_change?: (cascadeId: string) => void;
+  __ag_labs_dev_mode?: boolean;
+  __ag_app_config_hooked?: boolean;
+  __APP_CONFIG__?: {
+    productName?: string;
+    csrfToken?: string;
+    appVersion?: string;
+    releaseChannel?: string;
+    devMode?: boolean;
+    [key: string]: unknown;
+  };
   electronNative?: ElectronNativeBridge;
 }
 

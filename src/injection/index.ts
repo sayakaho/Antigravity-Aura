@@ -96,7 +96,10 @@ function bootstrap(): void {
   const selectors = boot.selectors;
   const themeVars = boot.themeVars && typeof boot.themeVars === 'object' ? boot.themeVars : {};
 
-  // 1. 注入主题 CSS 与用户自定义 CSS
+  // 1. 原生实验特性与开发者模式前置同步（确保先于宿主内联脚本与 React 树挂载拦截 __APP_CONFIG__）
+  setupExperiments(boot.advanced);
+
+  // 2. 注入主题 CSS 与用户自定义 CSS
   const headTarget = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
   let style = document.getElementById('ag-custom-fonts') as HTMLStyleElement | null;
   if (!style) {
@@ -145,11 +148,8 @@ function bootstrap(): void {
   // 4. 输入栏性能指标胶囊
   const ensureMetricsPill = initMetricsCapsule(modules.metrics !== false, selectors, boot.language || 'default');
 
-  // 5. 界面汉化引擎
+  // 6. 界面汉化引擎
   const dict = initI18n(modules.i18n === true, boot.i18nDict || {}, selectors.excludeI18n, patchVersion);
-
-  // 6. 原生实验特性与开发者模式同步
-  setupExperiments(boot.advanced);
 
   // 7. 开放用户自定义前端脚本钩子 (user/custom.js)
   agGlobal.__AG_PATCH_CTX__ = {

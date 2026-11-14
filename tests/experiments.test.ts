@@ -181,4 +181,28 @@ describe('setupExperiments & StorageEvent synchronization', () => {
     expect(dispatchedEvents.length).toBe(2);
     expect(dispatchedEvents.every((e) => e.newValue === null && e.storageArea === mockStorage)).toBe(true);
   });
+
+  test('patches and hooks window.__APP_CONFIG__.devMode when labsDeveloperMode is true and restores on false', async () => {
+    const { setupExperiments } = await import('../src/injection/experiments');
+    const win = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+    win.__APP_CONFIG__ = { productName: 'antigravity', devMode: false };
+
+    setupExperiments({
+      labsDeveloperMode: true,
+      experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
+    });
+
+    expect((win.__APP_CONFIG__ as { devMode: boolean }).devMode).toBe(true);
+
+    // Later host re-assignment must also have devMode enforced to true
+    win.__APP_CONFIG__ = { productName: 'antigravity', devMode: false, appVersion: '2.32.1' };
+    expect((win.__APP_CONFIG__ as { devMode: boolean }).devMode).toBe(true);
+
+    // Turning off disables devMode
+    setupExperiments({
+      labsDeveloperMode: false,
+      experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
+    });
+    expect((win.__APP_CONFIG__ as { devMode: boolean }).devMode).toBe(false);
+  });
 });

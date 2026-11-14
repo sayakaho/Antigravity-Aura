@@ -67,11 +67,44 @@ function writeStorageAndNotify(
   }
 }
 
+export function patchAppConfigDevMode(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const winGlobals = window as unknown as AuraGlobals;
+    winGlobals.__ag_labs_dev_mode = enabled;
+
+    let currentConfig = (window as unknown as { __APP_CONFIG__?: Record<string, unknown> }).__APP_CONFIG__;
+    if (currentConfig && typeof currentConfig === 'object') {
+      currentConfig.devMode = enabled;
+    }
+
+    if (!winGlobals.__ag_app_config_hooked) {
+      winGlobals.__ag_app_config_hooked = true;
+      Object.defineProperty(window, '__APP_CONFIG__', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return currentConfig;
+        },
+        set(val: unknown) {
+          if (val && typeof val === 'object') {
+            (val as Record<string, unknown>).devMode = winGlobals.__ag_labs_dev_mode === true;
+          }
+          currentConfig = val as Record<string, unknown> | undefined;
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('[Aura] Failed to patch __APP_CONFIG__.devMode:', err);
+  }
+}
+
 export function syncDeveloperSettings(advanced: AdvancedConfig): void {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-
     const labsEnabled = advanced.labsDeveloperMode !== false;
+    patchAppConfigDevMode(labsEnabled);
+
+    if (typeof window === 'undefined' || !window.localStorage) return;
 
     const prevEnvStr = window.localStorage.getItem(ENV_OVERRIDE_KEY);
     const envOverride = parsePlainObject(prevEnvStr);
