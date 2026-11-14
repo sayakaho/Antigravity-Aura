@@ -1546,6 +1546,41 @@ html[data-theme="dark"] .chart-shared-hover-band {
   line-height: 1.4;
 }
 
+.account-quota-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 11px;
+  font-family: var(--aura-font-mono, monospace);
+  color: var(--aura-fg-muted);
+}
+
+.account-quota-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--aura-control-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--aura-border, rgba(255, 255, 255, 0.1));
+  font-size: 10.5px;
+}
+
+.account-quota-pill strong {
+  color: var(--aura-fg);
+  font-weight: 600;
+}
+
+.account-quota-calibrating {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.account-quota-sep {
+  opacity: 0.4;
+}
+
 .account-stat-row-untracked {
   opacity: 0.82;
 }

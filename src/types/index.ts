@@ -174,6 +174,16 @@ export interface AccountTimelineEntry {
   end: number | null; // null if currently active
 }
 
+export interface AccountQuotaCapacity {
+  fiveHourTokens?: number;
+  sevenDayTokens?: number;
+  fiveHourUsed?: number;
+  sevenDayUsed?: number;
+  fiveHourFraction?: number;
+  weeklyFraction?: number;
+  status: 'calibrated' | 'calibrating';
+}
+
 export interface AccountTokenStat {
   account: string;
   totalTokens: number;
@@ -185,6 +195,7 @@ export interface AccountTokenStat {
   conversationCount: number;
   isCurrent?: boolean;
   isUntracked?: boolean;
+  quotaCapacity?: AccountQuotaCapacity;
 }
 
 export interface AccountDailyStat {
@@ -195,6 +206,15 @@ export interface AccountDailyStat {
   thinkTok: number;
   requests: number;
   conversationIds: string[];
+}
+
+export interface AccountHourlyStat {
+  account: string;
+  inTok: number;
+  outTok: number;
+  cacheRead: number;
+  thinkTok: number;
+  requests: number;
 }
 
 export interface ModelTokenStat {
@@ -384,6 +404,7 @@ export interface GlobalAnalyticsOverview {
   dailySubagentStats?: Record<string, Record<string, SubagentDailyStat>>;
   accountDistribution?: AccountTokenStat[];
   dailyAccountStats?: Record<string, Record<string, AccountDailyStat>>;
+  hourlyAccountStats?: Record<string, Record<string, AccountHourlyStat>>;
 }
 
 export interface LiveMetricsPayload {

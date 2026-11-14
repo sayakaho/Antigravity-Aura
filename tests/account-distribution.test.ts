@@ -30,7 +30,12 @@ function makeBaseOverview(): GlobalAnalyticsOverview {
         thinkTok: 0,
         requests: 4,
         conversationCount: 2,
-        isCurrent: true
+        isCurrent: true,
+        quotaCapacity: {
+          fiveHourTokens: 500_000,
+          sevenDayTokens: 3_500_000,
+          status: 'calibrated'
+        }
       },
       {
         account: 'secondary@example.com',
@@ -153,6 +158,8 @@ describe('Account Token Consumption UI & Distribution', () => {
     expect(today.length).toBe(1);
     expect(today[0].account).toBe('primary@example.com');
     expect(today[0].totalTokens).toBe(150); // 50 + 25 + 75
+    expect(today[0].quotaCapacity?.fiveHourTokens).toBe(500_000);
+    expect(today[0].quotaCapacity?.sevenDayTokens).toBe(3_500_000);
   });
 
   test('renderAccountDistribution renders HTML into container cleanly', () => {
@@ -174,5 +181,30 @@ describe('Account Token Consumption UI & Distribution', () => {
     expect(container.innerHTML).toContain('secondary@example.com');
     expect(container.innerHTML).toContain('account-current-badge');
     expect(container.innerHTML).toContain('Active');
+    expect(container.innerHTML).toContain('5h Window ≈');
+    expect(container.innerHTML).toContain('7d Window ≈');
+    expect(container.innerHTML).toContain('500k');
+    expect(container.innerHTML).toContain('3.5M');
+  });
+
+  test('renderAccountDistribution renders calibrating indicator when quota is uncalibrated', () => {
+    const overview = makeBaseOverview();
+    overview.accountDistribution![0].quotaCapacity = {
+      status: 'calibrating',
+      fiveHourUsed: 0,
+      sevenDayUsed: 0
+    };
+
+    const container = {
+      id: 'analytics-accounts-list',
+      innerHTML: '',
+      querySelectorAll: () => []
+    };
+    (globalThis as any).document = {
+      getElementById: (id: string) => (id === 'analytics-accounts-list' ? container : null)
+    };
+
+    renderAccountDistribution(overview, 'last-30-days', null, 'all-time');
+    expect(container.innerHTML).toContain('Calibrating Quota Capacity');
   });
 });

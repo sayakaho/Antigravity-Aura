@@ -1133,11 +1133,15 @@ export function computeAccountDistributionItems(
   }
 
   return Array.from(aggMap.values())
-    .map(({ stat, convIds }) => ({
-      ...stat,
-      conversationCount: convIds.size,
-      totalTokens: stat.inputTok + stat.outTok + stat.cacheRead
-    }))
+    .map(({ stat, convIds }) => {
+      const baseAccount = overview.accountDistribution?.find((a) => a.account === stat.account);
+      return {
+        ...stat,
+        quotaCapacity: baseAccount?.quotaCapacity,
+        conversationCount: convIds.size,
+        totalTokens: stat.inputTok + stat.outTok + stat.cacheRead
+      };
+    })
     .filter((a) => a.totalTokens > 0 || a.requests > 0)
     .sort((a, b) => {
       if (a.isUntracked && !b.isUntracked) return 1;
@@ -1203,6 +1207,30 @@ export function renderAccountDistribution(
       const pillHtml = isUntracked
         ? `Historical data prior to account tracking · ${formatFullNumber(a.requests)} req`
         : `In: ${formatCompactNumber(a.inputTok)} · Out: ${formatCompactNumber(a.outTok)} · Cache: ${formatCompactNumber(a.cacheRead)} · ${formatFullNumber(a.requests)} req`;
+      let quotaHtml = '';
+      if (a.quotaCapacity) {
+        if (a.quotaCapacity.status === 'calibrated') {
+          const pill5h = a.quotaCapacity.fiveHourTokens
+            ? `<span class="account-quota-pill" title="Estimated 5-hour rolling quota capacity">5h Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.fiveHourTokens)}</strong></span>`
+            : `<span class="account-quota-pill account-quota-calibrating">5h: Calibrating...</span>`;
+          const pill7d = a.quotaCapacity.sevenDayTokens
+            ? `<span class="account-quota-pill" title="Estimated 7-day rolling quota capacity">7d Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.sevenDayTokens)}</strong></span>`
+            : `<span class="account-quota-pill account-quota-calibrating">7d: Calibrating...</span>`;
+          quotaHtml = `
+            <div class="account-quota-pills">
+              ${pill5h}
+              <span class="account-quota-sep">·</span>
+              ${pill7d}
+            </div>
+          `;
+        } else {
+          quotaHtml = `
+            <div class="account-quota-pills">
+              <span class="account-quota-pill account-quota-calibrating" title="Accumulating token consumption and quota deltas">Calibrating Quota Capacity...</span>
+            </div>
+          `;
+        }
+      }
       const rowClass = isUntracked
         ? 'project-stat-row account-stat-row account-stat-row-untracked'
         : 'project-stat-row account-stat-row';
@@ -1228,6 +1256,7 @@ export function renderAccountDistribution(
             <span class="account-details-pill">
               ${pillHtml}
             </span>
+            ${quotaHtml}
           </div>
         </div>
       `;
