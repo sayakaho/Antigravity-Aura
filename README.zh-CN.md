@@ -6,7 +6,7 @@
 
 **Anthropic 风格的明暗主题、字体混排与本地性能监控插件，基于 Google Antigravity 原生 Plugin + Sidecar 机制实现。**
 
-[![Version](https://img.shields.io/badge/version-0.2.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
@@ -47,9 +47,13 @@
 
 ## 功能特性
 
-- **实时遥测与本地性能看板**：基于本地对话记录提供从即时状态到历史复盘的全链路监控。
-  - **输入框指标胶囊**：在输入框底部常驻展示最近一次响应的生成速率（`tok/s`）、TTFT、上下文占用与输出量；悬停可查看思考链与正文拆解、缓存命中率及距上下文压缩的剩余空间，点击即可切换侧边栏。
-  - **多维度性能看板**：支持按当前会话或指定时间范围（今日、近 7/30 天、自定义日期等）聚合统计，覆盖 Token 构成与缓存效率、API 等价成本、各模型实测速率与延迟分布，以及工具调用和工作区占比。
+- **多账号配额与本地性能看板**：基于本地对话记录与物理容量提供从即时状态到全景复盘的全链路监控。
+  - **账号消耗与配额反推**：支持多账号 Token 消耗占比分析（`Active Session`、今日、近 7/30 天、自定义日期与全部时间范围），集成商业 API 等价成本折算，独创配额增量差分校准（`ΔTokens / ΔQ`）与滚动 5h / 7d 周期物理容量边界保护。
+  - **一年期容量活跃度热力图**：GitHub 风格的 365 天容量活跃度热力矩阵，鼠标悬停任意日期即可检视完整 Token 吞吐与该日期反推计算出的 5h 与 7d Quota Bucket。
+  - **Gemini 商业定价模型**：精确对齐官方 Gemini 4 系列（Carbon / Argon / Hydrogen）与 Gemini 3.8 Flash 商业定价体系，支持缓存折扣与离线安全兜底。
+  - **Subagent 子代理会话树与层级追踪**：自动建立父子代理层级索引，精准拆解并去重统计多代理协同调用链路与 Token 贡献。
+  - **输入框实时指标胶囊**：在输入框底部常驻展示最新响应生成速率（`tok/s`）、TTFT、上下文体积与输出量；悬停查看思考链与正文拆解、缓存命中率，点击一键唤起侧边栏。
+  - **交互式性能看板**：支持按模型查看 TPS 速度折线时间轴、TTFT 延迟分位数（`p50`、`p90`、`p99`）、缓存命中突降标记与工具及工作区分布。
 - **Claude 风格主题与字体混排**：统一明暗视觉观感，解决原版界面中英混排的割裂问题。
   - **双模式独立预设**：为亮色（`Claude Light`、`Pure Light`、`Native Default`）与暗色（`Claude Dark`、`Vintage Deep`、`Native Default`）分别指定独立方案，随系统外观自动切换。
   - **三轨字体独立配置**：自动识别本机已安装字体，支持西文主字体、CJK 中文回退、等宽代码字体与对话阅读字号分别设置。
@@ -151,7 +155,7 @@ Antigravity-Aura/
 │   ├── panel/                      # 侧边栏 Webview 前端
 │   ├── presets/                    # 用户配置目录初始模板
 │   ├── server/                     # Sidecar 后端服务与数据解析
-│   ├── shared/                     # 前后端通用计算与配置校验
+│   ├── shared/                     # 共享定价注册表、TPS 速率计算与配置校验
 │   └── types/                      # TypeScript 类型与 SDK 声明
 ├── tests/                          # 单元测试
 ├── LICENSE

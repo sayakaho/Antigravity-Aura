@@ -6,7 +6,7 @@
 
 **Theme presets, custom font stacks, and local SQLite performance analytics for Google Antigravity, built on the native Plugin + Sidecar API.**
 
-[![Version](https://img.shields.io/badge/version-0.2.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
@@ -47,9 +47,13 @@ English | [简体中文](README.zh-CN.md)
 
 ## Features
 
-- **Real-Time Telemetry & Local Analytics**: Track live generation metrics and historical usage directly from your local Antigravity conversations.
-  - **Inline Telemetry Capsule**: Displays the latest response's speed (`tok/s`), TTFT, context usage, and output tokens on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
-  - **Analytics Dashboard**: Filter by the active session or time range (`Today`, `Last 7 Days`, `Last 30 Days`, `Custom`) to track token efficiency, estimated API cost, per-model speed and latency trends, and tool or workspace breakdowns.
+- **Multi-Account Quota & Local Analytics**: Deep observability into local Antigravity conversations, account distribution, and physical capacity.
+  - **Account Token & Quota Tracking**: Multi-account token distribution across selectable time ranges (`Active Session`, `Today`, `Last 7 Days`, `Last 30 Days`, `Custom`, `All-Time`) with commercial API cost conversion, differential quota calibration (`ΔTokens / ΔQ`), rolling 5h / 7d capacity estimation, and physical boundary clamping.
+  - **1-Year Capacity Activity Heatmap**: Interactive GitHub-style 365-day capacity activity heatmap with daily 5h & 7d quota bucket hover inspection.
+  - **Gemini-First Commercial Pricing**: Accurate rate calculation strictly focused on official Gemini series models (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Gemini 4 Hydrogen`, `Gemini 3.8 Flash`) with cache discounts and offline fallback.
+  - **Subagent Session Trees & Telemetry**: Full multi-agent hierarchy tracking with subagent breakdown, parent-child conversation linking, and deduplicated token aggregation.
+  - **Inline Telemetry Capsule**: Real-time generation speed (`tok/s`), TTFT, context volume, and output token counters on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
+  - **Interactive Analytics Dashboard**: Per-model speed timelines (TPS), latency percentiles (`p50`, `p90`, `p99` TTFT), cache hit rate break-point tracking, and tool or workspace distribution charts.
 - **Claude-Inspired Themes & Typography**: Cohesive light and dark palettes paired with clean multilingual text rendering.
   - **Independent Light & Dark Presets**: Configure separate themes for light (`Claude Light`, `Pure Light`, `Native Default`) and dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances that follow your OS theme automatically.
   - **Dedicated Font Stacks**: Enumerates locally installed fonts with separate controls for Latin UI sans, CJK fallback, monospace code blocks, and chat reading size.
@@ -151,7 +155,7 @@ Antigravity-Aura/
 │   ├── panel/                      # Auxiliary Pane Webview frontend
 │   ├── presets/                    # Default templates for persistent user config
 │   ├── server/                     # Sidecar backend, SQLite/Protobuf parser, and CDP client
-│   ├── shared/                     # Shared TPS calculation and config schema validation
+│   ├── shared/                     # Shared pricing registry, TPS calculation, and schema validation
 │   └── types/                      # TypeScript contracts and Sidecar SDK declarations
 ├── tests/                          # Unit tests
 ├── LICENSE
