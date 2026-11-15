@@ -515,6 +515,21 @@ export function initMetricsCapsule(
     wrapHistory('pushState');
     wrapHistory('replaceState');
     window.addEventListener('popstate', triggerRouteCheck);
+
+    const onPotentialNavigation = (e: Event) => {
+      const target = e.target as Element | null;
+      if (
+        !target ||
+        target.closest?.(
+          '[data-testid="conversation-row-sidebar"], aside, nav, [class*="sidebar"], [class*="conversation"]'
+        )
+      ) {
+        triggerRouteCheck();
+      }
+    };
+    document.addEventListener('click', onPotentialNavigation, { capture: true, passive: true });
+    document.addEventListener('keydown', onPotentialNavigation, { capture: true, passive: true });
+
     window.addEventListener('focus', () => {
       if (document.hidden) return;
       const cid = extractCascadeId();
@@ -544,6 +559,7 @@ export function initMetricsCapsule(
     clearInterval(agGlobal.__ag_metrics_route_watcher);
     agGlobal.__ag_metrics_route_watcher = null;
   }
+  agGlobal.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 800);
   checkRouteAndMountMetrics();
 
   return ensureMetricsPill;

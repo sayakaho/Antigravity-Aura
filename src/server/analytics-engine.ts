@@ -1042,6 +1042,7 @@ export class GlobalAnalyticsEngine {
         avgTurnLatency,
         models: sessionModels,
         tools: sessionTools,
+        accounts: accountDistribution,
         steps,
         speedTimeline,
         subagents: subagentsBreakdown
