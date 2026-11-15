@@ -692,12 +692,6 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   gap: 24px;
 }
 
-.hero-left {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .kpi-hero-value {
   font-size: 32px;
   font-weight: 700;
@@ -832,9 +826,6 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
 .kpi-card-compact .kpi-label-row {
   margin-bottom: 2px;
 }
-.kpi-card-compact .kpi-subtext {
-  margin-top: auto;
-}
 
 .kpi-label,
 .kpi-label-row {
@@ -881,20 +872,6 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   margin-left: 4px;
 }
 
-.hero-ratio-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.ratio-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--aura-fg-muted);
-}
-
 /* Cadence Rows (Faithful to original vertical stack) */
 .cadence-rows {
   display: flex;
@@ -923,13 +900,6 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   color: var(--aura-fg);
 }
 
-.kpi-subtext {
-  font-size: 11.5px;
-  color: var(--aura-fg-muted);
-  margin-top: 6px;
-  line-height: 1.35;
-}
-
 @media (max-width: 680px) {
   .kpi-hero-card {
     gap: 12px;
@@ -940,18 +910,9 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
     align-items: flex-start;
     gap: 12px;
   }
-  .hero-left {
-    width: 100%;
-  }
-  .hero-ratio-wrapper {
-    width: 100%;
-  }
   .kpi-ratio-bar {
     width: 100%;
     max-width: 100%;
-  }
-  .ratio-labels {
-    width: 100%;
   }
   .kpi-breakdown-list {
     width: 100%;
@@ -2170,11 +2131,6 @@ html[data-theme="dark"] .chart-shared-hover-band {
 
 .chart-ref-line {
   pointer-events: none;
-}
-
-.chart-ref-tag {
-  pointer-events: none;
-  user-select: none;
 }
 
 .scatter-legend {

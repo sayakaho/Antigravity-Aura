@@ -382,7 +382,6 @@ export function initMetricsCapsule(
     }
 
     syncPillAccessibility(pill, cfg.language);
-    bindMetricsPillHandlers(pill);
     pill.setAttribute('data-ag-row-mode', 'middle');
     if (bottomRow.getAttribute('data-ag-row-mode') !== 'middle') {
       bottomRow.setAttribute('data-ag-row-mode', 'middle');
@@ -545,7 +544,6 @@ export function initMetricsCapsule(
     clearInterval(agGlobal.__ag_metrics_route_watcher);
     agGlobal.__ag_metrics_route_watcher = null;
   }
-  agGlobal.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 1500);
   checkRouteAndMountMetrics();
 
   return ensureMetricsPill;

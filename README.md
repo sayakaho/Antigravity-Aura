@@ -8,7 +8,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.2.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
-[![Node](https://img.shields.io/badge/node-%3E%3D22.13.0%20(node%3Asqlite)-339933.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ English | [简体中文](README.zh-CN.md)
 
 ## Overview
 
-**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without patching `.asar` archives or running external OS daemons. The sidecar starts with the host application, attaches to active windows over CDP for live style and script injection, and reads the local SQLite conversation store via Node 22's built-in `node:sqlite` to serve an analytics and preferences panel in the Auxiliary Pane.
+**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without patching `.asar` archives or running external OS daemons. The sidecar starts with the host application, attaches to active windows over CDP for live style and script injection, and adaptively reads the local SQLite conversation store via native drivers or built-in WASM fallback to serve an analytics and preferences panel in the Auxiliary Pane.
 
 ## Screenshots
 
@@ -61,7 +61,7 @@ English | [简体中文](README.zh-CN.md)
 | Dependency | Requirement | Scope |
 | :--- | :--- | :--- |
 | **Google Antigravity** | Native Plugin + Sidecar support with CDP enabled | Runtime |
-| **Node.js** | `>= 22.13.0` with built-in `node:sqlite` | Runtime |
+| **Node.js** | `>= 18.0.0` (native acceleration on Node 22+, automatic WASM fallback on older versions) or **Bun** | Runtime |
 | **Bun** | `>= 1.2` | Build & test |
 | **OS** | macOS, Windows, or Linux | Runtime & build |
 

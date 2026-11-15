@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { computeNiceYScale, computePercentile } from '../src/panel/analytics/charts-base';
-import { generateContinuousDateList, getRangeBounds } from '../src/panel/analytics/time-range';
+import {
+  createTimeFilterContext,
+  generateContinuousDateList,
+  getRangeBounds,
+  isTimeFilterContext,
+  resolveTimeFilterContext
+} from '../src/panel/analytics/time-range';
 import { escapeHtml } from '../src/shared/format';
 
 describe('Chart helpers, escaping & time range bounds', () => {
@@ -45,5 +51,28 @@ describe('Chart helpers, escaping & time range bounds', () => {
     // Exceeds MAX_CONTINUOUS_DAYS (731) cap cleanly without infinite loop
     const capped = generateContinuousDateList('2020-01-01', '2026-11-09');
     expect(capped.length).toBe(731);
+  });
+
+  test('createTimeFilterContext and resolveTimeFilterContext manage unified context with cached dates', () => {
+    const fixedNow = new Date('2026-11-09T12:00:00');
+    const ctx = createTimeFilterContext('last-7-days', '', '', fixedNow);
+
+    expect(isTimeFilterContext(ctx)).toBe(true);
+    expect(ctx.range).toBe('last-7-days');
+    expect(ctx.startDate).toBe('2026-11-03');
+    expect(ctx.endDate).toBe('2026-11-09');
+    expect(ctx.dates).toHaveLength(7);
+    expect(ctx.dates[0]).toBe('2026-11-03');
+    expect(ctx.dates[6]).toBe('2026-11-09');
+    expect(ctx.now).toBe(fixedNow);
+
+    // resolveTimeFilterContext preserves existing context instance
+    const resolvedDirect = resolveTimeFilterContext(ctx);
+    expect(resolvedDirect).toBe(ctx);
+
+    // resolveTimeFilterContext falls back to createTimeFilterContext on string option
+    const resolvedFromOption = resolveTimeFilterContext('today', '', '', fixedNow);
+    expect(isTimeFilterContext(resolvedFromOption)).toBe(true);
+    expect(resolvedFromOption.dates).toEqual(['2026-11-09']);
   });
 });

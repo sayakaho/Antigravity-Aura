@@ -146,6 +146,22 @@ export function updateButtonSummary(btn: HTMLElement, language: 'default' | 'zh-
   badge.textContent = ` · ${text}`;
 }
 
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let rafId: number | null = null;
+
+function cancelScheduledUpdate(): void {
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  if (rafId !== null) {
+    if (typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(rafId);
+    }
+    rafId = null;
+  }
+}
+
 export function initActivitySummary(enabled: boolean, language: 'default' | 'zh-CN' = 'default'): void {
   uninstallActivitySummary();
   if (!enabled || typeof document === 'undefined') return;
@@ -157,9 +173,26 @@ export function initActivitySummary(enabled: boolean, language: 'default' | 'zh-
 
   updateAll();
 
+  const scheduleUpdate = () => {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      if (typeof requestAnimationFrame === 'function') {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          updateAll();
+        });
+      } else {
+        updateAll();
+      }
+    }, 100);
+  };
+
   if (typeof MutationObserver !== 'undefined' && document.body) {
     const observer = new MutationObserver(() => {
-      updateAll();
+      scheduleUpdate();
     });
 
     observer.observe(document.body, {
@@ -172,6 +205,7 @@ export function initActivitySummary(enabled: boolean, language: 'default' | 'zh-
 }
 
 export function uninstallActivitySummary(): void {
+  cancelScheduledUpdate();
   if (agGlobal.__ag_activity_summary_observer) {
     try {
       agGlobal.__ag_activity_summary_observer.disconnect();

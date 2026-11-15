@@ -30,7 +30,12 @@ import {
   renderSubagentDistribution,
   renderToolDistribution
 } from './metrics';
-import { getRangeDisplayTitle, type TimeRangeOption } from './time-range';
+import {
+  createTimeFilterContext,
+  getRangeDisplayTitle,
+  type TimeFilterContext,
+  type TimeRangeOption
+} from './time-range';
 
 export interface RefreshAnalyticsOptions {
   mode?: AnalyticsRefreshMode;
@@ -141,19 +146,18 @@ function updateAccountScopeControlUI(scope: ProjectScopeMode): void {
   });
 }
 
+function getCurrentTimeFilterContext(): TimeFilterContext {
+  return createTimeFilterContext(currentRange, customStartDate, customEndDate);
+}
+
 function renderRangeDependentViews(
   overview: GlobalAnalyticsOverview,
   range: TimeRangeOption,
   preserveScroll = false
 ): void {
-  const processed = computeProcessedColumns(
-    overview,
-    range,
-    activeSessionData,
-    customStartDate,
-    customEndDate
-  );
-  renderMetricCards(processed, range, overview, activeSessionData, customStartDate, customEndDate);
+  const timeCtx = createTimeFilterContext(range, customStartDate, customEndDate);
+  const processed = computeProcessedColumns(overview, timeCtx, activeSessionData);
+  renderMetricCards(processed, timeCtx, overview, activeSessionData);
   renderActivityChart(
     processed.columns,
     getRangeDisplayTitle(range),
@@ -162,40 +166,23 @@ function renderRangeDependentViews(
     undefined,
     { preserveScroll }
   );
-  renderModelDistribution(overview, range, activeSessionData, customStartDate, customEndDate);
-  renderSubagentDistribution(
-    overview,
-    range,
-    activeSessionData,
-    processed,
-    customStartDate,
-    customEndDate
-  );
-  renderToolDistribution(overview, range, activeSessionData, customStartDate, customEndDate);
+  renderModelDistribution(overview, timeCtx, activeSessionData);
+  renderSubagentDistribution(overview, timeCtx, activeSessionData, processed);
+  renderToolDistribution(overview, timeCtx, activeSessionData);
   renderProjectDistribution(
     overview,
-    range,
+    timeCtx,
     activeSessionData,
-    currentProjectScope,
-    customStartDate,
-    customEndDate
+    currentProjectScope
   );
   renderAccountDistribution(
     overview,
-    range,
+    timeCtx,
     activeSessionData,
-    currentAccountScope,
-    customStartDate,
-    customEndDate
+    currentAccountScope
   );
-  renderModelTpsChart(overview, range, activeSessionData, customStartDate, customEndDate);
-  renderLatencyTtftDistributionChart(
-    overview,
-    range,
-    activeSessionData,
-    customStartDate,
-    customEndDate
-  );
+  renderModelTpsChart(overview, timeCtx, activeSessionData);
+  renderLatencyTtftDistributionChart(overview, timeCtx, activeSessionData);
 }
 
 async function applyExternalRangeState(next: AnalyticsRangeState): Promise<void> {
@@ -386,11 +373,9 @@ function applyProjectScope(scope: ProjectScopeMode): void {
   if (rawOverview) {
     renderProjectDistribution(
       rawOverview,
-      currentRange,
+      getCurrentTimeFilterContext(),
       activeSessionData,
-      currentProjectScope,
-      customStartDate,
-      customEndDate
+      currentProjectScope
     );
   }
   if (scope === 'all-time' && overviewDirty) {
@@ -398,11 +383,9 @@ function applyProjectScope(scope: ProjectScopeMode): void {
       if (rawOverview && currentProjectScope === 'all-time') {
         renderProjectDistribution(
           rawOverview,
-          currentRange,
+          getCurrentTimeFilterContext(),
           activeSessionData,
-          currentProjectScope,
-          customStartDate,
-          customEndDate
+          currentProjectScope
         );
       }
     });
@@ -416,11 +399,23 @@ function applyAccountScope(scope: ProjectScopeMode): void {
   if (rawOverview) {
     renderAccountDistribution(
       rawOverview,
-      currentRange,
+      getCurrentTimeFilterContext(),
       activeSessionData,
-      currentAccountScope,
-      customStartDate,
-      customEndDate
+      currentAccountScope
+    );
+  }
+}
+
+function applyExternalAccountScope(nextScope: ProjectScopeMode): void {
+  if (nextScope === currentAccountScope) return;
+  currentAccountScope = nextScope;
+  updateAccountScopeControlUI(currentAccountScope);
+  if (rawOverview) {
+    renderAccountDistribution(
+      rawOverview,
+      getCurrentTimeFilterContext(),
+      activeSessionData,
+      currentAccountScope
     );
   }
 }
@@ -432,11 +427,9 @@ function applyExternalProjectScope(nextScope: ProjectScopeMode): void {
   if (rawOverview) {
     renderProjectDistribution(
       rawOverview,
-      currentRange,
+      getCurrentTimeFilterContext(),
       activeSessionData,
-      currentProjectScope,
-      customStartDate,
-      customEndDate
+      currentProjectScope
     );
   }
   if (nextScope === 'all-time' && overviewDirty) {
@@ -444,11 +437,9 @@ function applyExternalProjectScope(nextScope: ProjectScopeMode): void {
       if (rawOverview && currentProjectScope === 'all-time') {
         renderProjectDistribution(
           rawOverview,
-          currentRange,
+          getCurrentTimeFilterContext(),
           activeSessionData,
-          currentProjectScope,
-          customStartDate,
-          customEndDate
+          currentProjectScope
         );
       }
     });
@@ -509,9 +500,14 @@ export function initTimeRangeControls(): void {
       applyExternalProjectScope(parseProjectScopeState(event.newValue));
       return;
     }
+    if (event.key === ACCOUNT_SCOPE_STORAGE_KEY) {
+      applyExternalAccountScope(parseProjectScopeState(event.newValue));
+      return;
+    }
     if (event.key !== ANALYTICS_RANGE_STORAGE_KEY && event.key !== null) return;
     if (event.key === null) {
       applyExternalProjectScope(loadProjectScopeState());
+      applyExternalAccountScope(loadAccountScopeState());
     }
     const next =
       event.key === null
@@ -522,6 +518,7 @@ export function initTimeRangeControls(): void {
 
   const syncFromStorage = () => {
     applyExternalProjectScope(loadProjectScopeState());
+    applyExternalAccountScope(loadAccountScopeState());
     void applyExternalRangeState(loadAnalyticsRangeState());
   };
 

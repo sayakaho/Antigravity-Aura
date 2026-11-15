@@ -37,11 +37,14 @@ import {
 } from './charts-base';
 import {
   generateContinuousDateList,
-  getFilterDatesForRange,
   getRangeBounds,
   getRangeDisplayTitle,
+  resolveTimeFilterContext,
+  type TimeFilterContext,
   type TimeRangeOption
 } from './time-range';
+
+export { resolveTimeFilterContext, type TimeFilterContext, type TimeRangeOption };
 
 export interface ProcessedRangeMetrics {
   columns: ChartColumnData[];
@@ -145,12 +148,16 @@ export function computeRangePerf(
 
 export function computeProcessedColumns(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
   customEnd = '',
   now = new Date()
 ): ProcessedRangeMetrics {
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, startDate, endDate, dates: dateList } = timeCtx;
+  const effectiveNow = timeCtx.now;
+
   if (range === 'session') {
     if (!activeSessionData || activeSessionData.steps.length === 0) {
       return {
@@ -198,8 +205,8 @@ export function computeProcessedColumns(
   if (range === 'today' || range === 'yesterday') {
     const targetDate =
       range === 'today'
-        ? formatLocalDateKey(now)
-        : formatLocalDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+        ? formatLocalDateKey(effectiveNow)
+        : formatLocalDateKey(new Date(effectiveNow.getFullYear(), effectiveNow.getMonth(), effectiveNow.getDate() - 1));
 
     const hourlyMap: Record<string, ChartColumnData> = {};
     const matchedHourlyBuckets: HourlySeriesPoint[] = [];
@@ -270,7 +277,6 @@ export function computeProcessedColumns(
     };
   }
 
-  const { startDate, endDate } = getRangeBounds(range, customStart, customEnd, now);
   const dateMap: Record<string, DailySeriesPoint> = {};
   for (const item of overview.timeRangeSeries || []) {
     if (item.date && !item.date.startsWith('0001')) {
@@ -278,7 +284,6 @@ export function computeProcessedColumns(
     }
   }
 
-  const dateList = generateContinuousDateList(startDate, endDate);
   const startMs = new Date(`${startDate}T00:00:00`).getTime();
   const endMs = new Date(`${endDate}T00:00:00`).getTime();
   const daySpan = Math.round((endMs - startMs) / 86400000);
@@ -377,12 +382,15 @@ export interface CostAndSavings {
 
 export function computeApiCostAndSavings(
   metrics: ProcessedRangeMetrics,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   overview: GlobalAnalyticsOverview | null,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): CostAndSavings {
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
   let actualCost = 0;
   let baselineCost = 0;
 
@@ -416,7 +424,6 @@ export function computeApiCostAndSavings(
       }
     }
   } else if (overview?.dailyModelStats) {
-    const dates = getFilterDatesForRange(range, customStart, customEnd);
     let matchedAny = false;
     for (const d of dates) {
       const dayModels = overview.dailyModelStats[d];
@@ -473,14 +480,18 @@ export function computeApiCostAndSavings(
 
 export function renderMetricCards(
   metrics: ProcessedRangeMetrics,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   overview: GlobalAnalyticsOverview | null,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): void {
   const container = document.getElementById('analytics-cards-grid');
   if (!container) return;
+
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range } = timeCtx;
 
   const totalTok = metrics.totalTokens.total;
   const inTok = metrics.totalTokens.input;
@@ -499,11 +510,9 @@ export function renderMetricCards(
 
   const { actualCost } = computeApiCostAndSavings(
     metrics,
-    range,
+    timeCtx,
     overview,
-    activeSessionData,
-    customStart,
-    customEnd
+    activeSessionData
   );
 
   const isSession = range === 'session' && !!activeSessionData;
@@ -841,13 +850,16 @@ function bindProjectContainerEvents(container: HTMLElement): void {
 
 export function computeProjectDistributionItems(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   scope: ProjectScopeMode,
   customStart = '',
   customEnd = '',
   now = new Date()
 ): ProjectStatItem[] {
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
+
   const fallbackProjects = (): ProjectStatItem[] => {
     if (overview.projects && overview.projects.length > 0) {
       return [...overview.projects].sort(
@@ -910,7 +922,6 @@ export function computeProjectDistributionItems(
     return fallbackProjects();
   }
 
-  const dates = getFilterDatesForRange(range, customStart, customEnd, now);
   const aggMap = new Map<
     string,
     {
@@ -970,24 +981,26 @@ export function computeProjectDistributionItems(
 
 export function renderProjectDistribution(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption = 'last-30-days',
+  timeContextOrRange: TimeFilterContext | TimeRangeOption = 'last-30-days',
   activeSessionData: SessionAnalyticsData | null = null,
   scope: ProjectScopeMode = 'follow',
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): void {
   const container = document.getElementById('analytics-projects-list');
   if (!container) return;
 
   bindProjectContainerEvents(container);
 
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range } = timeCtx;
+
   const projects = computeProjectDistributionItems(
     overview,
-    range,
+    timeCtx,
     activeSessionData,
-    scope,
-    customStart,
-    customEnd
+    scope
   );
 
   if (projects.length === 0) {
@@ -1075,13 +1088,16 @@ export function renderProjectDistribution(
 
 export function computeAccountDistributionItems(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   scope: ProjectScopeMode = 'follow',
   customStart = '',
   customEnd = '',
   now = new Date()
 ): AccountTokenStat[] {
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
+
   if (range === 'session') {
     if (activeSessionData?.accounts && activeSessionData.accounts.length > 0) {
       return [...activeSessionData.accounts];
@@ -1093,7 +1109,6 @@ export function computeAccountDistributionItems(
     return overview.accountDistribution ? [...overview.accountDistribution] : [];
   }
 
-  const dates = getFilterDatesForRange(range, customStart, customEnd, now);
   const aggMap = new Map<string, { stat: AccountTokenStat; convIds: Set<string> }>();
   const currentAccount = overview.accountDistribution?.find((a) => a.isCurrent)?.account;
 
@@ -1152,22 +1167,24 @@ export function computeAccountDistributionItems(
 
 export function renderAccountDistribution(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   scope: ProjectScopeMode = 'follow',
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): void {
   const container = document.getElementById('analytics-accounts-list');
   if (!container) return;
 
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range } = timeCtx;
+
   const accounts = computeAccountDistributionItems(
     overview,
-    range,
+    timeCtx,
     activeSessionData,
-    scope,
-    customStart,
-    customEnd
+    scope
   );
 
   if (accounts.length === 0) {
@@ -1277,19 +1294,22 @@ export function renderAccountDistribution(
 
 export function renderModelDistribution(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): void {
   const container = document.getElementById('analytics-models-list');
   if (!container) return;
+
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
 
   let models: ModelTokenStat[] = [];
   if (range === 'session') {
     models = activeSessionData?.models ? [...activeSessionData.models] : [];
   } else {
-    const dates = getFilterDatesForRange(range, customStart, customEnd);
     const statsMap: Record<
       string,
       {
@@ -1431,19 +1451,22 @@ export function renderModelDistribution(
 
 export function renderToolDistribution(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): void {
   const container = document.getElementById('analytics-tools-list');
   if (!container) return;
+
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
 
   let tools: ToolStatItem[] = [];
   if (range === 'session') {
     tools = activeSessionData?.tools ? [...activeSessionData.tools] : [];
   } else {
-    const dates = getFilterDatesForRange(range, customStart, customEnd);
     const countsMap: Record<string, number> = {};
 
     for (const d of dates) {
@@ -1523,13 +1546,16 @@ export function renderToolDistribution(
 
 export function computeSubagentBreakdown(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   processedMetrics: ProcessedRangeMetrics,
   customStart = '',
   customEnd = '',
   now = new Date()
 ): SubagentBreakdownSummary | null {
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
+
   if (range === 'session') {
     const sa = activeSessionData?.subagents;
     if (!sa || sa.items.length === 0 || (sa.subagentTokens <= 0 && sa.totalRuns <= 0)) {
@@ -1550,7 +1576,6 @@ export function computeSubagentBreakdown(
     return null;
   }
 
-  const dates = getFilterDatesForRange(range, customStart, customEnd, now);
   const aggMap = new Map<
     string,
     {
@@ -1628,7 +1653,7 @@ export function computeSubagentBreakdown(
 
 export function renderSubagentDistribution(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   processedMetrics: ProcessedRangeMetrics,
   customStart = '',
@@ -1639,14 +1664,14 @@ export function renderSubagentDistribution(
   const container = document.getElementById('analytics-subagents-list');
   if (!container) return;
 
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range } = timeCtx;
+
   const breakdown = computeSubagentBreakdown(
     overview,
-    range,
+    timeCtx,
     activeSessionData,
-    processedMetrics,
-    customStart,
-    customEnd,
-    now
+    processedMetrics
   );
 
   if (!breakdown || breakdown.items.length === 0) {

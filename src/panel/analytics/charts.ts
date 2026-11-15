@@ -16,6 +16,7 @@ import type {
   TurnLatencySample
 } from '../../types';
 import {
+  buildStickyYAxisSvg,
   buildYAxisGridSvg,
   computeNiceYScale,
   computePercentile,
@@ -24,7 +25,12 @@ import {
   setRenderedHtmlIfChanged,
   type ChartColumnData
 } from './charts-base';
-import { getFilterDatesForRange, getRangeDisplayTitle, type TimeRangeOption } from './time-range';
+import {
+  getRangeDisplayTitle,
+  resolveTimeFilterContext,
+  type TimeFilterContext,
+  type TimeRangeOption
+} from './time-range';
 
 type ActivityViewMode = 'overview' | 'timeline';
 
@@ -191,16 +197,25 @@ function attachViewModeSwitchListeners(
   });
 }
 
-function renderStickyYAxis(yTicks: number[], yMax: number, paddingTop: number, chartHeight: number): string {
-  let yAxisSvg = '';
-  for (const tickVal of yTicks) {
-    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
-    yAxisSvg += `
-      <text x="40" y="${y + 3.5}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${escapeHtml(formatCompactNumber(tickVal))}</text>
-      <line x1="43" y1="${y}" x2="48" y2="${y}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.75' : '0.55'}" />
-    `;
+function renderBarSegmentSvg(
+  className: string,
+  x: number,
+  segTop: number,
+  segHeight: number,
+  barWidth: number,
+  fill: string,
+  isTop: boolean,
+  r: number,
+  extraAttrs = ''
+): string {
+  if (segHeight <= 0) return '';
+  const segBottom = segTop + segHeight;
+  if (!isTop || r <= 0) {
+    return `<rect class="bar-segment ${className}" x="${x}" y="${segTop}" width="${barWidth}" height="${segHeight}" fill="${fill}" ${extraAttrs}/>`;
   }
-  return yAxisSvg;
+  const safeR = Math.min(r, segHeight);
+  const d = `M ${x} ${segBottom} L ${x} ${(segTop + safeR).toFixed(1)} A ${safeR} ${safeR} 0 0 1 ${(x + safeR).toFixed(1)} ${segTop} L ${(x + barWidth - safeR).toFixed(1)} ${segTop} A ${safeR} ${safeR} 0 0 1 ${x + barWidth} ${(segTop + safeR).toFixed(1)} L ${x + barWidth} ${segBottom} Z`;
+  return `<path class="bar-segment ${className}" d="${d}" fill="${fill}" ${extraAttrs}/>`;
 }
 
 function renderStickyPercentYAxis(paddingTop: number, chartHeight: number): string {
@@ -336,7 +351,7 @@ function renderSessionOverviewArea(
   const stripY = paddingTop + chartHeight + 3;
   const stripH = 5;
 
-  const yAxisSvg = renderStickyYAxis(yTicks, yMax, paddingTop, chartHeight);
+  const yAxisSvg = buildStickyYAxisSvg(yTicks, yMax, paddingTop, chartHeight);
   const rightYAxisSvg = renderStickyPercentYAxis(paddingTop, chartHeight);
   const healthStripSvg = buildCacheHealthStripSvg(
     sanitizedSteps,
@@ -345,13 +360,15 @@ function renderSessionOverviewArea(
     chartWidth,
     stripH
   );
-
-  let gridSvg = '';
-  for (const tickVal of yTicks) {
-    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
-    const isZero = tickVal === 0;
-    gridSvg += `<line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${paddingLeft + chartWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? '0.75' : '0.55'}" />`;
-  }
+  const { linesSvg: gridSvg } = buildYAxisGridSvg({
+    yTicks,
+    yMax,
+    paddingLeft,
+    paddingRight,
+    paddingTop,
+    svgWidth,
+    chartHeight
+  });
 
   let areaD = '';
   let lineD = '';
@@ -714,16 +731,17 @@ function renderStandardTimelineChart(
   const step = chartWidth / columns.length;
   const barWidth = Math.max(3, Math.min(22, Math.floor(step * 0.72)));
 
-  const yAxisSvg = renderStickyYAxis(yTicks, yMax, paddingTop, chartHeight);
+  const yAxisSvg = buildStickyYAxisSvg(yTicks, yMax, paddingTop, chartHeight);
+  const { linesSvg: gridSvg } = buildYAxisGridSvg({
+    yTicks,
+    yMax,
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingTop,
+    svgWidth,
+    chartHeight
+  });
 
-  let gridSvg = '';
-  for (const tickVal of yTicks) {
-    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
-    const isZero = tickVal === 0;
-    gridSvg += `<line class="chart-grid-line" x1="0" y1="${y}" x2="${svgWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? '0.75' : '0.55'}" />`;
-  }
-
-  let defsSvg = '<defs>';
   let barsSvg = '';
   let focusBandSvg = '';
   let xLabelsSvg = '';
@@ -760,20 +778,46 @@ function renderStandardTimelineChart(
       const yOut = yIn - outHeight;
       const r = Math.min(3.5, barWidth / 2, totalBarHeight);
 
-      defsSvg += `
-        <clipPath id="col-clip-${idx}">
-          <path d="M ${x} ${yBottom} L ${x} ${yOut + r} A ${r} ${r} 0 0 1 ${x + r} ${yOut} L ${x + barWidth - r} ${yOut} A ${r} ${r} 0 0 1 ${x + barWidth} ${yOut + r} L ${x + barWidth} ${yBottom} Z" />
-        </clipPath>
-      `;
+      const outIsTop = outHeight > 0;
+      const inIsTop = inHeight > 0 && !outIsTop;
+      const cacheIsTop = cacheHeight > 0 && !outIsTop && !inIsTop;
+
+      const cacheSvg = renderBarSegmentSvg(
+        'bar-cache',
+        x,
+        yCache,
+        cacheHeight,
+        barWidth,
+        '#00A67E',
+        cacheIsTop,
+        r
+      );
+      const inSvg = renderBarSegmentSvg(
+        'bar-in',
+        x,
+        yIn,
+        inHeight,
+        barWidth,
+        '#6366F1',
+        inIsTop,
+        r,
+        'opacity="0.85" '
+      );
+      const outSvg = renderBarSegmentSvg(
+        'bar-out',
+        x,
+        yOut,
+        outHeight,
+        barWidth,
+        'var(--aura-primary)',
+        outIsTop,
+        r
+      );
 
       barsSvg += `
         <g class="chart-column-group" data-slot-x="${slotX}" data-slot-w="${step}" data-idx="${idx}">
           <rect class="bar-bg-band" x="${slotX}" y="${paddingTop}" width="${step}" height="${chartHeight}" rx="4" />
-          <g clip-path="url(#col-clip-${idx})">
-            ${cacheHeight > 0 ? `<rect class="bar-segment bar-cache" x="${x}" y="${yCache}" width="${barWidth}" height="${cacheHeight}" fill="#00A67E" />` : ''}
-            ${inHeight > 0 ? `<rect class="bar-segment bar-in" x="${x}" y="${yIn}" width="${barWidth}" height="${inHeight}" fill="#6366F1" opacity="0.85" />` : ''}
-            ${outHeight > 0 ? `<rect class="bar-segment bar-out" x="${x}" y="${yOut}" width="${barWidth}" height="${outHeight}" fill="var(--aura-primary)" />` : ''}
-          </g>
+          ${cacheSvg}${inSvg}${outSvg}
         </g>
       `;
     } else {
@@ -802,8 +846,6 @@ function renderStandardTimelineChart(
       xLabelsSvg += `<text x="${centerX}" y="${svgHeight - 8}" text-anchor="middle" font-size="10" font-family="inherit" fill="var(--aura-fg-muted)">${escapeHtml(item.label)}</text>`;
     }
   });
-
-  defsSvg += '</defs>';
 
   const switchHtml = isSession
     ? `
@@ -857,7 +899,6 @@ function renderStandardTimelineChart(
         }
         <div class="chart-stage ${isScrollable ? 'chart-stage-scrollable' : ''}" id="chart-stage-container">
           <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="analytics-svg" id="analytics-svg-element" style="${isScrollable ? `min-width: ${svgWidth}px;` : ''}">
-            ${defsSvg}
             ${gridSvg}
             ${focusBandSvg}
             <rect id="chart-shared-hover-band" class="chart-shared-hover-band" x="0" y="${paddingTop}" width="0" height="${chartHeight}" rx="4" style="display: none;" />
@@ -1206,7 +1247,7 @@ function resolveSessionTimelineModels(
 
 export function renderModelTpsChart(
   overview: GlobalAnalyticsOverview,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
   customEnd = '',
@@ -1214,6 +1255,9 @@ export function renderModelTpsChart(
 ): void {
   const chartWrapper = document.getElementById('analytics-model-tps-chart');
   if (!chartWrapper) return;
+
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates: dateList } = timeCtx;
 
   const isSession = range === 'session';
   const isHourly = range === 'today' || range === 'yesterday';
@@ -1461,7 +1505,6 @@ export function renderModelTpsChart(
       }
     });
   } else {
-    const dateList = getFilterDatesForRange(range, customStart, customEnd, now);
     const preferredOrder = (overview.modelDistribution || []).map((m) => m.modelId);
     const activeModels = resolveChartSeriesMeta(overview.dailyModelStats, dateList, preferredOrder);
     if (activeModels.length === 0) {
@@ -1531,14 +1574,16 @@ export function renderModelTpsChart(
   }
 
   const { yMax, yTicks } = computeNiceYScale(maxTps, 60, 4);
-  const yAxisSvg = renderStickyYAxis(yTicks, yMax, paddingTop, chartHeight);
-
-  let gridSvg = '';
-  for (const tickVal of yTicks) {
-    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
-    const isZero = tickVal === 0;
-    gridSvg += `<line class="chart-grid-line" x1="0" y1="${y}" x2="${svgWidth}" y2="${y}" stroke="var(--aura-border)" stroke-width="1" ${isZero ? '' : 'stroke-dasharray="3 4"'} opacity="${isZero ? '0.75' : '0.55'}" />`;
-  }
+  const yAxisSvg = buildStickyYAxisSvg(yTicks, yMax, paddingTop, chartHeight);
+  const { linesSvg: gridSvg } = buildYAxisGridSvg({
+    yTicks,
+    yMax,
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingTop,
+    svgWidth,
+    chartHeight
+  });
 
   let pathsSvg = '';
   let dotsSvg = '';
@@ -1747,7 +1792,7 @@ function formatLatencyTurnHeader(ts: number, fallbackIdx: number): string {
 
 export function renderLatencyTtftDistributionChart(
   overview: GlobalAnalyticsOverview | null,
-  range: TimeRangeOption,
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
   activeSessionData: SessionAnalyticsData | null,
   customStart = '',
   customEnd = '',
@@ -1755,6 +1800,9 @@ export function renderLatencyTtftDistributionChart(
 ): void {
   const chartWrapper = document.getElementById('analytics-latency-ttft-chart');
   if (!chartWrapper) return;
+
+  const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
+  const { range, dates } = timeCtx;
 
   const title = 'Turn Latency vs. TTFT Distribution';
   const isSession = range === 'session';
@@ -1792,7 +1840,7 @@ export function renderLatencyTtftDistributionChart(
       }
     }
   } else {
-    const dateSet = new Set(getFilterDatesForRange(range, customStart, customEnd, now));
+    const dateSet = new Set(dates);
     const rangeSamples: TurnLatencySample[] = [];
     for (const item of overview?.timeRangeSeries || []) {
       if (dateSet.has(item.date) && item.latencySamples && item.latencySamples.length > 0) {

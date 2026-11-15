@@ -509,21 +509,6 @@ html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSid
   color: #FFFFFF !important;
 }
 
-/* 覆盖 Tailwind v4 @layer utilities 内 hover:!bg-transparent */
-@layer utilities {
-  html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
-  html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
-    background-color: rgba(0, 0, 0, 0.06) !important;
-    color: #1F1E1D !important;
-  }
-
-  html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
-  html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #FFFFFF !important;
-  }
-}
-
 /* 6. 官方原生排版模式 (Native Layout) */
 html:not([data-ag-collinear="on"]) #antigravity\.agentSidePanelInputBox {
   transition: border-color 220ms ease, box-shadow 220ms ease !important;
@@ -597,9 +582,6 @@ html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox svg
 }
 
 /* 发送按钮：Claude 暖橙 (#D97757) */
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"],
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"],
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button,
 [data-testid="voice-live-pill"],
 button[data-testid="send-button"],
 .agy-send-button {
@@ -609,9 +591,6 @@ button[data-testid="send-button"],
   box-shadow: 0 1px 2px rgba(217, 119, 87, 0.25) !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"]:hover,
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"]:hover,
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button:hover,
 [data-testid="voice-live-pill"]:hover,
 button[data-testid="send-button"]:hover,
 .agy-send-button:hover {
@@ -619,16 +598,13 @@ button[data-testid="send-button"]:hover,
   opacity: 1 !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] *,
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"] *,
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button * {
+[data-testid="voice-live-pill"] *,
+button[data-testid="send-button"] *,
+.agy-send-button * {
   color: #FFFFFF !important;
   fill: #FFFFFF !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-0,
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"],
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"] *,
 [data-testid="voice-live-pill"] .opacity-0,
 [data-testid="voice-live-pill"] [class*="opacity-0"],
 [data-testid="voice-live-pill"] [class*="opacity-0"] * {
@@ -637,8 +613,6 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
   display: none !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-100,
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-100"],
 [data-testid="voice-live-pill"] .opacity-100,
 [data-testid="voice-live-pill"] [class*="opacity-100"] {
   opacity: 1 !important;

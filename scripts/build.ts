@@ -103,11 +103,32 @@ export async function runBuild(isDev = false): Promise<void> {
   }
   const coreRuntimeJs = await runtimeRes.outputs[0].text();
 
-  // 4. Collect read-only panel + injection assets for inline embedding
+  // 4. Collect read-only panel + injection assets for inline embedding (with CSS minification)
   const rawHtml = fs.readFileSync(path.join(SRC_DIR, 'panel', 'index.html'), 'utf8');
   const panelHtml = rawHtml.replace(/__AURA_VERSION__/g, cacheBustToken);
-  const panelCss = fs.readFileSync(path.join(SRC_DIR, 'panel', 'styles.css'), 'utf8');
-  const coreThemeCss = fs.readFileSync(path.join(SRC_DIR, 'injection', 'theme.css'), 'utf8');
+
+  let panelCss = fs.readFileSync(path.join(SRC_DIR, 'panel', 'styles.css'), 'utf8');
+  let coreThemeCss = fs.readFileSync(path.join(SRC_DIR, 'injection', 'theme.css'), 'utf8');
+
+  if (shouldMinify) {
+    const [panelCssRes, themeCssRes] = await Promise.all([
+      build({
+        entrypoints: [path.join(SRC_DIR, 'panel', 'styles.css')],
+        minify: true
+      }),
+      build({
+        entrypoints: [path.join(SRC_DIR, 'injection', 'theme.css')],
+        minify: true
+      })
+    ]);
+    if (panelCssRes.success && panelCssRes.outputs.length > 0) {
+      panelCss = await panelCssRes.outputs[0].text();
+    }
+    if (themeCssRes.success && themeCssRes.outputs.length > 0) {
+      coreThemeCss = await themeCssRes.outputs[0].text();
+    }
+  }
+
   const coreI18n = JSON.parse(
     fs.readFileSync(path.join(SRC_DIR, 'injection', 'i18n.json'), 'utf8')
   ) as Record<string, string>;
@@ -141,10 +162,16 @@ export async function runBuild(isDev = false): Promise<void> {
     throw new Error(`Sidecar server build failed:\n${serverRes.logs.map(String).join('\n')}`);
   }
 
-  // 6. Copy ONLY Editable User Customization Seed Templates (`user/*`)
+  // 6. Copy SQLite WASM fallback binary for non-native Node/Bun environments
+  const wasmSrcPath = path.join(ROOT_DIR, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+  if (fs.existsSync(wasmSrcPath)) {
+    copyFileSafe(wasmSrcPath, path.join(SIDECAR_DIST_DIR, 'sql-wasm.wasm'));
+  }
+
+  // 7. Copy ONLY Editable User Customization Seed Templates (`user/*`)
   copyDirRecursive(path.join(SRC_DIR, 'presets'), USER_DIST_DIR);
 
-  // 7. Assemble Sidecar Package & Manifest (cross-platform; host injects sidecar_sdk ESM loader)
+  // 8. Assemble Sidecar Package & Manifest (cross-platform; host injects sidecar_sdk ESM loader)
   fs.writeFileSync(
     path.join(SIDECAR_DIST_DIR, 'package.json'),
     JSON.stringify({ type: 'module' }, null, 2) + '\n',
@@ -175,7 +202,7 @@ export async function runBuild(isDev = false): Promise<void> {
     'utf8'
   );
 
-  // 8. Assemble Strict /plugin Root Metadata & Capabilities (no bloated previews or redundant SKILL.md)
+  // 9. Assemble Strict /plugin Root Metadata & Capabilities (no bloated previews or redundant SKILL.md)
   copyFileSafe(path.join(ROOT_DIR, 'plugin.json'), path.join(DIST_DIR, 'plugin.json'));
   copyFileSafe(path.join(ROOT_DIR, 'README.md'), path.join(DIST_DIR, 'README.md'));
   copyFileSafe(path.join(ROOT_DIR, 'LICENSE'), path.join(DIST_DIR, 'LICENSE'));

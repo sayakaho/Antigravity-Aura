@@ -137,3 +137,48 @@ describe('formatActivitySummary', () => {
     );
   });
 });
+
+describe('initActivitySummary & uninstallActivitySummary lifecycle', () => {
+  test('initializes and uninstalls cleanly with MutationObserver and timer cleanup', async () => {
+    const { initActivitySummary, uninstallActivitySummary } = await import(
+      '../src/injection/activity-summary'
+    );
+    const { agGlobal } = await import('../src/injection/types');
+
+    let observerDisconnected = false;
+    class MockMutationObserver {
+      callback: () => void;
+      constructor(cb: () => void) {
+        this.callback = cb;
+      }
+      observe() {}
+      disconnect() {
+        observerDisconnected = true;
+      }
+    }
+
+    const origDoc = (globalThis as { document?: unknown }).document;
+    const origMO = (globalThis as { MutationObserver?: unknown }).MutationObserver;
+
+    try {
+      (globalThis as { MutationObserver?: unknown }).MutationObserver = MockMutationObserver;
+      (globalThis as { document?: unknown }).document = {
+        body: {},
+        querySelectorAll: () => [],
+      };
+
+      initActivitySummary(true, 'default');
+      expect(agGlobal.__ag_activity_summary_observer).not.toBeNull();
+
+      uninstallActivitySummary();
+      expect(observerDisconnected).toBe(true);
+      expect(agGlobal.__ag_activity_summary_observer).toBeNull();
+    } finally {
+      if (origDoc === undefined) delete (globalThis as { document?: unknown }).document;
+      else (globalThis as { document?: unknown }).document = origDoc;
+
+      if (origMO === undefined) delete (globalThis as { MutationObserver?: unknown }).MutationObserver;
+      else (globalThis as { MutationObserver?: unknown }).MutationObserver = origMO;
+    }
+  });
+});

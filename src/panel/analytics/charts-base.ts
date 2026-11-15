@@ -74,6 +74,23 @@ export function buildYAxisGridSvg(opts: {
   return { linesSvg, textsSvg };
 }
 
+export function buildStickyYAxisSvg(
+  yTicks: number[],
+  yMax: number,
+  paddingTop: number,
+  chartHeight: number
+): string {
+  let yAxisSvg = '';
+  for (const tickVal of yTicks) {
+    const y = paddingTop + chartHeight - (tickVal / yMax) * chartHeight;
+    yAxisSvg += `
+      <text x="40" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--aura-font-mono)" fill="var(--aura-fg-muted)">${escapeHtml(formatCompactNumber(tickVal))}</text>
+      <line x1="43" y1="${y.toFixed(1)}" x2="48" y2="${y.toFixed(1)}" stroke="var(--aura-border)" stroke-width="1" opacity="${tickVal === 0 ? '0.75' : '0.55'}" />
+    `;
+  }
+  return yAxisSvg;
+}
+
 const renderedHtmlCache = new WeakMap<object, string>();
 
 export function setRenderedHtmlIfChanged(

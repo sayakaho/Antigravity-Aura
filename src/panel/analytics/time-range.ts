@@ -15,6 +15,16 @@ export interface DateRangeBounds {
   endDate: string;
 }
 
+export interface TimeFilterContext {
+  range: TimeRangeOption;
+  customStart: string;
+  customEnd: string;
+  startDate: string;
+  endDate: string;
+  dates: string[];
+  now: Date;
+}
+
 const MAX_CONTINUOUS_DAYS = 731;
 
 function shiftDays(base: Date, deltaDays: number): Date {
@@ -98,14 +108,47 @@ export function generateContinuousDateList(startStr: string, endStr: string): st
   return result;
 }
 
-export function getFilterDatesForRange(
+export function createTimeFilterContext(
   range: TimeRangeOption,
   customStart = '',
   customEnd = '',
   now = new Date()
-): string[] {
+): TimeFilterContext {
   const { startDate, endDate } = getRangeBounds(range, customStart, customEnd, now);
-  return generateContinuousDateList(startDate, endDate);
+  const dates = generateContinuousDateList(startDate, endDate);
+  return {
+    range,
+    customStart,
+    customEnd,
+    startDate,
+    endDate,
+    dates,
+    now
+  };
+}
+
+export function isTimeFilterContext(value: unknown): value is TimeFilterContext {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'dates' in value &&
+    Array.isArray((value as TimeFilterContext).dates) &&
+    'range' in value &&
+    'startDate' in value &&
+    'endDate' in value
+  );
+}
+
+export function resolveTimeFilterContext(
+  timeContextOrRange: TimeFilterContext | TimeRangeOption,
+  customStart = '',
+  customEnd = '',
+  now = new Date()
+): TimeFilterContext {
+  if (isTimeFilterContext(timeContextOrRange)) {
+    return timeContextOrRange;
+  }
+  return createTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
 }
 
 export function getRangeDisplayTitle(range: TimeRangeOption): string {

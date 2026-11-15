@@ -11,6 +11,7 @@ import {
   renderModelDistribution,
   renderToolDistribution
 } from '../src/panel/analytics/metrics';
+import { createTimeFilterContext } from '../src/panel/analytics/time-range';
 import {
   alignLocalBucketStartSec,
   buildSessionSpeedTimeline,
@@ -710,6 +711,40 @@ describe('Unified TPS & Analytics Metrics', () => {
 
       renderModelTpsChart(overview, 'session', null);
       expect(fakeTps.innerHTML).toContain('No throughput data recorded in this session');
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
+  });
+
+  test('unified TimeFilterContext passes smoothly to computeProcessedColumns, metrics & charts', () => {
+    const overview = makeOverviewFixture();
+    const fixedNow = new Date('2026-11-09T12:00:00');
+    const timeCtx = createTimeFilterContext('last-7-days', '', '', fixedNow);
+
+    const fromCtx = computeProcessedColumns(overview, timeCtx, null);
+    const fromLegacy = computeProcessedColumns(overview, 'last-7-days', null, '', '', fixedNow);
+
+    expect(fromCtx.totalTokens).toEqual(fromLegacy.totalTokens);
+    expect(fromCtx.totalRequests).toBe(fromLegacy.totalRequests);
+    expect(fromCtx.columns.length).toBe(fromLegacy.columns.length);
+
+    const costCtx = computeApiCostAndSavings(fromCtx, timeCtx, overview, null);
+    const costLegacy = computeApiCostAndSavings(fromLegacy, 'last-7-days', overview, null, '', '');
+    expect(costCtx).toEqual(costLegacy);
+
+    const fakeContainer = { innerHTML: '' };
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) => (id === 'analytics-models-list' ? fakeContainer : null)
+    };
+
+    try {
+      renderModelDistribution(overview, timeCtx, null);
+      expect(fakeContainer.innerHTML).toContain('Gemini 3.8 Flash');
     } finally {
       if (origDocument === undefined) {
         delete (globalThis as { document?: unknown }).document;

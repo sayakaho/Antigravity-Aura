@@ -125,12 +125,12 @@ jobs:
       - name: Build plugin distribution
         run: bun run build
 
-      - name: Verify Node 22 runtime & dist/ /plugin layout
+      - name: Verify Node runtime & dist/ /plugin layout
         env:
           EXPECTED_VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -eu
-          node -e 'const { DatabaseSync } = require("node:sqlite"); if (typeof DatabaseSync !== "function") process.exit(1); console.log("Node:", process.version, "node:sqlite OK");'
+          node -e 'console.log("Node:", process.version);'
           node --check dist/sidecars/dashboard/main.mjs
           node -e '
             const fs = require("node:fs");
@@ -143,6 +143,7 @@ jobs:
               "dist/sidecars/dashboard/main.mjs",
               "dist/sidecars/dashboard/package.json",
               "dist/sidecars/dashboard/sidecar.json",
+              "dist/sidecars/dashboard/sql-wasm.wasm",
               "dist/sidecars/dashboard/user/config.json",
               "dist/sidecars/dashboard/user/custom.css",
               "dist/sidecars/dashboard/user/custom.js",

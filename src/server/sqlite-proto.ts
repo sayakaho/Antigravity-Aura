@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { canonicalModelName } from '../shared/catalog';
 
 type DatabaseSyncConstructor = new (path: string, options?: { readOnly?: boolean }) => SqliteDatabase;
@@ -13,6 +15,72 @@ export interface SqliteDatabase {
   close: () => void;
 }
 
+class WasmStatement implements SqliteStatement {
+  private stmt: any;
+  constructor(stmt: any) {
+    this.stmt = stmt;
+  }
+  all(...params: unknown[]): any[] {
+    try {
+      if (params.length > 0) {
+        this.stmt.bind(params);
+      }
+      const rows: any[] = [];
+      while (this.stmt.step()) {
+        rows.push(this.stmt.getAsObject());
+      }
+      return rows;
+    } catch {
+      return [];
+    } finally {
+      try {
+        this.stmt.free();
+      } catch {}
+    }
+  }
+  get(...params: unknown[]): any {
+    try {
+      if (params.length > 0) {
+        this.stmt.bind(params);
+      }
+      let row: any = undefined;
+      if (this.stmt.step()) {
+        row = this.stmt.getAsObject();
+      }
+      return row;
+    } catch {
+      return undefined;
+    } finally {
+      try {
+        this.stmt.free();
+      } catch {}
+    }
+  }
+}
+
+class WasmDatabase implements SqliteDatabase {
+  private db: any;
+  constructor(db: any) {
+    this.db = db;
+  }
+  prepare(sql: string): SqliteStatement {
+    try {
+      const stmt = this.db.prepare(sql);
+      return new WasmStatement(stmt);
+    } catch {
+      return {
+        all: () => [],
+        get: () => undefined
+      };
+    }
+  }
+  close(): void {
+    try {
+      this.db.close();
+    } catch {}
+  }
+}
+
 let DatabaseSyncCtor: DatabaseSyncConstructor | null = null;
 try {
   const sqliteMod = (await import('node:sqlite').catch(() => null)) as {
@@ -25,24 +93,85 @@ try {
   DatabaseSyncCtor = null;
 }
 
+let sqlJsInstance: any = null;
+
+export async function initWasmSqlite(): Promise<any> {
+  if (sqlJsInstance) return sqlJsInstance;
+  try {
+    const sqlJsModule = await import('sql.js').then((m: any) => m.default || m).catch(() => null);
+    if (!sqlJsModule) return null;
+
+    let wasmPath: string | null = null;
+    const currentDir = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      path.join(currentDir, 'sql-wasm.wasm'),
+      path.join(currentDir, 'assets', 'sql-wasm.wasm'),
+      path.join(process.cwd(), 'dist', 'sidecars', 'dashboard', 'sql-wasm.wasm'),
+      path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        wasmPath = c;
+        break;
+      }
+    }
+    if (!wasmPath) return null;
+
+    const wasmBinary = fs.readFileSync(wasmPath);
+    sqlJsInstance = await sqlJsModule({ wasmBinary });
+    return sqlJsInstance;
+  } catch {
+    return null;
+  }
+}
+
+// 仅在缺少原生驱动时启动 WASM 兜底
+if (!DatabaseSyncCtor) {
+  try {
+    await initWasmSqlite();
+  } catch {
+    sqlJsInstance = null;
+  }
+}
+
+let forceWasmOnlyForTesting = false;
+export function _setForceWasmOnlyForTesting(val: boolean): void {
+  forceWasmOnlyForTesting = val;
+}
+
 export function hasSqlite(): boolean {
-  return DatabaseSyncCtor !== null;
+  if (forceWasmOnlyForTesting) return sqlJsInstance !== null;
+  return DatabaseSyncCtor !== null || sqlJsInstance !== null;
 }
 
 export function openDb(filePath: string): SqliteDatabase | null {
-  if (!DatabaseSyncCtor) return null;
-  try {
-    const db = new DatabaseSyncCtor(filePath, { readOnly: true });
-    // Verify readability against SQLite WAL locks
-    db.prepare('PRAGMA schema_version').all();
-    return db;
-  } catch {
+  if (DatabaseSyncCtor && !forceWasmOnlyForTesting) {
     try {
-      return new DatabaseSyncCtor(filePath);
+      const db = new DatabaseSyncCtor(filePath, { readOnly: true });
+      // Verify readability against SQLite WAL locks
+      db.prepare('PRAGMA schema_version').all();
+      return db;
+    } catch {
+      try {
+        return new DatabaseSyncCtor(filePath);
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  if (sqlJsInstance) {
+    try {
+      if (!fs.existsSync(filePath)) return null;
+      const fileBuffer = fs.readFileSync(filePath);
+      const wasmDb = new sqlJsInstance.Database(fileBuffer);
+      return new WasmDatabase(wasmDb);
     } catch {
       return null;
     }
   }
+
+  return null;
 }
 
 export function getDbSignature(dbPath: string): string | null {

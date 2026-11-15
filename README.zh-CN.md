@@ -8,7 +8,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.2.0-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
-[![Node](https://img.shields.io/badge/node-%3E%3D22.13.0%20(node%3Asqlite)-339933.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@
 
 ## 简介
 
-**Antigravity Aura** 运行于 Google Antigravity 的原生 Plugin + Sidecar 生命周期内，无需修改客户端 `.asar` 归档或常驻系统守护进程。Sidecar 随宿主启动后，通过 CDP 协议向活跃窗口热注入样式与脚本，并使用 Node 22 内置的 `node:sqlite` 解析本地对话库，在侧边栏提供实时性能统计与偏好设置面板。
+**Antigravity Aura** 运行于 Google Antigravity 的原生 Plugin + Sidecar 生命周期内，无需修改客户端 `.asar` 归档或常驻系统守护进程。Sidecar 随宿主启动后，通过 CDP 协议向活跃窗口热注入样式与脚本，并自适应使用原生 SQLite 驱动或内置 WASM 引擎解析本地对话库，在侧边栏提供实时性能统计与偏好设置面板。
 
 ## 界面预览
 
@@ -61,7 +61,7 @@
 | 依赖 | 要求 | 适用阶段 |
 | :--- | :--- | :--- |
 | **Google Antigravity** | 支持 Plugin + Sidecar 且开启 CDP 端口 | 运行时 |
-| **Node.js** | `>= 22.13.0`，内置 `node:sqlite` | 运行时 |
+| **Node.js** | `>= 18.0.0`（Node 22+ 原生加速，低版本自动 WASM 兜底）或 **Bun** | 运行时 |
 | **Bun** | `>= 1.2` | 源码构建与测试 |
 | **系统** | macOS / Windows / Linux | 运行与构建 |
 
