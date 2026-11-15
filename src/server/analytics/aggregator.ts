@@ -547,7 +547,8 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
             st.cacheRead,
             st.thinkTok,
             st.requests,
-            rootConvId || convId
+            rootConvId || convId,
+            st.cost || 0
           );
         }
       }
@@ -563,7 +564,8 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
             st.outTok,
             st.cacheRead,
             st.thinkTok,
-            st.requests
+            st.requests,
+            st.cost || 0
           );
         }
       }

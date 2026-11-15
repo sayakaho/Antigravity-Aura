@@ -48,7 +48,7 @@ import {
 
 export type { CacheEntry, TokenBreakdown, ModelBucket };
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v15.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v16.json';
 
 function isLegacyCacheFile(fileName: string): boolean {
   return (

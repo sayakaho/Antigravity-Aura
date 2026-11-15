@@ -1548,6 +1548,17 @@ html[data-theme="dark"] .chart-shared-hover-band {
   flex-shrink: 0;
 }
 
+.account-cost-spent {
+  color: var(--aura-fg-muted);
+  font-size: 11px;
+}
+
+.account-cost-spent strong {
+  color: var(--aura-fg);
+  font-weight: 600;
+  font-size: 12px;
+}
+
 .account-plan-pill {
   display: inline-flex;
   align-items: center;

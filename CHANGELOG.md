@@ -2,6 +2,19 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.3.0] - 2026-11-16
+
+### Added
+- **Commercial API Cost Equivalent Pricing**: Switched account ranking and consumption telemetry from raw token volume to true commercial API value ($), ranking accounts by actual billing value.
+- **GitHub Contribution-Style 30-Day Quota Heatmap**: Rendered a 30-day temporal grid heatmap below each account card with 5-tier dynamic color scaling, tracking rolling 5h and weekly quota capacity evolution.
+- **Account Plan Pill & Subscription Details**: Integrated with Language Server `GetUserStatus` to display official subscription tiers (`planName`) as pills next to account names, with full plan credits in hover tooltips.
+- **Quota Window Transitions Middleware Buffer**: Added a compact, bounded intermediate audit buffer for window transitions to accurately measure marginal token and cost drops.
+
+### Fixed
+- **Quota Calibration Deadlock & Cold-Start Self-Healing**: Resolved the permanent `Calibrating Quota Capacity...` freeze by decoupling 5h and weekly baselines, adding self-healing uninitialized baseline fraction and cost repairs.
+- **Session View "No Account Activity" Scope Bug**: Prioritized `all-time` scope over `session` range in account distribution, allowing historical accounts to remain visible and fully populated with quota capacities.
+- **Clarified Account Spent vs Quota Upper Bound**: Explicitly labeled consumed API cost as `Spent: $XX.XX` and eliminated raw token outputs from quota window pills to prevent conceptual confusion.
+
 ## [0.2.4] - 2026-11-15
 
 ### Added

@@ -1124,16 +1124,19 @@ export function renderQuotaHistoryHeatmap(capacity?: AccountQuotaCapacity): stri
       else if (ratio > 0.5) level = 'level-3';
       else if (ratio > 0.25) level = 'level-2';
 
-      const cost5hStr = snap.fiveHourCost
-        ? `~$${snap.fiveHourCost.toFixed(2)}`
-        : snap.fiveHourTokens
-          ? `~${formatCompactNumber(snap.fiveHourTokens)} tok`
-          : 'Calibrating';
-      const cost7dStr = snap.sevenDayCost
-        ? `~$${snap.sevenDayCost.toFixed(2)}`
-        : snap.sevenDayTokens
-          ? `~${formatCompactNumber(snap.sevenDayTokens)} tok`
-          : 'Calibrating';
+      const snapCost5h =
+        snap.fiveHourCost ??
+        (snap.fiveHourTokens
+          ? Math.round(((snap.fiveHourTokens * 0.35) / 1_000_000) * 100) / 100
+          : undefined);
+      const snapCost7d =
+        snap.sevenDayCost ??
+        (snap.sevenDayTokens
+          ? Math.round(((snap.sevenDayTokens * 0.35) / 1_000_000) * 100) / 100
+          : undefined);
+
+      const cost5hStr = snapCost5h ? `~$${snapCost5h.toFixed(2)}` : 'Calibrating';
+      const cost7dStr = snapCost7d ? `~$${snapCost7d.toFixed(2)}` : 'Calibrating';
       const planStr = snap.planName || snap.userTier || 'Pro';
       const groupStr = snap.groupName ? ` · ${snap.groupName}` : '';
       const tooltip = `${dateStr} · 5h: ${cost5hStr} · 7d: ${cost7dStr} (${planStr}${groupStr})`;
@@ -1328,16 +1331,30 @@ export function renderAccountDistribution(
       let quotaHtml = '';
       if (a.quotaCapacity) {
         if (a.quotaCapacity.status === 'calibrated') {
-          const pill5h = a.quotaCapacity.fiveHourCost
-            ? `<span class="account-quota-pill" title="Estimated 5-hour rolling quota capacity">5h Window ≈ <strong>~$${a.quotaCapacity.fiveHourCost.toFixed(2)}</strong></span>`
-            : a.quotaCapacity.fiveHourTokens
-              ? `<span class="account-quota-pill" title="Estimated 5-hour rolling quota capacity">5h Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.fiveHourTokens)}</strong></span>`
-              : `<span class="account-quota-pill account-quota-calibrating">5h: Calibrating...</span>`;
-          const pill7d = a.quotaCapacity.sevenDayCost
-            ? `<span class="account-quota-pill" title="Estimated 7-day rolling quota capacity">7d Window ≈ <strong>~$${a.quotaCapacity.sevenDayCost.toFixed(2)}</strong></span>`
-            : a.quotaCapacity.sevenDayTokens
-              ? `<span class="account-quota-pill" title="Estimated 7-day rolling quota capacity">7d Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.sevenDayTokens)}</strong></span>`
-              : `<span class="account-quota-pill account-quota-calibrating">7d: Calibrating...</span>`;
+          const cost5h =
+            a.quotaCapacity.fiveHourCost ??
+            (a.quotaCapacity.fiveHourTokens
+              ? Math.round(((a.quotaCapacity.fiveHourTokens * 0.35) / 1_000_000) * 100) / 100
+              : undefined);
+          const cost7d =
+            a.quotaCapacity.sevenDayCost ??
+            (a.quotaCapacity.sevenDayTokens
+              ? Math.round(((a.quotaCapacity.sevenDayTokens * 0.35) / 1_000_000) * 100) / 100
+              : undefined);
+
+          const tip5h = cost5h
+            ? `Estimated 5-hour rolling API quota budget: ~$${cost5h.toFixed(2)} (Capacity varies by cache hit: ~${Math.round(cost5h / 0.0000001 / 1_000_000)}M+ cached tokens or ~${Math.round(cost5h / 0.00000125 / 1_000_000)}M raw prompt tokens)`
+            : '5h: Calibrating...';
+          const tip7d = cost7d
+            ? `Estimated 7-day rolling API quota budget: ~$${cost7d.toFixed(2)}`
+            : '7d: Calibrating...';
+
+          const pill5h = cost5h
+            ? `<span class="account-quota-pill" title="${escapeHtml(tip5h)}">5h Window ≈ <strong>~$${cost5h.toFixed(2)}</strong></span>`
+            : `<span class="account-quota-pill account-quota-calibrating">5h: Calibrating...</span>`;
+          const pill7d = cost7d
+            ? `<span class="account-quota-pill" title="${escapeHtml(tip7d)}">7d Window ≈ <strong>~$${cost7d.toFixed(2)}</strong></span>`
+            : `<span class="account-quota-pill account-quota-calibrating">7d: Calibrating...</span>`;
           quotaHtml = `
             <div class="account-quota-pills">
               ${pill5h}
@@ -1359,7 +1376,7 @@ export function renderAccountDistribution(
 
       const countsContentHtml = hasCost
         ? `
-            <span class="project-tokens-strong">$${aCost.toFixed(2)}</span>
+            <span class="account-cost-spent" title="Actual commercial API cost consumed by this account in selected range">Spent: <strong>$${aCost.toFixed(2)}</strong></span>
             <span class="project-counts-sep">·</span>
             <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
             <span class="project-counts-sep">·</span>

@@ -395,6 +395,12 @@ export class QuotaTracker {
       base.baseWeeklyTokens = currentAccountTokens;
       base.baseWeeklyCost = currentAccountCost;
     }
+    if (typeof base.base5hCost !== 'number' && typeof currentAccountCost === 'number') {
+      base.base5hCost = currentAccountCost;
+    }
+    if (typeof base.baseWeeklyCost !== 'number' && typeof currentAccountCost === 'number') {
+      base.baseWeeklyCost = currentAccountCost;
+    }
 
     let updated = false;
 
@@ -438,6 +444,12 @@ export class QuotaTracker {
             let measured5hCost: number | undefined;
             if (typeof deltaCost5h === 'number' && deltaCost5h > 0) {
               measured5hCost = Math.round((deltaCost5h / deltaQ5h) * 100) / 100;
+            } else if (deltaTokens5h > 0) {
+              const fallbackCost = (deltaTokens5h * 0.35) / 1_000_000;
+              measured5hCost = Math.round((fallbackCost / deltaQ5h) * 100) / 100;
+            }
+
+            if (measured5hCost) {
               if (record.fiveHourCost && record.sampleCount5h > 0) {
                 record.fiveHourCost =
                   Math.round((record.fiveHourCost * 0.7 + measured5hCost * 0.3) * 100) / 100;
@@ -526,6 +538,12 @@ export class QuotaTracker {
             let measuredWeeklyCost: number | undefined;
             if (typeof deltaCostWeekly === 'number' && deltaCostWeekly > 0) {
               measuredWeeklyCost = Math.round((deltaCostWeekly / deltaQWeekly) * 100) / 100;
+            } else if (deltaTokensWeekly > 0) {
+              const fallbackCost = (deltaTokensWeekly * 0.35) / 1_000_000;
+              measuredWeeklyCost = Math.round((fallbackCost / deltaQWeekly) * 100) / 100;
+            }
+
+            if (measuredWeeklyCost) {
               if (record.sevenDayCost && record.sampleCountWeekly > 0) {
                 record.sevenDayCost =
                   Math.round((record.sevenDayCost * 0.7 + measuredWeeklyCost * 0.3) * 100) / 100;

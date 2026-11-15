@@ -183,8 +183,8 @@ describe('Account Token Consumption UI & Distribution', () => {
     expect(container.innerHTML).toContain('Active');
     expect(container.innerHTML).toContain('5h Window ≈');
     expect(container.innerHTML).toContain('7d Window ≈');
-    expect(container.innerHTML).toContain('500k');
-    expect(container.innerHTML).toContain('3.5M');
+    expect(container.innerHTML).toContain('~$0.18');
+    expect(container.innerHTML).toContain('~$1.23');
   });
 
   test('renderAccountDistribution renders calibrating indicator when quota is uncalibrated', () => {
@@ -259,6 +259,7 @@ describe('Account Token Consumption UI & Distribution', () => {
     expect(proIdx).toBeLessThan(flashIdx);
 
     // Should render cost badges and capacity cost pills
+    expect(container.innerHTML).toContain('Spent:');
     expect(container.innerHTML).toContain('$15.50');
     expect(container.innerHTML).toContain('$2.10');
     expect(container.innerHTML).toContain('$17.60'); // total cost
