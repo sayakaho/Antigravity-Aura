@@ -21,7 +21,7 @@ interface StatusUpdatePayload {
 }
 
 const INTERACTIVE_ANALYTICS_HOVER_SELECTOR =
-  '#analytics-activity-chart .chart-stage, #analytics-model-tps-chart .chart-body, #analytics-latency-ttft-chart .chart-body, #overview-hit-legend-trigger, .project-path-pill[data-tooltip-path]';
+  '#analytics-activity-chart .chart-stage, #analytics-model-tps-chart .chart-body, #analytics-latency-ttft-chart .chart-body, #overview-hit-legend-trigger, .project-path-pill[data-tooltip-path], [data-tooltip], [data-tooltip-html], .cost-pricing-info-icon, .quota-heatmap-cell, .account-plan-pill, .account-quota-pill, .account-details-pill';
 
 let onStatusUpdate: ((payload: StatusUpdatePayload) => void) | null = null;
 

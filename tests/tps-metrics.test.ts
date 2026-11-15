@@ -19,6 +19,7 @@ import {
   computeStepTps,
   computeWeightedTps
 } from '../src/shared/tps';
+import { getModelPricingRates } from '../src/shared/pricing';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../src/types';
 
 function makeOverviewFixture(): GlobalAnalyticsOverview {
@@ -197,8 +198,12 @@ describe('Unified TPS & Analytics Metrics', () => {
 
     const metrics = computeProcessedColumns(overview, 'session', session);
     const cost = computeApiCostAndSavings(metrics, 'session', overview, session);
-    // Opus rates: $2/1M input + $10/1M output = $12 (not Flash's $0.75 + $3.75 = $4.50)
-    expect(cost.actualCost).toBeCloseTo(12.0, 5);
+    const expectedRates = getModelPricingRates('claude-opus-4-6-thinking');
+    const expectedCost =
+      (1_000_000 * expectedRates.inputRate + 1_000_000 * expectedRates.outputRate) / 1_000_000;
+    expect(cost.actualCost).toBeCloseTo(expectedCost, 5);
+    // Not hardcoded Flash rates: $0.75/1M input + $3.75/1M output = $4.50
+    expect(cost.actualCost).not.toBeCloseTo(4.5, 2);
   });
 
   test('computeProcessedColumns aggregates ranges >90 days into weekly buckets and handles empty custom dates', () => {

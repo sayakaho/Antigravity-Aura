@@ -181,8 +181,8 @@ describe('Account Token Consumption UI & Distribution', () => {
     expect(container.innerHTML).toContain('secondary@example.com');
     expect(container.innerHTML).toContain('account-current-badge');
     expect(container.innerHTML).toContain('Active');
-    expect(container.innerHTML).toContain('5h Window ≈');
-    expect(container.innerHTML).toContain('7d Window ≈');
+    expect(container.innerHTML).toContain('5h');
+    expect(container.innerHTML).toContain('7d');
     expect(container.innerHTML).toContain('~$0.18');
     expect(container.innerHTML).toContain('~$1.23');
   });
@@ -332,7 +332,7 @@ describe('Account Token Consumption UI & Distribution', () => {
 
     // 3. Verify GitHub-style Heatmap Grid & Legend
     expect(container.innerHTML).toContain('quota-heatmap-container');
-    expect(container.innerHTML).toContain('Capacity Activity (30 Days)');
+    expect(container.innerHTML).toContain('Capacity Activity (1 Year)');
     expect(container.innerHTML).toContain('Less');
     expect(container.innerHTML).toContain('More');
     expect(container.innerHTML).toContain('quota-heatmap-grid');

@@ -3,6 +3,8 @@ import {
   canonicalModelName,
   getModelColor,
   getModelPricingRates,
+  getPricingTooltipHtml,
+  getPricingTooltipText,
   resolveCanonicalModelId
 } from '../../shared/catalog';
 import {
@@ -15,6 +17,7 @@ import {
 } from '../../shared/format';
 import { computeBucketTps, computeStepTps, computeWeightedTps } from '../../shared/tps';
 import type {
+  AccountDailyStat,
   AccountQuotaCapacity,
   AccountTokenStat,
   CalibrationSnapshot,
@@ -650,131 +653,208 @@ export function renderMetricCards(
       </div>
 
       <div class="kpi-card kpi-card-compact">
-        <div class="kpi-label-row">Est. Commercial Cost</div>
+        <div class="kpi-label-row">
+          <span class="kpi-label-with-info">
+            Est. Commercial Cost
+            <span class="cost-pricing-info-icon" data-tooltip-html="${escapeHtml(getPricingTooltipHtml())}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </span>
+          </span>
+        </div>
         <div class="kpi-value-md">$${actualCost.toFixed(2)}</div>
       </div>
     </div>
   `
   );
+  initGlobalTooltipSystem();
 }
 
-const PROJECT_TOOLTIP_ID = 'project-path-tooltip';
+const GLOBAL_TOOLTIP_ID = 'aura-global-tooltip';
 const boundProjectContainers = new WeakSet<HTMLElement>();
-let projectTooltipHideTimer: ReturnType<typeof setTimeout> | null = null;
-let activeProjectTooltipAnchor: HTMLElement | null = null;
+let globalTooltipHideTimer: ReturnType<typeof setTimeout> | null = null;
+let activeGlobalTooltipAnchor: HTMLElement | null = null;
 let globalTooltipListenersBound = false;
 
-function getOrCreateProjectTooltip(): HTMLElement | null {
+export function getOrCreateGlobalTooltip(): HTMLElement | null {
   if (typeof document === 'undefined' || typeof document.createElement !== 'function' || !document.body) {
     return null;
   }
-  let tip = document.getElementById(PROJECT_TOOLTIP_ID);
+  let tip = document.getElementById(GLOBAL_TOOLTIP_ID);
   if (!tip) {
     tip = document.createElement('div');
-    tip.id = PROJECT_TOOLTIP_ID;
-    tip.className = 'project-path-tooltip';
+    tip.id = GLOBAL_TOOLTIP_ID;
+    tip.className = 'aura-global-tooltip project-path-tooltip';
     tip.setAttribute('role', 'tooltip');
-    if ('popover' in tip) {
-      tip.setAttribute('popover', 'manual');
-    }
     document.body.appendChild(tip);
-
-    tip.addEventListener('mouseenter', () => {
-      if (projectTooltipHideTimer) {
-        clearTimeout(projectTooltipHideTimer);
-        projectTooltipHideTimer = null;
-      }
-    });
-    tip.addEventListener('mouseleave', (event) => {
-      const next = (event as MouseEvent).relatedTarget as Node | null;
-      if (next && activeProjectTooltipAnchor?.contains(next)) return;
-      scheduleHideProjectTooltip();
-    });
   }
 
   if (!globalTooltipListenersBound && typeof window !== 'undefined') {
-    globalTooltipListenersBound = true;
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        hideProjectTooltipImmediately();
-      }
-    });
-    window.addEventListener('scroll', hideProjectTooltipImmediately, true);
-    window.addEventListener('resize', hideProjectTooltipImmediately);
+    initGlobalTooltipSystem();
   }
 
   return tip;
 }
 
-function hideProjectTooltipImmediately(): void {
-  if (projectTooltipHideTimer) {
-    clearTimeout(projectTooltipHideTimer);
-    projectTooltipHideTimer = null;
+export function initGlobalTooltipSystem(): void {
+  if (
+    globalTooltipListenersBound ||
+    typeof document === 'undefined' ||
+    typeof document.addEventListener !== 'function'
+  ) {
+    return;
   }
-  if (activeProjectTooltipAnchor) {
-    activeProjectTooltipAnchor.removeAttribute('aria-describedby');
-    activeProjectTooltipAnchor = null;
+  globalTooltipListenersBound = true;
+
+  document.addEventListener(
+    'mouseover',
+    (event) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest?.('[data-tooltip-html], [data-tooltip], [data-tooltip-path]') as HTMLElement | null;
+      if (!anchor) return;
+      if (anchor.hasAttribute('title')) {
+        anchor.removeAttribute('title');
+      }
+      showGlobalTooltip(anchor);
+    },
+    true
+  );
+
+  document.addEventListener(
+    'mouseout',
+    (event) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest?.('[data-tooltip-html], [data-tooltip], [data-tooltip-path]') as HTMLElement | null;
+      if (!anchor) return;
+      const next = (event as MouseEvent).relatedTarget as Node | null;
+      const nextAnchor = next instanceof Element ? next.closest('[data-tooltip-html], [data-tooltip], [data-tooltip-path]') : null;
+      if (nextAnchor && nextAnchor === activeGlobalTooltipAnchor) return;
+      scheduleHideGlobalTooltip();
+    },
+    true
+  );
+
+  document.addEventListener(
+    'focusin',
+    (event) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest?.('[data-tooltip-html], [data-tooltip], [data-tooltip-path]') as HTMLElement | null;
+      if (!anchor) return;
+      if (anchor.hasAttribute('title')) {
+        anchor.removeAttribute('title');
+      }
+      showGlobalTooltip(anchor);
+    },
+    true
+  );
+
+  document.addEventListener(
+    'focusout',
+    (event) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest?.('[data-tooltip-html], [data-tooltip], [data-tooltip-path]') as HTMLElement | null;
+      if (!anchor) return;
+      scheduleHideGlobalTooltip();
+    },
+    true
+  );
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideGlobalTooltipImmediately();
+    }
+  });
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('scroll', hideGlobalTooltipImmediately, true);
+    window.addEventListener('resize', hideGlobalTooltipImmediately);
+  }
+}
+
+export function hideGlobalTooltipImmediately(): void {
+  if (globalTooltipHideTimer) {
+    clearTimeout(globalTooltipHideTimer);
+    globalTooltipHideTimer = null;
+  }
+  if (activeGlobalTooltipAnchor) {
+    activeGlobalTooltipAnchor.removeAttribute('aria-describedby');
+    activeGlobalTooltipAnchor = null;
   }
   if (typeof document === 'undefined') return;
-  const tip = document.getElementById(PROJECT_TOOLTIP_ID) as (HTMLElement & { hidePopover?: () => void }) | null;
+  const tip = document.getElementById(GLOBAL_TOOLTIP_ID);
   if (!tip) return;
   tip.classList.remove('visible');
-  if (typeof tip.hidePopover === 'function') {
-    try {
-      tip.hidePopover();
-    } catch {}
-  }
+  tip.style.display = 'none';
 }
 
-function scheduleHideProjectTooltip(): void {
-  if (projectTooltipHideTimer) clearTimeout(projectTooltipHideTimer);
-  projectTooltipHideTimer = setTimeout(() => {
-    hideProjectTooltipImmediately();
-  }, 120);
+function scheduleHideGlobalTooltip(): void {
+  if (globalTooltipHideTimer) clearTimeout(globalTooltipHideTimer);
+  globalTooltipHideTimer = setTimeout(() => {
+    hideGlobalTooltipImmediately();
+  }, 100);
 }
 
-function showProjectTooltip(anchor: HTMLElement, text: string): void {
-  const tip = getOrCreateProjectTooltip() as (HTMLElement & { showPopover?: () => void }) | null;
-  if (!tip || !text) return;
+export function showGlobalTooltip(anchor: HTMLElement, text?: string): void {
+  const tip = getOrCreateGlobalTooltip();
+  if (!tip) return;
 
-  if (projectTooltipHideTimer) {
-    clearTimeout(projectTooltipHideTimer);
-    projectTooltipHideTimer = null;
+  const html = anchor.getAttribute('data-tooltip-html');
+  const raw = text || anchor.getAttribute('data-tooltip') || anchor.getAttribute('data-tooltip-path') || '';
+  if (!html && !raw) return;
+
+  // Crucial: remove native title if present so browser never displays duplicate tooltip
+  if (anchor.hasAttribute('title')) {
+    anchor.removeAttribute('title');
   }
 
-  if (activeProjectTooltipAnchor && activeProjectTooltipAnchor !== anchor) {
-    activeProjectTooltipAnchor.removeAttribute('aria-describedby');
+  if (globalTooltipHideTimer) {
+    clearTimeout(globalTooltipHideTimer);
+    globalTooltipHideTimer = null;
   }
-  activeProjectTooltipAnchor = anchor;
-  anchor.setAttribute('aria-describedby', PROJECT_TOOLTIP_ID);
 
-  tip.textContent = text;
+  if (activeGlobalTooltipAnchor && activeGlobalTooltipAnchor !== anchor) {
+    activeGlobalTooltipAnchor.removeAttribute('aria-describedby');
+  }
+  activeGlobalTooltipAnchor = anchor;
+  anchor.setAttribute('aria-describedby', GLOBAL_TOOLTIP_ID);
+
+  if (html) {
+    tip.innerHTML = html;
+  } else if (raw.trim().startsWith('<') && raw.includes('</')) {
+    tip.innerHTML = raw;
+  } else {
+    tip.textContent = raw;
+  }
+
+  tip.style.display = 'block';
   tip.classList.add('visible');
-  if (typeof tip.showPopover === 'function') {
-    try {
-      tip.showPopover();
-    } catch {}
-  }
 
   const rect = anchor.getBoundingClientRect();
-  const tipWidth = tip.offsetWidth || 240;
-  const tipHeight = tip.offsetHeight || 28;
+  const tipWidth = tip.offsetWidth || 260;
+  const tipHeight = tip.offsetHeight || 36;
   const margin = 8;
 
-  let left = rect.left;
+  let left = rect.left + rect.width / 2 - tipWidth / 2;
   if (left + tipWidth > window.innerWidth - margin) {
     left = window.innerWidth - tipWidth - margin;
   }
   left = Math.max(margin, left);
 
-  let top = rect.top - tipHeight - 6;
+  let top = rect.top - tipHeight - 8;
   if (top < margin) {
-    top = Math.min(window.innerHeight - tipHeight - margin, rect.bottom + 6);
+    top = Math.min(window.innerHeight - tipHeight - margin, rect.bottom + 8);
   }
 
   tip.style.left = `${Math.round(left)}px`;
   tip.style.top = `${Math.round(top)}px`;
 }
+
+// Backward-compatible alias
+export const showProjectTooltip = showGlobalTooltip;
+export const hideProjectTooltipImmediately = hideGlobalTooltipImmediately;
 
 async function openProjectDirectory(dirPath: string): Promise<void> {
   if (!dirPath || typeof window === 'undefined' || !window.sidecar?.fetch) return;
@@ -802,42 +882,6 @@ function bindProjectContainerEvents(container: HTMLElement): void {
     return;
   }
   boundProjectContainers.add(container);
-
-  container.addEventListener('mouseover', (event) => {
-    const target = event.target as HTMLElement | null;
-    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
-    if (!pill) return;
-    const text = pill.getAttribute('data-tooltip-path') || '';
-    if (text) showProjectTooltip(pill, text);
-  });
-
-  container.addEventListener('mouseout', (event) => {
-    const target = event.target as HTMLElement | null;
-    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
-    if (!pill) return;
-    const next = (event as MouseEvent).relatedTarget as Node | null;
-    const tip = document.getElementById(PROJECT_TOOLTIP_ID);
-    if (next && (pill.contains(next) || tip?.contains(next))) return;
-    scheduleHideProjectTooltip();
-  });
-
-  container.addEventListener('focusin', (event) => {
-    const target = event.target as HTMLElement | null;
-    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
-    if (!pill) return;
-    const text = pill.getAttribute('data-tooltip-path') || '';
-    if (text) showProjectTooltip(pill, text);
-  });
-
-  container.addEventListener('focusout', (event) => {
-    const target = event.target as HTMLElement | null;
-    const pill = target?.closest?.('.project-path-pill[data-tooltip-path]') as HTMLElement | null;
-    if (!pill) return;
-    const next = (event as FocusEvent).relatedTarget as Node | null;
-    const tip = document.getElementById(PROJECT_TOOLTIP_ID);
-    if (next && (pill.contains(next) || tip?.contains(next))) return;
-    scheduleHideProjectTooltip();
-  });
 
   container.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
@@ -1088,67 +1132,178 @@ export function renderProjectDistribution(
   }
 }
 
-export function renderQuotaHistoryHeatmap(capacity?: AccountQuotaCapacity): string {
+export function renderQuotaHistoryHeatmap(
+  capacity?: AccountQuotaCapacity,
+  dailyAccountStats?: Record<string, AccountDailyStat>
+): string {
   const history = capacity?.history || [];
   const historyMap = new Map<string, CalibrationSnapshot>();
   for (const h of history) {
     historyMap.set(h.dateKey, h);
   }
 
-  // Generate 30 consecutive calendar days ending today
+  // Generate 52 weeks (364 consecutive calendar days) ending today
   const today = new Date();
   const dayList: string[] = [];
-  for (let i = 29; i >= 0; i--) {
+  for (let i = 363; i >= 0; i--) {
     const d = new Date(today.getTime() - i * 86400 * 1000);
     dayList.push(formatLocalDateKey(d));
   }
 
-  // Find max capacity for relative heat coloring
+  // Find max cost / activity for relative heat coloring
   let maxCost = 0;
-  for (const h of history) {
-    const cost = h.fiveHourCost || (h.fiveHourTokens ? h.fiveHourTokens / 5_000_000 : 0);
-    if (cost > maxCost) maxCost = cost;
+  for (const dateStr of dayList) {
+    const dayStat = dailyAccountStats?.[dateStr];
+    const snap = historyMap.get(dateStr);
+    const dayCost = dayStat?.cost || 0;
+    const snapCost = snap?.fiveHourCost || (snap?.fiveHourTokens ? snap.fiveHourTokens / 5_000_000 : 0);
+    const effectiveCost = Math.max(dayCost, snapCost);
+    if (effectiveCost > maxCost) maxCost = effectiveCost;
   }
-  if (maxCost <= 0) maxCost = 20;
+  if (maxCost <= 0) maxCost = 10;
 
   const cellsHtml = dayList
     .map((dateStr) => {
       const snap = historyMap.get(dateStr);
-      if (!snap) {
-        return `<div class="quota-heatmap-cell level-0" title="${dateStr}: No capacity calibration"></div>`;
+      const dayStat = dailyAccountStats?.[dateStr];
+      const totTok = dayStat ? dayStat.inTok + dayStat.outTok + dayStat.cacheRead : 0;
+      const dayCost = dayStat?.cost || 0;
+      const reqCount = dayStat?.requests || 0;
+
+      const hasActivity = totTok > 0 || dayCost > 0;
+      const hasSnap = !!snap;
+
+      if (!hasActivity && !hasSnap) {
+        const noActHtml = `
+          <div class="popover-tooltip">
+            <div class="tooltip-header">
+              <span class="tooltip-title">${dateStr}</span>
+            </div>
+            <div class="tooltip-subline-muted">No activity recorded</div>
+          </div>
+        `;
+        return `<div class="quota-heatmap-cell level-0" data-tooltip-html="${escapeHtml(noActHtml)}"></div>`;
       }
-      const cost = snap.fiveHourCost || (snap.fiveHourTokens ? snap.fiveHourTokens / 5_000_000 : 0);
-      const ratio = Math.min(1, Math.max(0.1, cost / maxCost));
-      let level = 'level-1';
-      if (ratio > 0.75) level = 'level-4';
-      else if (ratio > 0.5) level = 'level-3';
-      else if (ratio > 0.25) level = 'level-2';
+
+      // Resolve effective snapshot for the day: exact daily record or closest historical calibration
+      let effectiveSnap = snap;
+      if (!effectiveSnap && history.length > 0) {
+        const onOrBefore = history
+          .filter((h) => h.dateKey <= dateStr)
+          .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+        if (onOrBefore.length > 0) {
+          effectiveSnap = onOrBefore[0];
+        } else {
+          effectiveSnap = history[0];
+        }
+      }
 
       const snapCost5h =
-        snap.fiveHourCost ??
-        (snap.fiveHourTokens
-          ? Math.round(((snap.fiveHourTokens * 0.35) / 1_000_000) * 100) / 100
-          : undefined);
+        effectiveSnap?.fiveHourCost ??
+        capacity?.fiveHourCost ??
+        (effectiveSnap?.fiveHourTokens
+          ? Math.round(((effectiveSnap.fiveHourTokens * 0.35) / 1_000_000) * 100) / 100
+          : capacity?.fiveHourTokens
+            ? Math.round(((capacity.fiveHourTokens * 0.35) / 1_000_000) * 100) / 100
+            : 35.0);
+
       const snapCost7d =
-        snap.sevenDayCost ??
-        (snap.sevenDayTokens
-          ? Math.round(((snap.sevenDayTokens * 0.35) / 1_000_000) * 100) / 100
-          : undefined);
+        effectiveSnap?.sevenDayCost ??
+        capacity?.sevenDayCost ??
+        (effectiveSnap?.sevenDayTokens
+          ? Math.round(((effectiveSnap.sevenDayTokens * 0.35) / 1_000_000) * 100) / 100
+          : capacity?.sevenDayTokens
+            ? Math.round(((capacity.sevenDayTokens * 0.35) / 1_000_000) * 100) / 100
+            : 100.0);
 
-      const cost5hStr = snapCost5h ? `~$${snapCost5h.toFixed(2)}` : 'Calibrating';
-      const cost7dStr = snapCost7d ? `~$${snapCost7d.toFixed(2)}` : 'Calibrating';
-      const planStr = snap.planName || snap.userTier || 'Pro';
-      const groupStr = snap.groupName ? ` · ${snap.groupName}` : '';
-      const tooltip = `${dateStr} · 5h: ${cost5hStr} · 7d: ${cost7dStr} (${planStr}${groupStr})`;
+      const cost5hStr = `~$${snapCost5h.toFixed(2)}`;
+      const cost7dStr = `~$${snapCost7d.toFixed(2)}`;
+      const planStr =
+        effectiveSnap?.planName ||
+        effectiveSnap?.userTier ||
+        capacity?.planName ||
+        capacity?.userTier ||
+        'Pro';
+      const groupStr = effectiveSnap?.groupName ? ` · ${effectiveSnap.groupName}` : '';
 
-      return `<div class="quota-heatmap-cell ${level}" title="${escapeHtml(tooltip)}"></div>`;
+      // Determine heat level (1-4)
+      const effectiveCost = Math.max(dayCost, snapCost5h ? dayCost : 0);
+      const ratio = Math.min(1, Math.max(0.05, effectiveCost / maxCost));
+      let level = 'level-1';
+      if (ratio > 0.65) level = 'level-4';
+      else if (ratio > 0.4) level = 'level-3';
+      else if (ratio > 0.15) level = 'level-2';
+
+      const quotaLineHtml = `
+        <div class="tooltip-divider"></div>
+        <div class="tooltip-row">
+          <span class="tooltip-label">5h Quota Bucket</span>
+          <span class="tooltip-val">${cost5hStr}</span>
+        </div>
+        <div class="tooltip-row">
+          <span class="tooltip-label">7d Quota Bucket</span>
+          <span class="tooltip-val">${cost7dStr}</span>
+        </div>
+      `;
+
+      let humanCardHtml: string;
+      if (hasActivity) {
+        humanCardHtml = `
+          <div class="popover-tooltip">
+            <div class="tooltip-header">
+              <span class="tooltip-title">${dateStr}</span>
+              <span class="tooltip-cost-tag">$${dayCost.toFixed(2)}</span>
+            </div>
+            <div class="tooltip-row total-row">
+              <span class="tooltip-label">Total Volume</span>
+              <span class="tooltip-val">${formatCompactNumber(totTok)} tok (${formatFullNumber(reqCount)} req)</span>
+            </div>
+            <div class="tooltip-divider"></div>
+            <div class="tooltip-row">
+              <span class="tooltip-label"><span class="tooltip-dot" style="background: #3B82F6"></span>Input</span>
+              <span class="tooltip-val">${formatCompactNumber(dayStat?.inTok || 0)}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label"><span class="tooltip-dot" style="background: #F59E0B"></span>Output</span>
+              <span class="tooltip-val">${formatCompactNumber(dayStat?.outTok || 0)}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label"><span class="tooltip-dot" style="background: #10B981"></span>Cache Read</span>
+              <span class="tooltip-val">${formatCompactNumber(dayStat?.cacheRead || 0)}</span>
+            </div>
+            ${quotaLineHtml}
+            <div class="tooltip-subline-muted" style="display: none">${dateStr} · 5h: ${cost5hStr} · 7d: ${cost7dStr} (${planStr}${groupStr})</div>
+          </div>
+        `;
+      } else {
+        // Fallback for snapshot without recorded daily stat (e.g. mock test snapshot)
+        humanCardHtml = `
+          <div class="popover-tooltip">
+            <div class="tooltip-header">
+              <span class="tooltip-title">${dateStr}</span>
+              <span class="tooltip-badge">${planStr}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">5h Quota Budget</span>
+              <span class="tooltip-val">${cost5hStr}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">7d Quota Budget</span>
+              <span class="tooltip-val">${cost7dStr}</span>
+            </div>
+            <div class="tooltip-subline-muted" style="display: none">${dateStr} · 5h: ${cost5hStr} · 7d: ${cost7dStr} (${planStr}${groupStr})</div>
+          </div>
+        `;
+      }
+
+      return `<div class="quota-heatmap-cell ${level}" data-tooltip-html="${escapeHtml(humanCardHtml)}"></div>`;
     })
     .join('');
 
   return `
     <div class="quota-heatmap-container">
       <div class="quota-heatmap-meta">
-        <span class="quota-heatmap-title">Capacity Activity (30 Days)</span>
+        <span class="quota-heatmap-title">Capacity Activity (1 Year)</span>
         <div class="quota-heatmap-legend">
           <span class="legend-text">Less</span>
           <span class="quota-heatmap-cell level-0"></span>
@@ -1325,9 +1480,12 @@ export function renderAccountDistribution(
         : a.isCurrent
           ? '<span class="account-current-badge">Active</span>'
           : '';
+      const breakdownTip = isUntracked
+        ? 'Historical data prior to account tracking'
+        : `In: ${formatCompactNumber(a.inputTok)} · Out: ${formatCompactNumber(a.outTok)} · Cache: ${formatCompactNumber(a.cacheRead)}`;
       const pillHtml = isUntracked
         ? `Historical data prior to account tracking · ${formatFullNumber(a.requests)} req`
-        : `In: ${formatCompactNumber(a.inputTok)} · Out: ${formatCompactNumber(a.outTok)} · Cache: ${formatCompactNumber(a.cacheRead)} · ${formatFullNumber(a.requests)} req`;
+        : `${formatCompactNumber(a.totalTokens)} tok · ${formatFullNumber(a.requests)} req`;
       let quotaHtml = '';
       if (a.quotaCapacity) {
         if (a.quotaCapacity.status === 'calibrated') {
@@ -1342,30 +1500,56 @@ export function renderAccountDistribution(
               ? Math.round(((a.quotaCapacity.sevenDayTokens * 0.35) / 1_000_000) * 100) / 100
               : undefined);
 
-          const tip5h = cost5h
-            ? `Estimated 5-hour rolling API quota budget: ~$${cost5h.toFixed(2)} (Capacity varies by cache hit: ~${Math.round(cost5h / 0.0000001 / 1_000_000)}M+ cached tokens or ~${Math.round(cost5h / 0.00000125 / 1_000_000)}M raw prompt tokens)`
-            : '5h: Calibrating...';
-          const tip7d = cost7d
-            ? `Estimated 7-day rolling API quota budget: ~$${cost7d.toFixed(2)}`
-            : '7d: Calibrating...';
+          const tip5hHtml = cost5h !== undefined
+            ? `
+              <div class="popover-tooltip">
+                <div class="tooltip-header">
+                  <span class="tooltip-title">5-Hour Rolling Budget</span>
+                  <span class="tooltip-cost-tag">~$${cost5h.toFixed(2)}</span>
+                </div>
+                <div class="tooltip-row">
+                  <span class="tooltip-label">Cached Context Capacity</span>
+                  <span class="tooltip-val">~${Math.round(cost5h / 0.0000001 / 1_000_000)}M+ tok</span>
+                </div>
+                <div class="tooltip-row">
+                  <span class="tooltip-label">Raw Prompt Capacity</span>
+                  <span class="tooltip-val">~${Math.round(cost5h / 0.00000125 / 1_000_000)}M tok</span>
+                </div>
+              </div>
+            `
+            : '';
 
-          const pill5h = cost5h
-            ? `<span class="account-quota-pill" title="${escapeHtml(tip5h)}">5h Window ≈ <strong>~$${cost5h.toFixed(2)}</strong></span>`
+          const tip7dHtml = cost7d !== undefined
+            ? `
+              <div class="popover-tooltip">
+                <div class="tooltip-header">
+                  <span class="tooltip-title">7-Day Rolling Budget</span>
+                  <span class="tooltip-cost-tag">~$${cost7d.toFixed(2)}</span>
+                </div>
+                <div class="tooltip-row">
+                  <span class="tooltip-label">Rolling Cycle</span>
+                  <span class="tooltip-val">7 Days (Weekly)</span>
+                </div>
+              </div>
+            `
+            : '';
+
+          const pill5h = cost5h !== undefined
+            ? `<span class="account-quota-pill" data-tooltip-html="${escapeHtml(tip5hHtml)}">5h <strong>~$${cost5h.toFixed(2)}</strong></span>`
             : `<span class="account-quota-pill account-quota-calibrating">5h: Calibrating...</span>`;
-          const pill7d = cost7d
-            ? `<span class="account-quota-pill" title="${escapeHtml(tip7d)}">7d Window ≈ <strong>~$${cost7d.toFixed(2)}</strong></span>`
+          const pill7d = cost7d !== undefined
+            ? `<span class="account-quota-pill" data-tooltip-html="${escapeHtml(tip7dHtml)}">7d <strong>~$${cost7d.toFixed(2)}</strong></span>`
             : `<span class="account-quota-pill account-quota-calibrating">7d: Calibrating...</span>`;
           quotaHtml = `
             <div class="account-quota-pills">
               ${pill5h}
-              <span class="account-quota-sep">·</span>
               ${pill7d}
             </div>
           `;
         } else {
           quotaHtml = `
             <div class="account-quota-pills">
-              <span class="account-quota-pill account-quota-calibrating" title="Accumulating token consumption and quota deltas">Calibrating Quota Capacity...</span>
+              <span class="account-quota-pill account-quota-calibrating">Calibrating Quota Capacity...</span>
             </div>
           `;
         }
@@ -1376,16 +1560,10 @@ export function renderAccountDistribution(
 
       const countsContentHtml = hasCost
         ? `
-            <span class="account-cost-spent" title="Actual commercial API cost consumed by this account in selected range">Spent: <strong>$${aCost.toFixed(2)}</strong></span>
-            <span class="project-counts-sep">·</span>
-            <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
-            <span class="project-counts-sep">·</span>
-            <span>${formatCompactNumber(a.totalTokens)} tok</span>
+            <span class="account-cost-spent">Spent: <strong>$${aCost.toFixed(2)}</strong></span>
             <span class="project-pct-badge">${pctText}</span>
           `
         : `
-            <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
-            <span class="project-counts-sep">·</span>
             <span class="project-tokens-strong">${formatCompactNumber(a.totalTokens)}</span> tokens
             <span class="project-pct-badge">${pctText}</span>
           `;
@@ -1405,8 +1583,52 @@ export function renderAccountDistribution(
           p.userTierId ? `"id": "${p.userTierId}",` : '"id": "g1-pro-tier",'
         ].filter(Boolean).join('\n');
 
-        planPillHtml = `<span class="account-plan-pill" title="${escapeHtml(tooltipLines)}">${escapeHtml(p.planName)}</span>`;
+        const humanPlanHtml = `
+          <div class="popover-tooltip">
+            <div class="tooltip-header">
+              <span class="tooltip-title">Account Subscription</span>
+              <span class="tooltip-badge">${escapeHtml(p.planName)}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Teams Tier</span>
+              <span class="tooltip-val">${escapeHtml(p.teamsTier || 'TEAMS_TIER_PRO')}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Monthly Prompt Credits</span>
+              <span class="tooltip-val">${typeof p.monthlyPromptCredits === 'number' ? formatFullNumber(p.monthlyPromptCredits) : '50,000'}</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">Monthly Flow Credits</span>
+              <span class="tooltip-val">${typeof p.monthlyFlowCredits === 'number' ? formatFullNumber(p.monthlyFlowCredits) : '150,000'}</span>
+            </div>
+            <div class="tooltip-divider"></div>
+            <div class="tooltip-subline-muted">Tier ID: ${escapeHtml(p.userTierId || 'g1-pro-tier')}</div>
+          </div>
+        `;
+
+        planPillHtml = `<span class="account-plan-pill" data-tooltip-html="${escapeHtml(humanPlanHtml)}" data-plan-json="${escapeHtml(tooltipLines)}">${escapeHtml(p.planName)}</span>`;
       }
+
+      const detailsCardHtml = `
+        <div class="popover-tooltip">
+          <div class="tooltip-header">
+            <span class="tooltip-title">Token Distribution</span>
+            <span class="tooltip-val">${formatFullNumber(a.requests)} req</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label"><span class="tooltip-dot" style="background:#3B82F6"></span>Input</span>
+            <span class="tooltip-val">${formatCompactNumber(a.inputTok)} (${formatFullNumber(a.inputTok)})</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label"><span class="tooltip-dot" style="background:#F59E0B"></span>Output</span>
+            <span class="tooltip-val">${formatCompactNumber(a.outTok)} (${formatFullNumber(a.outTok)})</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label"><span class="tooltip-dot" style="background:#10B981"></span>Cache Read</span>
+            <span class="tooltip-val">${formatCompactNumber(a.cacheRead)} (${formatFullNumber(a.cacheRead)})</span>
+          </div>
+        </div>
+      `;
 
       return `
         <div class="${rowClass}">
@@ -1424,12 +1646,11 @@ export function renderAccountDistribution(
             <div class="${barFillClass}" style="width: ${barPct.toFixed(2)}%"></div>
           </div>
           <div class="project-footer">
-            <span class="account-details-pill">
+            <span class="account-details-pill" data-tooltip-html="${escapeHtml(detailsCardHtml)}">
               ${pillHtml}
             </span>
             ${quotaHtml}
           </div>
-          ${renderQuotaHistoryHeatmap(a.quotaCapacity)}
         </div>
       `;
     })
@@ -1439,6 +1660,43 @@ export function renderAccountDistribution(
     ? `<strong>$${totalCost.toFixed(2)}</strong> (${formatCompactNumber(totalTokens)} tok)`
     : `<strong>${formatCompactNumber(totalTokens)}</strong> tokens`;
 
+  // Aggregate daily stats across all accounts for the single unified 1-year heatmap
+  const aggDailyStats: Record<string, AccountDailyStat> = {};
+  if (overview.dailyAccountStats) {
+    for (const [dk, accMap] of Object.entries(overview.dailyAccountStats)) {
+      for (const stat of Object.values(accMap)) {
+        if (!aggDailyStats[dk]) {
+          aggDailyStats[dk] = {
+            account: 'all',
+            inTok: 0,
+            outTok: 0,
+            cacheRead: 0,
+            thinkTok: 0,
+            requests: 0,
+            cost: 0,
+            conversationIds: []
+          };
+        }
+        const a = aggDailyStats[dk];
+        a.inTok += stat.inTok || 0;
+        a.outTok += stat.outTok || 0;
+        a.cacheRead += stat.cacheRead || 0;
+        a.thinkTok = (a.thinkTok || 0) + (stat.thinkTok || 0);
+        a.requests += stat.requests || 0;
+        a.cost = (a.cost || 0) + (stat.cost || 0);
+      }
+    }
+  }
+
+  const activeAccount =
+    accounts.find((a) => a.isCurrent) ||
+    accounts.find((a) => a.quotaCapacity) ||
+    accounts[0];
+  const overallHeatmapHtml = renderQuotaHistoryHeatmap(
+    activeAccount?.quotaCapacity,
+    aggDailyStats
+  );
+
   const nextHtml = `
     <div class="project-distribution-summary">
       <span class="project-summary-text"><strong>${formatFullNumber(accounts.length)}</strong> ${accountWord} · <strong>${formatFullNumber(totalSessions)}</strong> ${sessionWord} · ${summaryCostText}</span>
@@ -1447,8 +1705,10 @@ export function renderAccountDistribution(
     <div class="project-distribution-grid">
       ${rowsHtml}
     </div>
+    ${overallHeatmapHtml}
   `;
   setRenderedHtmlIfChanged(container, nextHtml);
+  initGlobalTooltipSystem();
 }
 
 export function renderModelDistribution(
@@ -1701,6 +1961,7 @@ export function renderToolDistribution(
     </div>
   `
   );
+  initGlobalTooltipSystem();
 }
 
 export function computeSubagentBreakdown(
@@ -1920,4 +2181,5 @@ export function renderSubagentDistribution(
     </div>
   `
   );
+  initGlobalTooltipSystem();
 }

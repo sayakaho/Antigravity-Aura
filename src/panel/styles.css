@@ -840,6 +840,29 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active {
   margin-bottom: 8px;
 }
 
+.kpi-label-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cost-pricing-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--aura-fg-muted);
+  cursor: help;
+  opacity: 0.75;
+  transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
+  vertical-align: middle;
+}
+
+.cost-pricing-info-icon:hover {
+  opacity: 1;
+  color: var(--aura-accent, #388bfd);
+  transform: scale(1.1);
+}
+
 .kpi-value-lg {
   font-size: 28px;
   font-weight: 600;
@@ -1584,6 +1607,8 @@ html[data-theme="dark"] .chart-shared-hover-band {
   color: var(--aura-fg-muted);
   font-family: var(--aura-font-mono, monospace);
   line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
 }
 
 .account-quota-pills {
@@ -1594,6 +1619,8 @@ html[data-theme="dark"] .chart-shared-hover-band {
   font-size: 11px;
   font-family: var(--aura-font-mono, monospace);
   color: var(--aura-fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .account-quota-pill {
@@ -1605,6 +1632,9 @@ html[data-theme="dark"] .chart-shared-hover-band {
   background: var(--aura-control-bg, rgba(255, 255, 255, 0.05));
   border: 1px solid var(--aura-border, rgba(255, 255, 255, 0.1));
   font-size: 10.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.3;
 }
 
 .account-quota-pill strong {
@@ -1689,24 +1719,40 @@ html[data-theme="dark"] .chart-shared-hover-band {
 
 .quota-heatmap-grid {
   display: grid;
-  grid-template-columns: repeat(30, minmax(0, 1fr));
-  gap: 3px;
-  align-items: center;
+  grid-template-rows: repeat(7, 9px);
+  grid-auto-flow: column;
+  grid-auto-columns: 9px;
+  gap: 2.5px;
+  overflow-x: auto;
+  padding: 4px 1px;
+  scrollbar-width: thin;
 }
 
 .quota-heatmap-cell {
-  aspect-ratio: 1 / 1;
-  min-height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 2px;
   background: var(--aura-border, rgba(255, 255, 255, 0.08));
   cursor: pointer;
   transition: transform 80ms ease, outline 80ms ease;
+  box-sizing: border-box;
+}
+
+.quota-heatmap-legend .quota-heatmap-cell {
+  width: 9px;
+  height: 9px;
+  cursor: default;
 }
 
 .quota-heatmap-cell:hover {
-  transform: scale(1.25);
-  outline: 1px solid var(--aura-fg);
+  transform: scale(1.35);
+  outline: 1.5px solid var(--aura-accent, #388bfd);
   z-index: 2;
+}
+
+.quota-heatmap-legend .quota-heatmap-cell:hover {
+  transform: none;
+  outline: none;
 }
 
 .quota-heatmap-cell.level-0 {
@@ -1836,29 +1882,172 @@ html[data-theme="dark"] .chart-shared-hover-band {
   min-width: 6px;
 }
 
+.aura-global-tooltip,
 .project-path-tooltip {
   position: fixed;
   inset: auto;
   margin: 0;
-  max-width: min(460px, calc(100vw - 24px));
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--aura-toast-bg);
-  border: 1px solid var(--aura-toast-border);
-  color: var(--aura-toast-fg);
-  font-family: var(--aura-font-mono, monospace);
+  max-width: min(440px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--aura-toast-bg, rgba(20, 20, 24, 0.96));
+  border: 1px solid var(--aura-toast-border, rgba(255, 255, 255, 0.14));
+  color: var(--aura-fg, #e6edf3);
+  font-family: var(--aura-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   font-size: 11px;
-  line-height: 1.4;
-  word-break: break-all;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38), 0 0 0 1px var(--aura-border);
-  backdrop-filter: blur(12px);
-  z-index: 9999;
+  line-height: 1.45;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.52), 0 0 0 1px var(--aura-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 99999;
   display: none;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
+.aura-global-tooltip.visible,
 .project-path-tooltip.visible {
   display: block;
+}
+
+/* Rich Popover Tooltip Internal Components */
+.popover-tooltip {
+  display: flex;
+  flex-direction: column;
+}
+
+.popover-tooltip .tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--aura-border, rgba(255, 255, 255, 0.08));
+}
+
+.popover-tooltip .tooltip-title {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--aura-fg, #fff);
+  letter-spacing: -0.01em;
+}
+
+.popover-tooltip .tooltip-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--aura-accent, #10b981) 14%, transparent);
+  color: var(--aura-accent, #10b981);
+  border: 1px solid color-mix(in srgb, var(--aura-accent, #10b981) 28%, transparent);
+  letter-spacing: 0.02em;
+}
+
+.popover-tooltip .tooltip-cost-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aura-accent, #10b981);
+  font-family: var(--aura-font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pricing Table inside Tooltip */
+.pricing-tooltip-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 3px 0 6px 0;
+  font-size: 10.5px;
+}
+
+.pricing-tooltip-table th {
+  text-align: right;
+  padding: 3px 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--aura-fg-muted, #8b949e);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--aura-border, rgba(255, 255, 255, 0.08));
+}
+
+.pricing-tooltip-table th.th-model {
+  text-align: left;
+  padding-left: 0;
+}
+
+.pricing-tooltip-table td {
+  padding: 3.5px 6px;
+  text-align: right;
+  font-family: var(--aura-font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--aura-fg, #e6edf3);
+}
+
+.pricing-tooltip-table td.td-model {
+  text-align: left;
+  padding-left: 0;
+  font-family: var(--aura-font, inherit);
+  font-weight: 500;
+  color: var(--aura-fg, #fff);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.tooltip-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: var(--aura-fg-muted, #8b949e);
+  margin-top: 5px;
+}
+
+.tooltip-source-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--aura-accent, #10b981);
+  flex-shrink: 0;
+}
+
+.tooltip-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.tooltip-stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--aura-control-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--aura-border, rgba(255, 255, 255, 0.06));
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+.tooltip-stat-cell .cell-label {
+  font-size: 9.5px;
+  color: var(--aura-fg-muted, #8b949e);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tooltip-stat-cell .cell-val {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--aura-font-mono, monospace);
+  color: var(--aura-fg, #fff);
+}
+
+.tooltip-subline-muted {
+  font-size: 10px;
+  color: var(--aura-fg-muted, #8b949e);
+  margin-top: 3px;
 }
 
 @media (max-width: 520px) {
