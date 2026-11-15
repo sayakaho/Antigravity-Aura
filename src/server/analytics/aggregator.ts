@@ -1,7 +1,7 @@
 import { AccountTracker, isUntrackedAccount } from '../account-tracker';
 import { QuotaTracker } from '../quota-tracker';
 import { canonicalizeTool, canonicalModelName } from '../../shared/catalog';
-import { formatLocalDateAndHourKeys } from '../../shared/format';
+import { formatLocalDateAndHourKeys, formatLocalDateKey } from '../../shared/format';
 import { resolveSummaryProjectInfo, type ResolvedProjectInfo } from '../../shared/project';
 import {
   isSubagentSummary,
@@ -699,54 +699,115 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
   }
 
   const now = new Date();
-  const last5HourKeys: string[] = [];
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(now.getTime() - i * 3600 * 1000);
-    last5HourKeys.push(formatLocalDateAndHourKeys(d).hourKey);
+  const nowMs = now.getTime();
+  const quotaWindows = quotaTracker.getActiveQuotaWindows();
+  const windowStart5hMs = quotaWindows.windowStart5hMs ?? (nowMs - 5 * 3600 * 1000);
+  const windowStartWeeklyMs = quotaWindows.windowStartWeeklyMs ?? (nowMs - 7 * 86400 * 1000);
+
+  function parseHourKeyInterval(hourKey: string): { startMs: number; endMs: number } {
+    const [datePart, timePart] = hourKey.split(' ');
+    if (!datePart || !timePart) return { startMs: 0, endMs: 0 };
+    const [y, m, d] = datePart.split('-').map(Number);
+    const [hr, min] = timePart.split(':').map(Number);
+    const startMs = new Date(y, m - 1, d, hr, min || 0, 0).getTime();
+    return { startMs, endMs: startMs + 3600 * 1000 - 1 };
   }
 
-  const last7DateKeys: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now.getTime() - i * 86400 * 1000);
-    last7DateKeys.push(formatLocalDateAndHourKeys(d).dateKey);
+  // Pre-filter hourly keys strictly falling within active 5h and weekly quota cycles
+  const active5HourKeys: string[] = [];
+  const activeWeeklyHourKeys: string[] = [];
+
+  for (const hk of Object.keys(globalHourlyAccountStats)) {
+    const { startMs, endMs } = parseHourKeyInterval(hk);
+    if (endMs >= windowStart5hMs && startMs <= nowMs) {
+      active5HourKeys.push(hk);
+    }
+    if (endMs >= windowStartWeeklyMs && startMs <= nowMs) {
+      activeWeeklyHourKeys.push(hk);
+    }
+  }
+
+  // Fallback: If no hourly records matched (e.g. cold start), compute rolling hour keys
+  if (active5HourKeys.length === 0) {
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(nowMs - i * 3600 * 1000);
+      active5HourKeys.push(formatLocalDateAndHourKeys(d).hourKey);
+    }
   }
 
   for (const [acc, item] of Object.entries(globalAccountMap)) {
     if (!item.isUntracked) {
-      let tokens5h = 0;
-      let cost5h = 0;
-      for (const hk of last5HourKeys) {
-        const st = globalHourlyAccountStats[hk]?.[acc];
-        if (st) {
-          tokens5h += st.inTok + st.outTok + st.cacheRead;
-          cost5h += st.cost || 0;
-        }
-      }
+      const isCurrent = acc === currentAccount;
 
-      let tokens7d = 0;
-      let cost7d = 0;
-      for (const dk of last7DateKeys) {
-        const st = globalDailyAccountStats[dk]?.[acc];
-        if (st) {
-          tokens7d += st.inTok + st.outTok + st.cacheRead;
-          cost7d += st.cost || 0;
+      if (isCurrent) {
+        // Only calculate window consumption for the currently active account.
+        // Active 5h and weekly quota cycles belong strictly to this authenticated session.
+        let tokens5h = 0;
+        let cost5h = 0;
+        for (const hk of active5HourKeys) {
+          const st = globalHourlyAccountStats[hk]?.[acc];
+          if (st) {
+            tokens5h += st.inTok + st.outTok + st.cacheRead;
+            cost5h += st.cost || 0;
+          }
         }
-      }
 
-      const isCurrent = !item.isUntracked && acc === currentAccount;
-      const cap = quotaTracker.getAccountQuotaCapacity(
-        acc,
-        tokens5h,
-        tokens7d,
-        isCurrent ? item.totalTokens : undefined,
-        isCurrent ? item.cost : undefined,
-        cost5h,
-        cost7d
-      );
-      item.quotaCapacity = cap;
-      item.userTier = cap.userTier;
-      item.planName = cap.planName;
-      item.planDetails = cap.planDetails;
+        let tokens7d = 0;
+        let cost7d = 0;
+        for (const hk of activeWeeklyHourKeys) {
+          const st = globalHourlyAccountStats[hk]?.[acc];
+          if (st) {
+            tokens7d += st.inTok + st.outTok + st.cacheRead;
+            cost7d += st.cost || 0;
+          }
+        }
+
+        // Fallback for daily account stats if hourly stats are absent (e.g. legacy/mock test environments)
+        if (tokens7d === 0 && cost7d === 0 && Object.keys(globalDailyAccountStats).length > 0) {
+          const startDateKey = formatLocalDateKey(new Date(windowStartWeeklyMs));
+          for (const [dk, dayAccounts] of Object.entries(globalDailyAccountStats)) {
+            if (dk >= startDateKey) {
+              const st = dayAccounts[acc];
+              if (st) {
+                tokens7d += st.inTok + st.outTok + st.cacheRead;
+                cost7d += st.cost || 0;
+              }
+            }
+          }
+        }
+
+        const cap = quotaTracker.getAccountQuotaCapacity(
+          acc,
+          tokens5h,
+          tokens7d,
+          item.totalTokens,
+          item.cost,
+          cost5h,
+          cost7d,
+          true
+        );
+        item.quotaCapacity = cap;
+        item.userTier = cap.userTier;
+        item.planName = cap.planName;
+        item.planDetails = cap.planDetails;
+      } else {
+        // Inactive account: strictly read-only snapshot.
+        // Zero computation, zero calibration updates, zero cross-account contamination.
+        const cap = quotaTracker.getAccountQuotaCapacity(
+          acc,
+          0,
+          0,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          false
+        );
+        item.quotaCapacity = cap;
+        item.userTier = cap.userTier;
+        item.planName = cap.planName;
+        item.planDetails = cap.planDetails;
+      }
     }
   }
 
