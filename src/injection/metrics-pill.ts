@@ -382,6 +382,7 @@ export function initMetricsCapsule(
     }
 
     syncPillAccessibility(pill, cfg.language);
+    bindMetricsPillHandlers(pill);
     pill.setAttribute('data-ag-row-mode', 'middle');
     if (bottomRow.getAttribute('data-ag-row-mode') !== 'middle') {
       bottomRow.setAttribute('data-ag-row-mode', 'middle');

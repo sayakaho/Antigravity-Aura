@@ -174,20 +174,18 @@ export function initActivitySummary(enabled: boolean, language: 'default' | 'zh-
   updateAll();
 
   const scheduleUpdate = () => {
-    if (debounceTimer !== null) {
-      clearTimeout(debounceTimer);
-    }
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null;
-      if (typeof requestAnimationFrame === 'function') {
-        rafId = requestAnimationFrame(() => {
-          rafId = null;
-          updateAll();
-        });
-      } else {
+    if (rafId !== null) return;
+    if (typeof requestAnimationFrame === 'function') {
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
         updateAll();
-      }
-    }, 100);
+      });
+    } else if (debounceTimer === null) {
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        updateAll();
+      }, 50);
+    }
   };
 
   if (typeof MutationObserver !== 'undefined' && document.body) {

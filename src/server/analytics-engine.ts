@@ -913,6 +913,7 @@ export class GlobalAnalyticsEngine {
                 sessionAccountMap[accKey] = {
                   account: accKey,
                   totalTokens: 0,
+                  cost: 0,
                   inputTok: 0,
                   outTok: 0,
                   cacheRead: 0,
@@ -929,6 +930,7 @@ export class GlobalAnalyticsEngine {
               item.cacheRead += st.cacheRead;
               item.thinkTok += st.thinkTok;
               item.totalTokens += st.inTok + st.outTok + st.cacheRead;
+              item.cost = (item.cost || 0) + (st.cost || 0);
               item.requests += st.requests;
             }
           }
@@ -1019,6 +1021,8 @@ export class GlobalAnalyticsEngine {
       const accountDistribution = Object.values(sessionAccountMap).sort((a, b) => {
         if (a.isUntracked && !b.isUntracked) return 1;
         if (!a.isUntracked && b.isUntracked) return -1;
+        const costDiff = (b.cost || 0) - (a.cost || 0);
+        if (Math.abs(costDiff) > 0.0001) return costDiff;
         return b.totalTokens - a.totalTokens || b.requests - a.requests;
       });
 

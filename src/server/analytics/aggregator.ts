@@ -664,6 +664,7 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
         globalAccountMap[acc] = {
           account: acc,
           totalTokens: 0,
+          cost: 0,
           inputTok: 0,
           outTok: 0,
           cacheRead: 0,
@@ -681,6 +682,7 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
       item.cacheRead += st.cacheRead;
       item.thinkTok += st.thinkTok;
       item.totalTokens += st.inTok + st.outTok + st.cacheRead;
+      item.cost = (item.cost || 0) + (st.cost || 0);
       item.requests += st.requests;
       for (const cid of st.conversationIds || []) {
         accountSessionIds[acc].add(cid);
@@ -710,30 +712,34 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
   for (const [acc, item] of Object.entries(globalAccountMap)) {
     if (!item.isUntracked) {
       let tokens5h = 0;
+      let cost5h = 0;
       for (const hk of last5HourKeys) {
         const st = globalHourlyAccountStats[hk]?.[acc];
-        if (st) tokens5h += st.inTok + st.outTok + st.cacheRead;
-      }
-
-      let tokens7d = 0;
-      for (const dk of last7DateKeys) {
-        const st = globalDailyAccountStats[dk]?.[acc];
-        if (st) tokens7d += st.inTok + st.outTok + st.cacheRead;
-      }
-
-      if (tokens5h === 0 && tokens7d > 0) {
-        const todayKey = last7DateKeys[0];
-        const todayStat = globalDailyAccountStats[todayKey]?.[acc];
-        if (todayStat) {
-          tokens5h = Math.round((todayStat.inTok + todayStat.outTok + todayStat.cacheRead) * (5 / 24));
+        if (st) {
+          tokens5h += st.inTok + st.outTok + st.cacheRead;
+          cost5h += st.cost || 0;
         }
       }
 
+      let tokens7d = 0;
+      let cost7d = 0;
+      for (const dk of last7DateKeys) {
+        const st = globalDailyAccountStats[dk]?.[acc];
+        if (st) {
+          tokens7d += st.inTok + st.outTok + st.cacheRead;
+          cost7d += st.cost || 0;
+        }
+      }
+
+      const isCurrent = !item.isUntracked && acc === currentAccount;
       item.quotaCapacity = quotaTracker.getAccountQuotaCapacity(
         acc,
         tokens5h,
         tokens7d,
-        item.totalTokens
+        isCurrent ? item.totalTokens : undefined,
+        isCurrent ? item.cost : undefined,
+        cost5h,
+        cost7d
       );
     }
   }
@@ -741,6 +747,8 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
   const accountDistribution = Object.values(globalAccountMap).sort((a, b) => {
     if (a.isUntracked && !b.isUntracked) return 1;
     if (!a.isUntracked && b.isUntracked) return -1;
+    const costDiff = (b.cost || 0) - (a.cost || 0);
+    if (Math.abs(costDiff) > 0.0001) return costDiff;
     return b.totalTokens - a.totalTokens || b.requests - a.requests;
   });
 

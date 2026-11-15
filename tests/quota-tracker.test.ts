@@ -113,4 +113,40 @@ describe('QuotaTracker & Differential Calibration (ΔTokens / ΔQ)', () => {
     expect(rec?.fiveHourTokens).toBe(106_000_000);
     expect(rec?.sampleCount5h).toBe(2);
   });
+
+  test('decouples 5h and weekly baselines so 5h updates do not truncate weekly accumulation', () => {
+    const tracker = new QuotaTracker();
+    const account = 'decouple@example.com';
+
+    // Initial baseline: 10M tokens, frac5h: 0.80, fracWeekly: 0.90
+    tracker.recordObservation(account, 10_000_000, 0.80, 0.90, 20.0);
+
+    // Turn 1: 5h drops 1% with 150k tokens, weekly does not drop
+    tracker.recordObservation(account, 10_150_000, 0.79, 0.90, 20.3);
+    let rec = tracker.getCalibrationRecord(account);
+    expect(rec?.fiveHourTokens).toBe(15_000_000);
+    expect(rec?.sevenDayTokens).toBeUndefined(); // Weekly not yet triggered
+
+    // Turn 2: Another 150k tokens consumed (total 300k since start), weekly drops by 0.3%
+    // 5h does not drop further this turn
+    tracker.recordObservation(account, 10_300_000, 0.79, 0.897, 20.6);
+    rec = tracker.getCalibrationRecord(account);
+    // Weekly delta should be total 300k tokens over 0.003 drop = 100M (not truncated to 150k / 0.003)
+    expect(rec?.sevenDayTokens).toBe(100_000_000);
+    expect(rec?.sampleCountWeekly).toBe(1);
+  });
+
+  test('resets baseline cleanly when quota group changes dynamically', () => {
+    const tracker = new QuotaTracker();
+    const account = 'group_switch@example.com';
+
+    // Baseline under Gemini Models (frac5h: 0.90)
+    tracker.recordObservation(account, 10_000_000, 0.90, 0.95, 10.0, 'Gemini Models');
+
+    // Switch to Claude group (frac5h drops to 0.70 because Claude has independent quota)
+    // Should NOT compute a 20% drop from 10k tokens!
+    tracker.recordObservation(account, 10_010_000, 0.70, 0.80, 10.1, 'Claude and GPT models');
+    let rec = tracker.getCalibrationRecord(account);
+    expect(rec).toBeUndefined(); // Safely reset baseline, no calibration record created
+  });
 });

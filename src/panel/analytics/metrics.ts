@@ -1123,6 +1123,7 @@ export function computeAccountDistributionItems(
           stat: {
             account: acc,
             totalTokens: 0,
+            cost: 0,
             inputTok: 0,
             outTok: 0,
             cacheRead: 0,
@@ -1141,6 +1142,7 @@ export function computeAccountDistributionItems(
       bucket.stat.cacheRead += st.cacheRead;
       bucket.stat.thinkTok += st.thinkTok;
       bucket.stat.requests += st.requests;
+      bucket.stat.cost = (bucket.stat.cost || 0) + (st.cost || 0);
       for (const cid of st.conversationIds || []) {
         bucket.convIds.add(cid);
       }
@@ -1150,17 +1152,24 @@ export function computeAccountDistributionItems(
   return Array.from(aggMap.values())
     .map(({ stat, convIds }) => {
       const baseAccount = overview.accountDistribution?.find((a) => a.account === stat.account);
+      let cost = stat.cost;
+      if (typeof cost !== 'number' && typeof baseAccount?.cost === 'number') {
+        cost = baseAccount.cost;
+      }
       return {
         ...stat,
+        cost,
         quotaCapacity: baseAccount?.quotaCapacity,
         conversationCount: convIds.size,
         totalTokens: stat.inputTok + stat.outTok + stat.cacheRead
       };
     })
-    .filter((a) => a.totalTokens > 0 || a.requests > 0)
+    .filter((a) => a.totalTokens > 0 || a.requests > 0 || (typeof a.cost === 'number' && a.cost > 0))
     .sort((a, b) => {
       if (a.isUntracked && !b.isUntracked) return 1;
       if (!a.isUntracked && b.isUntracked) return -1;
+      const costDiff = (b.cost || 0) - (a.cost || 0);
+      if (Math.abs(costDiff) > 0.0001) return costDiff;
       return b.totalTokens - a.totalTokens || b.conversationCount - a.conversationCount;
     });
 }
@@ -1198,23 +1207,29 @@ export function renderAccountDistribution(
     return;
   }
 
+  const totalCost = accounts.reduce((sum, a) => sum + (a.cost || 0), 0);
   const totalTokens = accounts.reduce((sum, a) => sum + a.totalTokens, 0);
   const totalSessions = accounts.reduce((sum, a) => sum + a.conversationCount, 0);
+  const hasCost = totalCost > 0 || accounts.some((a) => typeof a.cost === 'number' && a.cost > 0);
   const scopeLabel = scope === 'all-time' ? 'All Time' : getRangeDisplayTitle(range);
   const accountWord = accounts.length === 1 ? 'account' : 'accounts';
   const sessionWord = totalSessions === 1 ? 'session' : 'sessions';
 
   const rowsHtml = accounts
     .map((a) => {
-      const sharePct = totalTokens > 0 ? (a.totalTokens / totalTokens) * 100 : 0;
-      const barPct = a.totalTokens > 0 ? sharePct : 0;
+      const aCost = a.cost || 0;
+      const sharePct = hasCost
+        ? (totalCost > 0 ? (aCost / totalCost) * 100 : 0)
+        : (totalTokens > 0 ? (a.totalTokens / totalTokens) * 100 : 0);
+      const isNonzero = hasCost ? aCost > 0 : a.totalTokens > 0;
+      const barPct = isNonzero ? sharePct : 0;
       const isUntracked = !!a.isUntracked || a.account === 'Untracked (Historical)';
       const barFillClass = isUntracked
         ? 'project-bar-fill account-bar-fill-untracked'
-        : a.totalTokens > 0
+        : isNonzero
           ? 'project-bar-fill project-bar-fill-nonzero'
           : 'project-bar-fill';
-      const pctText = a.totalTokens > 0 && sharePct < 0.1 ? '<0.1%' : `${sharePct.toFixed(1)}%`;
+      const pctText = isNonzero && sharePct < 0.1 ? '<0.1%' : `${sharePct.toFixed(1)}%`;
       const sWord = a.conversationCount === 1 ? 'session' : 'sessions';
       const badgeHtml = isUntracked
         ? '<span class="account-untracked-badge">Pre-tracking</span>'
@@ -1227,12 +1242,16 @@ export function renderAccountDistribution(
       let quotaHtml = '';
       if (a.quotaCapacity) {
         if (a.quotaCapacity.status === 'calibrated') {
-          const pill5h = a.quotaCapacity.fiveHourTokens
-            ? `<span class="account-quota-pill" title="Estimated 5-hour rolling quota capacity">5h Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.fiveHourTokens)}</strong></span>`
-            : `<span class="account-quota-pill account-quota-calibrating">5h: Calibrating...</span>`;
-          const pill7d = a.quotaCapacity.sevenDayTokens
-            ? `<span class="account-quota-pill" title="Estimated 7-day rolling quota capacity">7d Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.sevenDayTokens)}</strong></span>`
-            : `<span class="account-quota-pill account-quota-calibrating">7d: Calibrating...</span>`;
+          const pill5h = a.quotaCapacity.fiveHourCost
+            ? `<span class="account-quota-pill" title="Estimated 5-hour rolling quota capacity">5h Window ≈ <strong>~$${a.quotaCapacity.fiveHourCost.toFixed(2)}</strong></span>`
+            : a.quotaCapacity.fiveHourTokens
+              ? `<span class="account-quota-pill" title="Estimated 5-hour rolling quota capacity">5h Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.fiveHourTokens)}</strong></span>`
+              : `<span class="account-quota-pill account-quota-calibrating">5h: Calibrating...</span>`;
+          const pill7d = a.quotaCapacity.sevenDayCost
+            ? `<span class="account-quota-pill" title="Estimated 7-day rolling quota capacity">7d Window ≈ <strong>~$${a.quotaCapacity.sevenDayCost.toFixed(2)}</strong></span>`
+            : a.quotaCapacity.sevenDayTokens
+              ? `<span class="account-quota-pill" title="Estimated 7-day rolling quota capacity">7d Window ≈ <strong>~${formatCompactNumber(a.quotaCapacity.sevenDayTokens)}</strong></span>`
+              : `<span class="account-quota-pill account-quota-calibrating">7d: Calibrating...</span>`;
           quotaHtml = `
             <div class="account-quota-pills">
               ${pill5h}
@@ -1252,6 +1271,22 @@ export function renderAccountDistribution(
         ? 'project-stat-row account-stat-row account-stat-row-untracked'
         : 'project-stat-row account-stat-row';
 
+      const countsContentHtml = hasCost
+        ? `
+            <span class="project-tokens-strong">$${aCost.toFixed(2)}</span>
+            <span class="project-counts-sep">·</span>
+            <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
+            <span class="project-counts-sep">·</span>
+            <span>${formatCompactNumber(a.totalTokens)} tok</span>
+            <span class="project-pct-badge">${pctText}</span>
+          `
+        : `
+            <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
+            <span class="project-counts-sep">·</span>
+            <span class="project-tokens-strong">${formatCompactNumber(a.totalTokens)}</span> tokens
+            <span class="project-pct-badge">${pctText}</span>
+          `;
+
       return `
         <div class="${rowClass}">
           <div class="project-meta">
@@ -1260,10 +1295,7 @@ export function renderAccountDistribution(
               ${badgeHtml}
             </div>
             <div class="project-counts">
-              <span class="project-sessions-count">${formatFullNumber(a.conversationCount)} ${sWord}</span>
-              <span class="project-counts-sep">·</span>
-              <span class="project-tokens-strong">${formatCompactNumber(a.totalTokens)}</span> tokens
-              <span class="project-pct-badge">${pctText}</span>
+              ${countsContentHtml}
             </div>
           </div>
           <div class="project-bar-track">
@@ -1280,9 +1312,13 @@ export function renderAccountDistribution(
     })
     .join('');
 
+  const summaryCostText = hasCost
+    ? `<strong>$${totalCost.toFixed(2)}</strong> (${formatCompactNumber(totalTokens)} tok)`
+    : `<strong>${formatCompactNumber(totalTokens)}</strong> tokens`;
+
   const nextHtml = `
     <div class="project-distribution-summary">
-      <span class="project-summary-text"><strong>${formatFullNumber(accounts.length)}</strong> ${accountWord} · <strong>${formatFullNumber(totalSessions)}</strong> ${sessionWord} · <strong>${formatCompactNumber(totalTokens)}</strong> tokens</span>
+      <span class="project-summary-text"><strong>${formatFullNumber(accounts.length)}</strong> ${accountWord} · <strong>${formatFullNumber(totalSessions)}</strong> ${sessionWord} · ${summaryCostText}</span>
       <span class="project-scope-badge">${escapeHtml(scopeLabel)}</span>
     </div>
     <div class="project-distribution-grid">

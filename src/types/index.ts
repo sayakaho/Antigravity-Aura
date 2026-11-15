@@ -177,6 +177,8 @@ export interface AccountTimelineEntry {
 export interface AccountQuotaCapacity {
   fiveHourTokens?: number;
   sevenDayTokens?: number;
+  fiveHourCost?: number;
+  sevenDayCost?: number;
   fiveHourUsed?: number;
   sevenDayUsed?: number;
   fiveHourFraction?: number;
@@ -187,6 +189,7 @@ export interface AccountQuotaCapacity {
 export interface AccountTokenStat {
   account: string;
   totalTokens: number;
+  cost?: number;
   inputTok: number;
   outTok: number;
   cacheRead: number;
@@ -200,6 +203,7 @@ export interface AccountTokenStat {
 
 export interface AccountDailyStat {
   account: string;
+  cost?: number;
   inTok: number;
   outTok: number;
   cacheRead: number;
@@ -210,6 +214,7 @@ export interface AccountDailyStat {
 
 export interface AccountHourlyStat {
   account: string;
+  cost?: number;
   inTok: number;
   outTok: number;
   cacheRead: number;

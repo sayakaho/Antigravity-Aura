@@ -207,4 +207,62 @@ describe('Account Token Consumption UI & Distribution', () => {
     renderAccountDistribution(overview, 'last-30-days', null, 'all-time');
     expect(container.innerHTML).toContain('Calibrating Quota Capacity');
   });
+
+  test('renderAccountDistribution renders API cost and sorts by commercial value', () => {
+    const overview = makeBaseOverview();
+    overview.accountDistribution = [
+      {
+        account: 'pro_user@example.com',
+        cost: 15.5,
+        totalTokens: 1_000_000,
+        inputTok: 200_000,
+        outTok: 800_000,
+        cacheRead: 0,
+        thinkTok: 0,
+        requests: 50,
+        conversationCount: 5,
+        isCurrent: true,
+        quotaCapacity: {
+          fiveHourCost: 20.0,
+          sevenDayCost: 100.0,
+          status: 'calibrated'
+        }
+      },
+      {
+        account: 'flash_cached@example.com',
+        cost: 2.1,
+        totalTokens: 50_000_000, // Very high tokens due to cache, but low cost
+        inputTok: 1_000_000,
+        outTok: 200_000,
+        cacheRead: 48_800_000,
+        thinkTok: 0,
+        requests: 10,
+        conversationCount: 2,
+        isCurrent: false
+      }
+    ];
+
+    const container = {
+      id: 'analytics-accounts-list',
+      innerHTML: '',
+      querySelectorAll: () => []
+    };
+    (globalThis as any).document = {
+      getElementById: (id: string) => (id === 'analytics-accounts-list' ? container : null)
+    };
+
+    renderAccountDistribution(overview, 'last-30-days', null, 'all-time');
+
+    // Should prioritize pro_user due to higher commercial cost ($15.50 vs $2.10)
+    const proIdx = container.innerHTML.indexOf('pro_user@example.com');
+    const flashIdx = container.innerHTML.indexOf('flash_cached@example.com');
+    expect(proIdx).toBeLessThan(flashIdx);
+
+    // Should render cost badges and capacity cost pills
+    expect(container.innerHTML).toContain('$15.50');
+    expect(container.innerHTML).toContain('$2.10');
+    expect(container.innerHTML).toContain('$17.60'); // total cost
+    expect(container.innerHTML).toContain('~$20.00');
+    expect(container.innerHTML).toContain('~$100.00');
+  });
 });

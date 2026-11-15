@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { AccountTracker } from '../account-tracker';
-import { resolveCanonicalModelId } from '../../shared/catalog';
+import { getModelPricingRates, resolveCanonicalModelId } from '../../shared/catalog';
 import { formatLocalDateAndHourKeys } from '../../shared/format';
 import { computeStepTps } from '../../shared/tps';
 import type {
@@ -133,12 +133,14 @@ export function accumulateAccountDailyStat(
   cacheRead: number,
   thinkTok: number,
   requests: number,
-  cascadeId?: string
+  cascadeId?: string,
+  cost = 0
 ): void {
   if (!target[dateKey]) target[dateKey] = {};
   if (!target[dateKey][account]) {
     target[dateKey][account] = {
       account,
+      cost: 0,
       inTok: 0,
       outTok: 0,
       cacheRead: 0,
@@ -148,6 +150,7 @@ export function accumulateAccountDailyStat(
     };
   }
   const item = target[dateKey][account];
+  item.cost = (item.cost || 0) + cost;
   item.inTok += inTok;
   item.outTok += outTok;
   item.cacheRead += cacheRead;
@@ -166,12 +169,14 @@ export function accumulateAccountHourlyStat(
   outTok: number,
   cacheRead: number,
   thinkTok: number,
-  requests: number
+  requests: number,
+  cost = 0
 ): void {
   if (!target[hourKey]) target[hourKey] = {};
   if (!target[hourKey][account]) {
     target[hourKey][account] = {
       account,
+      cost: 0,
       inTok: 0,
       outTok: 0,
       cacheRead: 0,
@@ -180,6 +185,7 @@ export function accumulateAccountHourlyStat(
     };
   }
   const item = target[hourKey][account];
+  item.cost = (item.cost || 0) + cost;
   item.inTok += inTok;
   item.outTok += outTok;
   item.cacheRead += cacheRead;
@@ -417,6 +423,13 @@ export function parseSessionCacheEntry(
 
       const stepTs = sec && sec > 1_000_000_000 ? sec : Math.floor(turnDate.getTime() / 1000);
       const account = accountTracker.matchAccountForTimestamp(stepTs);
+      const modelRates = getModelPricingRates(modelKey || parsed.modelName);
+      const stepCost =
+        (parsed.inTok * modelRates.inputRate +
+          parsed.outTok * modelRates.outputRate +
+          parsed.cacheRead * modelRates.cacheRate) /
+        1_000_000;
+
       accumulateAccountDailyStat(
         dailyAccountStats,
         dateKey,
@@ -425,7 +438,9 @@ export function parseSessionCacheEntry(
         parsed.outTok,
         parsed.cacheRead,
         parsed.thinkTok,
-        1
+        1,
+        undefined,
+        stepCost
       );
       accumulateAccountHourlyStat(
         hourlyAccountStats,
@@ -435,7 +450,8 @@ export function parseSessionCacheEntry(
         parsed.outTok,
         parsed.cacheRead,
         parsed.thinkTok,
-        1
+        1,
+        stepCost
       );
     }
 
