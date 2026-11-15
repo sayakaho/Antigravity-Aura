@@ -642,7 +642,116 @@ export class QuotaTracker {
       );
     }
 
-    const record = this.calibrations.get(account);
+    const record = this.calibrations.get(account) || {
+      sampleCount5h: 0,
+      sampleCountWeekly: 0,
+      lastUpdated: Date.now()
+    };
+
+    let updated = false;
+
+    // Window Consumption Integration (Ground Truth Correction):
+    // Compare actual window consumption against consumed quota fraction: C_window / (1 - Q)
+    if (typeof frac5h === 'number' && frac5h < 0.99) {
+      const usedFrac5h = Math.max(0.01, 1 - frac5h);
+      if (typeof cost5h === 'number' && cost5h > 0) {
+        const integratedCost = Math.round((cost5h / usedFrac5h) * 100) / 100;
+        if (
+          !record.fiveHourCost ||
+          record.fiveHourCost < cost5h ||
+          Math.abs(integratedCost - record.fiveHourCost) / record.fiveHourCost > 0.2
+        ) {
+          record.fiveHourCost = integratedCost;
+          updated = true;
+        }
+      }
+      if (typeof tokens5h === 'number' && tokens5h > 0) {
+        const integratedTokens = Math.round(tokens5h / usedFrac5h);
+        if (
+          !record.fiveHourTokens ||
+          record.fiveHourTokens < tokens5h ||
+          Math.abs(integratedTokens - record.fiveHourTokens) / record.fiveHourTokens > 0.2
+        ) {
+          record.fiveHourTokens = integratedTokens;
+          updated = true;
+        }
+      }
+    }
+
+    if (typeof fracWeekly === 'number' && fracWeekly < 0.99) {
+      const usedFracWeekly = Math.max(0.01, 1 - fracWeekly);
+      if (typeof cost7d === 'number' && cost7d > 0) {
+        const integratedCost = Math.round((cost7d / usedFracWeekly) * 100) / 100;
+        if (
+          !record.sevenDayCost ||
+          record.sevenDayCost < cost7d ||
+          Math.abs(integratedCost - record.sevenDayCost) / record.sevenDayCost > 0.2
+        ) {
+          record.sevenDayCost = integratedCost;
+          updated = true;
+        }
+      }
+      if (typeof tokens7d === 'number' && tokens7d > 0) {
+        const integratedTokens = Math.round(tokens7d / usedFracWeekly);
+        if (
+          !record.sevenDayTokens ||
+          record.sevenDayTokens < tokens7d ||
+          Math.abs(integratedTokens - record.sevenDayTokens) / record.sevenDayTokens > 0.2
+        ) {
+          record.sevenDayTokens = integratedTokens;
+          updated = true;
+        }
+      }
+    }
+
+    // Physical Invariant Enforcer: Capacity can never be smaller than amount already used in that window
+    if (typeof cost5h === 'number' && cost5h > 0 && record.fiveHourCost && record.fiveHourCost < cost5h) {
+      record.fiveHourCost = cost5h;
+      updated = true;
+    }
+    if (typeof cost7d === 'number' && cost7d > 0 && record.sevenDayCost && record.sevenDayCost < cost7d) {
+      record.sevenDayCost = cost7d;
+      updated = true;
+    }
+    if (typeof tokens5h === 'number' && tokens5h > 0 && record.fiveHourTokens && record.fiveHourTokens < tokens5h) {
+      record.fiveHourTokens = tokens5h;
+      updated = true;
+    }
+    if (typeof tokens7d === 'number' && tokens7d > 0 && record.sevenDayTokens && record.sevenDayTokens < tokens7d) {
+      record.sevenDayTokens = tokens7d;
+      updated = true;
+    }
+
+    if (updated) {
+      record.lastUpdated = Date.now();
+      const planDetails = record.planDetails || this.getLatestPlanDetails();
+      const { dateKey } = formatLocalDateAndHourKeys(new Date());
+      if (!record.history) record.history = [];
+      const existingSnap = record.history.find((h) => h.dateKey === dateKey);
+      if (existingSnap) {
+        existingSnap.fiveHourCost = record.fiveHourCost;
+        existingSnap.fiveHourTokens = record.fiveHourTokens;
+        existingSnap.sevenDayCost = record.sevenDayCost;
+        existingSnap.sevenDayTokens = record.sevenDayTokens;
+      } else {
+        record.history.push({
+          timestamp: Date.now(),
+          dateKey,
+          fiveHourCost: record.fiveHourCost,
+          fiveHourTokens: record.fiveHourTokens,
+          sevenDayCost: record.sevenDayCost,
+          sevenDayTokens: record.sevenDayTokens,
+          userTier: planDetails?.userTierName || planDetails?.userTierId,
+          planName: planDetails?.planName,
+          deltaCost: 0,
+          deltaTokens: 0,
+          groupName: activeGroupId
+        });
+      }
+      this.calibrations.set(account, record);
+      this.saveCalibrations();
+    }
+
     const planDetails = record?.planDetails || this.getLatestPlanDetails();
     const isCalibrated = !!(
       record?.fiveHourTokens ||
