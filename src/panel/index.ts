@@ -275,6 +275,34 @@ async function initApp(): Promise<void> {
     }
   });
 
+  const reloadWindowBtn = document.getElementById('btn-force-reload-window') as HTMLButtonElement | null;
+  const reloadWindowBannerBtn = document.getElementById('btn-reload-window-banner') as HTMLButtonElement | null;
+
+  async function triggerHostWindowReload(btn: HTMLButtonElement | null): Promise<void> {
+    if (!btn) return;
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    try {
+      const res = await window.sidecar.fetch('/api/reload-window', { method: 'POST' });
+      if (res.ok) {
+        showToast('Host window reloaded');
+        const banner = document.getElementById('advanced-reload-banner');
+        if (banner) banner.style.display = 'none';
+        await updateStatus();
+      } else {
+        showToast('Window reload failed');
+      }
+    } catch {
+      showToast('Request error');
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+
+  reloadWindowBtn?.addEventListener('click', () => void triggerHostWindowReload(reloadWindowBtn));
+  reloadWindowBannerBtn?.addEventListener('click', () => void triggerHostWindowReload(reloadWindowBannerBtn));
+
   if (typeof window.sidecar?.onWorkspaceChange === 'function') {
     let initialAnalyticsQueued = activeTab === 'analytics';
     setTimeout(() => {

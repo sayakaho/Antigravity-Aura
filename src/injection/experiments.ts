@@ -50,13 +50,26 @@ function dispatchLocalStorageEvent(
   } catch {}
 }
 
+function writeNativeStorage(key: string, value: string | null): void {
+  if (typeof window === 'undefined') return;
+  const win = window as unknown as AuraGlobals;
+  if (win.nativeStorage && typeof win.nativeStorage.updateItems === 'function') {
+    try {
+      void win.nativeStorage.updateItems({ [key]: value });
+    } catch (err) {
+      console.warn('[Aura] Failed to update nativeStorage:', err);
+    }
+  }
+}
+
 function writeStorageAndNotify(
   key: string,
   prevValue: string | null,
   nextValue: string | null,
   forceNotify: boolean
 ): void {
-  if (nextValue !== prevValue) {
+  const valueChanged = nextValue !== prevValue;
+  if (valueChanged) {
     if (nextValue === null) window.localStorage.removeItem(key);
     else window.localStorage.setItem(key, nextValue);
     dispatchLocalStorageEvent(key, prevValue, nextValue);
@@ -64,6 +77,12 @@ function writeStorageAndNotify(
     // 宿主采用动态随机端口，冷启动时 React 可能早于 CDP 首次注入完成挂载；
     // 原生 localStorage 监听只在收到同窗口显式 StorageEvent 时更新 FeatureContext 状态。
     dispatchLocalStorageEvent(key, prevValue, nextValue);
+  }
+
+  // Antigravity 2.32+ (Electron 桌面端) 优先采纳 window.nativeStorage (native-bridge)，
+  // 必须双写同步原生存储通道并驱动 onChanged/kod 缓存失效
+  if (valueChanged || forceNotify) {
+    writeNativeStorage(key, nextValue);
   }
 }
 
@@ -147,6 +166,19 @@ export function patchUrlArchitectureParams(advanced: Partial<AdvancedConfig>): v
         }
         return originalGet.call(this, name);
       };
+
+      const originalHas = TargetUrlSearchParams.prototype.has;
+      if (typeof originalHas === 'function') {
+        TargetUrlSearchParams.prototype.has = function (name: string): boolean {
+          const win = (typeof window !== 'undefined' ? window : globalThis) as unknown as AuraGlobals;
+          const overrides = win.__ag_adv_arch_params;
+          if (overrides && Object.prototype.hasOwnProperty.call(overrides, name)) {
+            const val = overrides[name];
+            if (val !== null && val !== undefined) return true;
+          }
+          return originalHas.call(this, name);
+        };
+      }
     }
   } catch (err) {
     console.warn('[Aura] Failed to patch URLSearchParams architecture params:', err);

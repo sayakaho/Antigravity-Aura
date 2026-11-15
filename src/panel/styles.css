@@ -358,6 +358,54 @@ html, body {
   background: var(--aura-active-pill);
 }
 
+/* Architecture Reload Banner */
+.advanced-reload-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(234, 88, 12, 0.08);
+  border: 1px solid rgba(234, 88, 12, 0.25);
+  border-radius: 8px;
+  color: var(--aura-fg);
+  font-size: 12px;
+}
+
+.advanced-reload-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--aura-fg-muted);
+}
+
+.advanced-reload-banner-text svg {
+  color: #ea580c;
+  flex-shrink: 0;
+}
+
+.btn-reload-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(234, 88, 12, 0.35);
+  background: rgba(234, 88, 12, 0.15);
+  color: #ea580c;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-reload-window:hover {
+  background: rgba(234, 88, 12, 0.25);
+  border-color: rgba(234, 88, 12, 0.5);
+}
+
 /* Status Indicator Dot */
 .status-pill {
   display: inline-flex;

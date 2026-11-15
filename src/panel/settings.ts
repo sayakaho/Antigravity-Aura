@@ -372,38 +372,50 @@ export function bindSettingsControls(): void {
     });
   }
 
+  const showReloadBanner = () => {
+    const banner = document.getElementById('advanced-reload-banner');
+    if (banner) banner.style.display = 'flex';
+  };
+
   const labsToggle = document.getElementById('toggle-labs-dev-mode') as HTMLInputElement | null;
   labsToggle?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ labsDeveloperMode: labsToggle.checked }));
   });
 
   const channelSelect = document.getElementById('select-release-channel') as HTMLSelectElement | null;
   channelSelect?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ releaseChannel: channelSelect.value as any }));
   });
 
   const byoaToggle = document.getElementById('toggle-byoa') as HTMLInputElement | null;
   byoaToggle?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ isByoa: byoaToggle.checked }));
   });
 
   const entToggle = document.getElementById('toggle-enterprise-disabled') as HTMLInputElement | null;
   entToggle?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ isEnterpriseDisabled: entToggle.checked }));
   });
 
   const cdeToggle = document.getElementById('toggle-cde') as HTMLInputElement | null;
   cdeToggle?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ cde: cdeToggle.checked }));
   });
 
   const hostSelect = document.getElementById('select-host-variant') as HTMLSelectElement | null;
   hostSelect?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ hostVariant: hostSelect.value as any }));
   });
 
   const micToggle = document.getElementById('toggle-enable-microphone') as HTMLInputElement | null;
   micToggle?.addEventListener('change', () => {
+    showReloadBanner();
     void saveConfig(patchAdvanced({ enableMicrophone: micToggle.checked }));
   });
 }

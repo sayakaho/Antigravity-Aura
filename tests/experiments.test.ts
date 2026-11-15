@@ -229,9 +229,49 @@ describe('setupExperiments & StorageEvent synchronization', () => {
     const sp = new URLSearchParams('project=123');
     expect(sp.get('project')).toBe('123');
     expect(sp.get('cde')).toBe('true');
+    expect(sp.has('cde')).toBe(true);
     expect(sp.get('isEnterpriseDisabled')).toBe('true');
+    expect(sp.has('isEnterpriseDisabled')).toBe(true);
     expect(sp.get('hostVariant')).toBe('antigravity-ide');
+    expect(sp.has('hostVariant')).toBe(true);
     expect(sp.get('enableMicrophone')).toBe('true');
+    expect(sp.has('enableMicrophone')).toBe(true);
     expect(sp.get('nonexistent')).toBeNull();
+    expect(sp.has('nonexistent')).toBe(false);
+  });
+
+  test('synchronizes overrides to window.nativeStorage when present', async () => {
+    const { setupExperiments } = await import('../src/injection/experiments');
+    const win = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+    const nativeStorageUpdates: Array<Record<string, string | null>> = [];
+    win.nativeStorage = {
+      updateItems: (items: Record<string, string | null>) => {
+        nativeStorageUpdates.push(items);
+      }
+    };
+
+    setupExperiments({
+      labsDeveloperMode: true,
+      experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
+    });
+
+    expect(nativeStorageUpdates.length).toBe(2);
+    expect(nativeStorageUpdates[0]?.['jetski.developer.featureEnvironmentOverride']).toBe(
+      JSON.stringify({ enabled: true, userCohort: 'google' })
+    );
+    expect(nativeStorageUpdates[1]?.['jetski.developer.customFlagOverrides']).toContain(
+      '"enable-developer-mode":true'
+    );
+
+    // Disable passes null to clean up nativeStorage
+    nativeStorageUpdates.length = 0;
+    setupExperiments({
+      labsDeveloperMode: false,
+      experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
+    });
+
+    expect(nativeStorageUpdates.length).toBe(2);
+    expect(nativeStorageUpdates[0]?.['jetski.developer.featureEnvironmentOverride']).toBeNull();
+    expect(nativeStorageUpdates[1]?.['jetski.developer.customFlagOverrides']).toBeNull();
   });
 });

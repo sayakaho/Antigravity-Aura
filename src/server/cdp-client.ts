@@ -263,6 +263,25 @@ export class CdpManager {
     }
   }
 
+  public async reloadHostWindow(targetId?: string): Promise<boolean> {
+    await this.sync(true);
+    const snap = getBundleSnapshot();
+    let reloadedAny = false;
+    for (const [id, entry] of this.attachedTargets.entries()) {
+      if (targetId && id !== targetId) continue;
+      try {
+        await entry.send('Page.addScriptToEvaluateOnNewDocument', {
+          source: snap.injectScript
+        });
+        await entry.send('Page.reload', { ignoreCache: false });
+        reloadedAny = true;
+      } catch (err) {
+        console.warn(`[Sidecar Engine] Failed to reload window target ${id}:`, err);
+      }
+    }
+    return reloadedAny;
+  }
+
   public closeAll(): void {
     for (const [, entry] of this.attachedTargets.entries()) {
       try {

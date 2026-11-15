@@ -186,6 +186,26 @@ export function initThemePresetSync(presetsCfg: PresetConfig, themeMode?: string
           }, 50);
         }
       };
+
+      // 联动防御：宿主基于 window.nativeStorage (kod) 读取 theme-preset 时防止非原生预设名白屏
+      const winNativeStorage = (agGlobal as unknown as { nativeStorage?: {
+        getItems?: () => Promise<Record<string, string>> | Record<string, string>;
+        updateItems?: (items: Record<string, string | null>) => Promise<void> | void;
+      } }).nativeStorage;
+
+      if (winNativeStorage && typeof winNativeStorage.getItems === 'function') {
+        const origNativeGetItems = winNativeStorage.getItems.bind(winNativeStorage);
+        winNativeStorage.getItems = async function (): Promise<Record<string, string>> {
+          const res = (await origNativeGetItems()) || {};
+          const copy = { ...res };
+          for (const k of ['theme-preset-light', 'theme-preset-dark']) {
+            if (copy[k] && ALL_CUSTOM_PRESET_NAMES.has(copy[k])) {
+              copy[k] = k === 'theme-preset-light' ? 'Default Light' : 'Default Dark';
+            }
+          }
+          return copy;
+        };
+      }
     } catch {
       // Ignore storage hook restrictions
     }

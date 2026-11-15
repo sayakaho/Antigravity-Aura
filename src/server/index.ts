@@ -238,6 +238,15 @@ app.api('/api/reload', async () => {
   };
 });
 
+app.api('/api/reload-window', async () => {
+  const reloaded = await cdpManager.reloadHostWindow();
+  return {
+    ok: true,
+    reloaded,
+    targetCount: cdpManager.getTargetCount()
+  };
+});
+
 async function openDirectoryInFileManager(rawPath: string): Promise<string> {
   const resolved = path.resolve(rawPath);
   if (!fs.existsSync(resolved)) {

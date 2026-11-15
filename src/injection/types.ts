@@ -12,6 +12,12 @@ export interface ElectronNativeBridge {
   zoomReset?: () => void;
 }
 
+export interface NativeStorageBridge {
+  getItems?: () => Promise<Record<string, string>> | Record<string, string>;
+  updateItems?: (items: Record<string, string | null>) => Promise<void> | void;
+  onChanged?: (callback: (changes: Record<string, string | null>) => void) => void;
+}
+
 export interface AuraPatchContext {
   version: string;
   preset: string;
@@ -76,6 +82,7 @@ export interface AuraGlobals {
     devMode?: boolean;
     [key: string]: unknown;
   };
+  nativeStorage?: NativeStorageBridge;
   electronNative?: ElectronNativeBridge;
 }
 
