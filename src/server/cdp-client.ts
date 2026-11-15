@@ -348,11 +348,13 @@ export class CdpManager {
           if (!activeCascadeId || force) {
             const evalRes = await send('Runtime.evaluate', {
               expression: `(function(){
+                const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+                const selectedCid = el ? (el.getAttribute('data-cascade-id') || '') : '';
+                if (selectedCid && /^[0-9a-f-]{36}$/i.test(selectedCid)) return selectedCid;
                 if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
                 const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
                 if (m) return m[1];
-                const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
-                return el ? (el.getAttribute('data-cascade-id') || '') : '';
+                return '';
               })()`,
               returnByValue: true
             });

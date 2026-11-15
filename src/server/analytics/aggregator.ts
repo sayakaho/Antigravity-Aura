@@ -732,7 +732,7 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
       }
 
       const isCurrent = !item.isUntracked && acc === currentAccount;
-      item.quotaCapacity = quotaTracker.getAccountQuotaCapacity(
+      const cap = quotaTracker.getAccountQuotaCapacity(
         acc,
         tokens5h,
         tokens7d,
@@ -741,6 +741,10 @@ export function buildGlobalOverview(opts: BuildOverviewOptions): GlobalAnalytics
         cost5h,
         cost7d
       );
+      item.quotaCapacity = cap;
+      item.userTier = cap.userTier;
+      item.planName = cap.planName;
+      item.planDetails = cap.planDetails;
     }
   }
 

@@ -1,6 +1,13 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import type { AccountQuotaCapacity } from '../types';
+import type {
+  AccountPlanDetails,
+  AccountQuotaCapacity,
+  CalibrationSnapshot,
+  QuotaWindowTransition
+} from '../types';
+import { formatLocalDateAndHourKeys } from '../shared/format';
 
 export interface UserQuotaBucket {
   bucketId: string;
@@ -21,6 +28,26 @@ export interface RetrieveUserQuotaSummaryResponse {
   response?: {
     groups?: UserQuotaGroup[];
     description?: string;
+  };
+}
+
+export interface GetUserStatusResponse {
+  userStatus?: {
+    name?: string;
+    email?: string;
+    planStatus?: {
+      planInfo?: {
+        teamsTier?: string;
+        planName?: string;
+        monthlyPromptCredits?: number;
+        monthlyFlowCredits?: number;
+      };
+    };
+    userTier?: {
+      id?: string;
+      name?: string;
+      description?: string;
+    };
   };
 }
 
@@ -45,6 +72,9 @@ export interface PersistedCalibrationRecord {
   sampleCount5h: number;
   sampleCountWeekly: number;
   lastUpdated: number;
+  planDetails?: AccountPlanDetails;
+  history?: CalibrationSnapshot[];
+  recentTransitions?: QuotaWindowTransition[];
 }
 
 export interface QuotaTrackerOptions {
@@ -98,17 +128,17 @@ export class QuotaTracker {
   private readonly cacheTtlMs: number;
 
   private latestQuotaSummary: RetrieveUserQuotaSummaryResponse | null = null;
+  private latestUserStatus: GetUserStatusResponse | null = null;
   private lastFetchTime = 0;
   private inFlightFetch: Promise<RetrieveUserQuotaSummaryResponse | null> | null = null;
+  private inFlightUserStatusFetch: Promise<GetUserStatusResponse | null> | null = null;
 
   private readonly baselines = new Map<string, QuotaObservationPoint>();
   private readonly calibrations = new Map<string, PersistedCalibrationRecord>();
 
   constructor(options?: QuotaTrackerOptions) {
-    this.storageDir = options?.storageDir;
-    this.calibrationFilePath = this.storageDir
-      ? path.join(this.storageDir, 'quota_calibration.json')
-      : undefined;
+    this.storageDir = options?.storageDir || path.join(os.homedir(), '.gemini', 'antigravity');
+    this.calibrationFilePath = path.join(this.storageDir, 'quota_calibration.json');
 
     this.lsAddress = options?.lsAddress || process.env.ANTIGRAVITY_LS_ADDRESS || 'localhost:5387';
     this.csrfToken = options?.csrfToken || process.env.ANTIGRAVITY_CSRF_TOKEN || '';
@@ -116,15 +146,43 @@ export class QuotaTracker {
     this.cacheTtlMs = options?.cacheTtlMs || 20_000;
 
     this.loadCalibrations();
+    // Warm up background fetch on startup so first evaluation does not hit uninitialized state
+    void this.fetchQuotaSummary();
+    void this.fetchUserStatus();
   }
 
   public getLatestQuotaSummary(): RetrieveUserQuotaSummaryResponse | null {
     return this.latestQuotaSummary;
   }
 
+  public getLatestUserStatus(): GetUserStatusResponse | null {
+    return this.latestUserStatus;
+  }
+
+  public getLatestPlanDetails(): AccountPlanDetails | undefined {
+    const status = this.latestUserStatus?.userStatus;
+    const planInfo = status?.planStatus?.planInfo;
+    const userTier = status?.userTier;
+    if (!planInfo?.planName && !userTier?.name && !userTier?.id) {
+      return undefined;
+    }
+    return {
+      planName: planInfo?.planName,
+      teamsTier: planInfo?.teamsTier,
+      monthlyPromptCredits: planInfo?.monthlyPromptCredits,
+      monthlyFlowCredits: planInfo?.monthlyFlowCredits,
+      userTierId: userTier?.id,
+      userTierName: userTier?.name
+    };
+  }
+
   public setLatestQuotaSummaryForTesting(summary: RetrieveUserQuotaSummaryResponse | null): void {
     this.latestQuotaSummary = summary;
     this.lastFetchTime = Date.now();
+  }
+
+  public setLatestUserStatusForTesting(status: GetUserStatusResponse | null): void {
+    this.latestUserStatus = status;
   }
 
   public setCalibrationForTesting(account: string, record: PersistedCalibrationRecord): void {
@@ -152,7 +210,10 @@ export class QuotaTracker {
                 sevenDayCost: typeof r.sevenDayCost === 'number' ? r.sevenDayCost : undefined,
                 sampleCount5h: typeof r.sampleCount5h === 'number' ? r.sampleCount5h : 0,
                 sampleCountWeekly: typeof r.sampleCountWeekly === 'number' ? r.sampleCountWeekly : 0,
-                lastUpdated: typeof r.lastUpdated === 'number' ? r.lastUpdated : Date.now()
+                lastUpdated: typeof r.lastUpdated === 'number' ? r.lastUpdated : Date.now(),
+                planDetails: r.planDetails,
+                history: Array.isArray(r.history) ? r.history : undefined,
+                recentTransitions: Array.isArray(r.recentTransitions) ? r.recentTransitions : undefined
               });
             }
           }
@@ -176,6 +237,53 @@ export class QuotaTracker {
       fs.writeFileSync(this.calibrationFilePath, JSON.stringify(serializable, null, 2), 'utf8');
     } catch (err) {
       console.error('[QuotaTracker] Failed to save quota_calibration.json:', err);
+    }
+  }
+
+  public async fetchUserStatus(force = false): Promise<GetUserStatusResponse | null> {
+    const now = Date.now();
+    if (!force && this.latestUserStatus && now - this.lastFetchTime < this.cacheTtlMs) {
+      return this.latestUserStatus;
+    }
+    if (this.inFlightUserStatusFetch) {
+      return this.inFlightUserStatusFetch;
+    }
+    this.inFlightUserStatusFetch = this.performUserStatusFetch()
+      .then((status) => {
+        if (status) {
+          this.latestUserStatus = status;
+        }
+        return this.latestUserStatus;
+      })
+      .finally(() => {
+        this.inFlightUserStatusFetch = null;
+      });
+    return this.inFlightUserStatusFetch;
+  }
+
+  private async performUserStatusFetch(): Promise<GetUserStatusResponse | null> {
+    const url = `http://${this.lsAddress}/exa.language_server_pb.LanguageServerService/GetUserStatus`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-codeium-csrf-token': this.csrfToken
+        },
+        body: '{}',
+        signal: controller.signal
+      });
+
+      if (!res.ok) return null;
+      const data = (await res.json()) as GetUserStatusResponse;
+      return data;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -276,6 +384,18 @@ export class QuotaTracker {
       base.activeGroupId = activeGroupId;
     }
 
+    // Self-healing: if baseline fraction was recorded as undefined (e.g. uninitialized cold start), repair it now
+    if (typeof base.frac5h !== 'number' && typeof frac5h === 'number') {
+      base.frac5h = frac5h;
+      base.base5hTokens = currentAccountTokens;
+      base.base5hCost = currentAccountCost;
+    }
+    if (typeof base.fracWeekly !== 'number' && typeof fracWeekly === 'number') {
+      base.fracWeekly = fracWeekly;
+      base.baseWeeklyTokens = currentAccountTokens;
+      base.baseWeeklyCost = currentAccountCost;
+    }
+
     let updated = false;
 
     const record = this.calibrations.get(account) || {
@@ -283,6 +403,13 @@ export class QuotaTracker {
       sampleCountWeekly: 0,
       lastUpdated: Date.now()
     };
+
+    const planDetails = this.getLatestPlanDetails();
+    if (planDetails) {
+      record.planDetails = planDetails;
+    }
+
+    const { dateKey } = formatLocalDateAndHourKeys(new Date());
 
     // 1. Five Hour Differential Window (ΔTokens / ΔQ_5h)
     if (typeof base.frac5h === 'number' && typeof frac5h === 'number') {
@@ -300,18 +427,17 @@ export class QuotaTracker {
             ? currentAccountCost - base.base5hCost
             : undefined;
 
-        // Require at least 0.3% quota drop and 100k tokens consumed to filter noise
-        if (deltaQ5h >= 0.003 && deltaTokens5h >= 100_000) {
+        // Trigger on either >=0.3% quota drop with 80k tokens OR >=$0.15 cost drop
+        const isTrigger5h =
+          deltaQ5h >= 0.003 &&
+          (deltaTokens5h >= 80_000 || (typeof deltaCost5h === 'number' && deltaCost5h >= 0.15));
+
+        if (isTrigger5h) {
           const measured5h = Math.round(deltaTokens5h / deltaQ5h);
           if (measured5h >= 1_000_000 && measured5h <= 10_000_000_000) {
-            if (record.fiveHourTokens && record.sampleCount5h > 0) {
-              record.fiveHourTokens = Math.round(record.fiveHourTokens * 0.7 + measured5h * 0.3);
-            } else {
-              record.fiveHourTokens = measured5h;
-            }
-
+            let measured5hCost: number | undefined;
             if (typeof deltaCost5h === 'number' && deltaCost5h > 0) {
-              const measured5hCost = Math.round((deltaCost5h / deltaQ5h) * 100) / 100;
+              measured5hCost = Math.round((deltaCost5h / deltaQ5h) * 100) / 100;
               if (record.fiveHourCost && record.sampleCount5h > 0) {
                 record.fiveHourCost =
                   Math.round((record.fiveHourCost * 0.7 + measured5hCost * 0.3) * 100) / 100;
@@ -320,8 +446,49 @@ export class QuotaTracker {
               }
             }
 
+            if (record.fiveHourTokens && record.sampleCount5h > 0) {
+              record.fiveHourTokens = Math.round(record.fiveHourTokens * 0.7 + measured5h * 0.3);
+            } else {
+              record.fiveHourTokens = measured5h;
+            }
+
             record.sampleCount5h++;
             record.lastUpdated = Date.now();
+
+            if (!record.history) record.history = [];
+            record.history.push({
+              timestamp: Date.now(),
+              dateKey,
+              fiveHourCost: measured5hCost,
+              fiveHourTokens: measured5h,
+              userTier: planDetails?.userTierName || planDetails?.userTierId,
+              planName: planDetails?.planName,
+              deltaCost: deltaCost5h || 0,
+              deltaTokens: deltaTokens5h,
+              deltaQ5h,
+              groupName: activeGroupId || base.activeGroupId
+            });
+            if (record.history.length > 60) {
+              record.history = record.history.slice(-60);
+            }
+
+            if (!record.recentTransitions) record.recentTransitions = [];
+            record.recentTransitions.push({
+              timestamp: Date.now(),
+              account,
+              windowType: '5h',
+              prevFraction: base.frac5h,
+              currFraction: frac5h,
+              deltaFraction: deltaQ5h,
+              deltaTokens: deltaTokens5h,
+              deltaCost: deltaCost5h,
+              measuredCapacityTokens: measured5h,
+              measuredCapacityCost: measured5hCost
+            });
+            if (record.recentTransitions.length > 30) {
+              record.recentTransitions = record.recentTransitions.slice(-30);
+            }
+
             base.frac5h = frac5h;
             base.base5hTokens = currentAccountTokens;
             base.base5hCost = currentAccountCost;
@@ -348,18 +515,17 @@ export class QuotaTracker {
             ? currentAccountCost - base.baseWeeklyCost
             : undefined;
 
-        // Require at least 0.2% quota drop and 200k tokens consumed to filter noise
-        if (deltaQWeekly >= 0.002 && deltaTokensWeekly >= 200_000) {
+        // Trigger on either >=0.2% quota drop with 150k tokens OR >=$0.25 cost drop
+        const isTriggerWeekly =
+          deltaQWeekly >= 0.002 &&
+          (deltaTokensWeekly >= 150_000 || (typeof deltaCostWeekly === 'number' && deltaCostWeekly >= 0.25));
+
+        if (isTriggerWeekly) {
           const measuredWeekly = Math.round(deltaTokensWeekly / deltaQWeekly);
           if (measuredWeekly >= 10_000_000 && measuredWeekly <= 50_000_000_000) {
-            if (record.sevenDayTokens && record.sampleCountWeekly > 0) {
-              record.sevenDayTokens = Math.round(record.sevenDayTokens * 0.7 + measuredWeekly * 0.3);
-            } else {
-              record.sevenDayTokens = measuredWeekly;
-            }
-
+            let measuredWeeklyCost: number | undefined;
             if (typeof deltaCostWeekly === 'number' && deltaCostWeekly > 0) {
-              const measuredWeeklyCost = Math.round((deltaCostWeekly / deltaQWeekly) * 100) / 100;
+              measuredWeeklyCost = Math.round((deltaCostWeekly / deltaQWeekly) * 100) / 100;
               if (record.sevenDayCost && record.sampleCountWeekly > 0) {
                 record.sevenDayCost =
                   Math.round((record.sevenDayCost * 0.7 + measuredWeeklyCost * 0.3) * 100) / 100;
@@ -368,8 +534,49 @@ export class QuotaTracker {
               }
             }
 
+            if (record.sevenDayTokens && record.sampleCountWeekly > 0) {
+              record.sevenDayTokens = Math.round(record.sevenDayTokens * 0.7 + measuredWeekly * 0.3);
+            } else {
+              record.sevenDayTokens = measuredWeekly;
+            }
+
             record.sampleCountWeekly++;
             record.lastUpdated = Date.now();
+
+            if (!record.history) record.history = [];
+            record.history.push({
+              timestamp: Date.now(),
+              dateKey,
+              sevenDayCost: measuredWeeklyCost,
+              sevenDayTokens: measuredWeekly,
+              userTier: planDetails?.userTierName || planDetails?.userTierId,
+              planName: planDetails?.planName,
+              deltaCost: deltaCostWeekly || 0,
+              deltaTokens: deltaTokensWeekly,
+              deltaQWeekly,
+              groupName: activeGroupId || base.activeGroupId
+            });
+            if (record.history.length > 60) {
+              record.history = record.history.slice(-60);
+            }
+
+            if (!record.recentTransitions) record.recentTransitions = [];
+            record.recentTransitions.push({
+              timestamp: Date.now(),
+              account,
+              windowType: 'weekly',
+              prevFraction: base.fracWeekly,
+              currFraction: fracWeekly,
+              deltaFraction: deltaQWeekly,
+              deltaTokens: deltaTokensWeekly,
+              deltaCost: deltaCostWeekly,
+              measuredCapacityTokens: measuredWeekly,
+              measuredCapacityCost: measuredWeeklyCost
+            });
+            if (record.recentTransitions.length > 30) {
+              record.recentTransitions = record.recentTransitions.slice(-30);
+            }
+
             base.fracWeekly = fracWeekly;
             base.baseWeeklyTokens = currentAccountTokens;
             base.baseWeeklyCost = currentAccountCost;
@@ -398,6 +605,7 @@ export class QuotaTracker {
     const now = Date.now();
     if (now - this.lastFetchTime >= this.cacheTtlMs && !this.inFlightFetch) {
       void this.fetchQuotaSummary();
+      void this.fetchUserStatus();
     }
 
     const { frac5h, fracWeekly, activeGroupId } = extractActiveQuotaFractions(
@@ -417,6 +625,7 @@ export class QuotaTracker {
     }
 
     const record = this.calibrations.get(account);
+    const planDetails = record?.planDetails || this.getLatestPlanDetails();
     const isCalibrated = !!(
       record?.fiveHourTokens ||
       record?.sevenDayTokens ||
@@ -433,7 +642,12 @@ export class QuotaTracker {
       sevenDayUsed: tokens7d,
       fiveHourFraction: frac5h,
       weeklyFraction: fracWeekly,
-      status: isCalibrated ? 'calibrated' : 'calibrating'
+      status: isCalibrated ? 'calibrated' : 'calibrating',
+      userTier: planDetails?.userTierName || planDetails?.userTierId,
+      planName: planDetails?.planName,
+      planDetails,
+      history: record?.history,
+      recentTransitions: record?.recentTransitions
     };
   }
 }

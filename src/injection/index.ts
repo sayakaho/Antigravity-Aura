@@ -50,6 +50,12 @@ function uninstallRuntime(patchVersion: string): void {
     } catch {}
     agGlobal.__ag_i18n_observer = null;
   }
+  if (agGlobal.__ag_sidebar_selection_observer) {
+    try {
+      agGlobal.__ag_sidebar_selection_observer.disconnect();
+    } catch {}
+    agGlobal.__ag_sidebar_selection_observer = null;
+  }
   if (agGlobal.__ag_metrics_route_watcher) {
     clearInterval(agGlobal.__ag_metrics_route_watcher);
     agGlobal.__ag_metrics_route_watcher = null;

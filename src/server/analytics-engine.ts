@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { AccountTracker, isUntrackedAccount } from './account-tracker';
 import { QuotaTracker } from './quota-tracker';
-import { canonicalizeTool, resolveCanonicalModelId } from '../shared/catalog';
+import { canonicalizeTool, getModelPricingRates, resolveCanonicalModelId } from '../shared/catalog';
 import { resolveSummaryProjectInfo } from '../shared/project';
 import {
   buildSessionTreeIndex,
@@ -770,6 +770,13 @@ export class GlobalAnalyticsEngine {
           };
         }
         const accItem = sessionAccountMap[stepAccount];
+        const stepModelRates = getModelPricingRates(modelKey || parsed.modelName);
+        const stepCost =
+          (parsed.inTok * stepModelRates.inputRate +
+            parsed.outTok * stepModelRates.outputRate +
+            parsed.cacheRead * stepModelRates.cacheRate) /
+          1_000_000;
+        accItem.cost = (accItem.cost || 0) + stepCost;
         accItem.inputTok += parsed.inTok;
         accItem.outTok += parsed.outTok;
         accItem.cacheRead += parsed.cacheRead;

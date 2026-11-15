@@ -95,7 +95,8 @@ describe('QuotaTracker & Differential Calibration (ΔTokens / ΔQ)', () => {
   });
 
   test('applies weighted smoothing on subsequent differential measurements', () => {
-    const tracker = new QuotaTracker();
+    const tmpDir = path.join(os.tmpdir(), `aura-smooth-test-${Date.now()}-${Math.random()}`);
+    const tracker = new QuotaTracker({ storageDir: tmpDir });
     const account = 'smooth@example.com';
 
     // Baseline
@@ -112,10 +113,15 @@ describe('QuotaTracker & Differential Calibration (ΔTokens / ΔQ)', () => {
     rec = tracker.getCalibrationRecord(account);
     expect(rec?.fiveHourTokens).toBe(106_000_000);
     expect(rec?.sampleCount5h).toBe(2);
+
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test('decouples 5h and weekly baselines so 5h updates do not truncate weekly accumulation', () => {
-    const tracker = new QuotaTracker();
+    const tmpDir = path.join(os.tmpdir(), `aura-decouple-test-${Date.now()}-${Math.random()}`);
+    const tracker = new QuotaTracker({ storageDir: tmpDir });
     const account = 'decouple@example.com';
 
     // Initial baseline: 10M tokens, frac5h: 0.80, fracWeekly: 0.90
@@ -134,10 +140,15 @@ describe('QuotaTracker & Differential Calibration (ΔTokens / ΔQ)', () => {
     // Weekly delta should be total 300k tokens over 0.003 drop = 100M (not truncated to 150k / 0.003)
     expect(rec?.sevenDayTokens).toBe(100_000_000);
     expect(rec?.sampleCountWeekly).toBe(1);
+
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test('resets baseline cleanly when quota group changes dynamically', () => {
-    const tracker = new QuotaTracker();
+    const tmpDir = path.join(os.tmpdir(), `aura-group-test-${Date.now()}-${Math.random()}`);
+    const tracker = new QuotaTracker({ storageDir: tmpDir });
     const account = 'group_switch@example.com';
 
     // Baseline under Gemini Models (frac5h: 0.90)
@@ -148,5 +159,70 @@ describe('QuotaTracker & Differential Calibration (ΔTokens / ΔQ)', () => {
     tracker.recordObservation(account, 10_010_000, 0.70, 0.80, 10.1, 'Claude and GPT models');
     let rec = tracker.getCalibrationRecord(account);
     expect(rec).toBeUndefined(); // Safely reset baseline, no calibration record created
+
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  test('self-heals uninitialized undefined baseline and appends calibration snapshot history', () => {
+    const tmpDir = path.join(os.tmpdir(), `aura-heal-test-${Date.now()}-${Math.random()}`);
+    const tracker = new QuotaTracker({ storageDir: tmpDir });
+    const account = 'heal@example.com';
+
+    // Step 1: Simulate cold start where RPC was in flight, fraction passed as undefined
+    tracker.recordObservation(account, 5_000_000, undefined, undefined, 10.0);
+
+    // Step 2: Next cycle RPC resolves, frac5h is 0.80. Base should self-heal and repair frac5h
+    tracker.recordObservation(account, 5_000_000, 0.80, 0.90, 10.0);
+
+    // Step 3: Turn consumes 90k tokens and $0.20 cost, frac5h drops from 0.80 to 0.79
+    // Expected 5h capacity: 90k / 0.01 = 9M tokens, $0.20 / 0.01 = $20.00
+    tracker.recordObservation(account, 5_090_000, 0.79, 0.90, 10.2);
+
+    const rec = tracker.getCalibrationRecord(account);
+    expect(rec).toBeDefined();
+    expect(rec?.fiveHourTokens).toBe(9_000_000);
+    expect(rec?.fiveHourCost).toBe(20.0);
+    expect(rec?.history).toBeDefined();
+    expect(rec?.history?.length).toBe(1);
+    expect(rec?.history?.[0].fiveHourCost).toBe(20.0);
+    expect(rec?.history?.[0].fiveHourTokens).toBe(9_000_000);
+
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  test('records bounded recent transitions as intermediate calculation evidence', () => {
+    const tmpDir = path.join(os.tmpdir(), `aura-transitions-test-${Date.now()}`);
+    const tracker = new QuotaTracker({ storageDir: tmpDir });
+    const account = 'trans@example.com';
+
+    // Baseline
+    tracker.recordObservation(account, 1_000_000, 0.90, 0.95, 2.0);
+
+    // Turn 1: 5h drop 0.90 -> 0.88 (deltaQ = 0.02), deltaTokens = 100,000, deltaCost = $0.40
+    // Capacity: 5,000,000 tokens, $20.00
+    tracker.recordObservation(account, 1_100_000, 0.88, 0.95, 2.4);
+
+    const cap = tracker.getAccountQuotaCapacity(account, 100_000, 100_000);
+    expect(cap.recentTransitions).toBeDefined();
+    expect(cap.recentTransitions?.length).toBe(1);
+    expect(cap.recentTransitions?.[0].windowType).toBe('5h');
+    expect(cap.recentTransitions?.[0].deltaFraction).toBeCloseTo(0.02);
+    expect(cap.recentTransitions?.[0].deltaTokens).toBe(100_000);
+    expect(cap.recentTransitions?.[0].deltaCost).toBeCloseTo(0.4);
+    expect(cap.recentTransitions?.[0].measuredCapacityTokens).toBe(5_000_000);
+    expect(cap.recentTransitions?.[0].measuredCapacityCost).toBe(20.0);
+
+    // Persistence test
+    const tracker2 = new QuotaTracker({ storageDir: tmpDir });
+    const cap2 = tracker2.getAccountQuotaCapacity(account, 0, 0);
+    expect(cap2.recentTransitions?.length).toBe(1);
+
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 });

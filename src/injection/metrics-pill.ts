@@ -3,13 +3,13 @@ import { agGlobal } from './types';
 
 function extractCascadeId(): string {
   try {
-    const m = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/i);
-    if (m) return m[1];
-    const q = new URLSearchParams(window.location.search).get('cascadeId');
-    if (q && /^[0-9a-f-]{36}$/i.test(q)) return q;
     const selected = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
     const cid = selected?.getAttribute('data-cascade-id');
     if (cid && /^[0-9a-f-]{36}$/i.test(cid)) return cid;
+    const q = new URLSearchParams(window.location.search).get('cascadeId');
+    if (q && /^[0-9a-f-]{36}$/i.test(q)) return q;
+    const m = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/i);
+    if (m) return m[1];
   } catch {
     // Ignore malformed query string
   }
@@ -434,7 +434,7 @@ export function initMetricsCapsule(
     }
   };
 
-  const checkRouteAndMountMetrics = () => {
+  const checkRouteAndMountMetrics = (explicitCid?: string) => {
     try {
       if (document.hidden) return;
       const cfg = agGlobal.__ag_metrics_config;
@@ -443,10 +443,11 @@ export function initMetricsCapsule(
       const box = document.getElementById(cfg.selectors.inputBoxId);
       const hasBranchPillInBox = Boolean(box?.querySelector(cfg.selectors.branchPillInBox));
       const isHome =
-        hasBranchPillInBox ||
-        Boolean(document.querySelector(cfg.selectors.homeGreeting)) ||
-        window.location.pathname === '/' ||
-        !window.location.pathname.startsWith('/c/');
+        !explicitCid &&
+        (hasBranchPillInBox ||
+          Boolean(document.querySelector(cfg.selectors.homeGreeting)) ||
+          window.location.pathname === '/' ||
+          !window.location.pathname.startsWith('/c/'));
       const pageType = isHome ? 'home' : 'chat';
       if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
         document.documentElement.setAttribute('data-ag-page-type', pageType);
@@ -458,7 +459,7 @@ export function initMetricsCapsule(
         return;
       }
 
-      const cid = extractCascadeId();
+      const cid = explicitCid || extractCascadeId();
       if (!cid) {
         agGlobal.__ag_watched_cascade_id = '';
         const pill = document.getElementById('ag-live-metrics-pill');
@@ -519,8 +520,19 @@ export function initMetricsCapsule(
 
     const onPotentialNavigation = (e: Event) => {
       const target = e.target as Element | null;
+      if (!target) return;
+
+      const targetRow = target.closest?.('[data-testid="conversation-row-sidebar"]') as HTMLElement | null;
+      const targetCid = targetRow?.getAttribute?.('data-cascade-id');
+      if (targetCid && /^[0-9a-f-]{36}$/i.test(targetCid)) {
+        if (targetCid !== agGlobal.__ag_watched_cascade_id) {
+          checkRouteAndMountMetrics(targetCid);
+        }
+        triggerRouteCheck();
+        return;
+      }
+
       if (
-        !target ||
         target.closest?.(
           '[data-testid="conversation-row-sidebar"], aside, nav, [class*="sidebar"], [class*="conversation"]'
         )
@@ -530,6 +542,37 @@ export function initMetricsCapsule(
     };
     document.addEventListener('click', onPotentialNavigation, { capture: true, passive: true });
     document.addEventListener('keydown', onPotentialNavigation, { capture: true, passive: true });
+
+    if (!agGlobal.__ag_sidebar_selection_observer && typeof MutationObserver !== 'undefined' && document.body) {
+      try {
+        const selObserver = new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            if (m.type === 'attributes' && m.attributeName === 'data-selected') {
+              const el = m.target as HTMLElement;
+              if (el?.getAttribute?.('data-selected') === 'true') {
+                const newCid = el.getAttribute?.('data-cascade-id');
+                if (newCid && /^[0-9a-f-]{36}$/i.test(newCid) && newCid !== agGlobal.__ag_watched_cascade_id) {
+                  checkRouteAndMountMetrics(newCid);
+                  break;
+                }
+              }
+            }
+          }
+        });
+
+        const sidebarTarget =
+          document.querySelector('aside') ||
+          document.querySelector('[class*="sidebar"]') ||
+          document.body;
+
+        selObserver.observe(sidebarTarget, {
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['data-selected']
+        });
+        agGlobal.__ag_sidebar_selection_observer = selObserver;
+      } catch {}
+    }
 
     window.addEventListener('focus', () => {
       if (document.hidden) return;

@@ -15,7 +15,9 @@ import {
 } from '../../shared/format';
 import { computeBucketTps, computeStepTps, computeWeightedTps } from '../../shared/tps';
 import type {
+  AccountQuotaCapacity,
   AccountTokenStat,
+  CalibrationSnapshot,
   DailySeriesPoint,
   GlobalAnalyticsOverview,
   HourlySeriesPoint,
@@ -1086,6 +1088,81 @@ export function renderProjectDistribution(
   }
 }
 
+export function renderQuotaHistoryHeatmap(capacity?: AccountQuotaCapacity): string {
+  const history = capacity?.history || [];
+  const historyMap = new Map<string, CalibrationSnapshot>();
+  for (const h of history) {
+    historyMap.set(h.dateKey, h);
+  }
+
+  // Generate 30 consecutive calendar days ending today
+  const today = new Date();
+  const dayList: string[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * 86400 * 1000);
+    dayList.push(formatLocalDateKey(d));
+  }
+
+  // Find max capacity for relative heat coloring
+  let maxCost = 0;
+  for (const h of history) {
+    const cost = h.fiveHourCost || (h.fiveHourTokens ? h.fiveHourTokens / 5_000_000 : 0);
+    if (cost > maxCost) maxCost = cost;
+  }
+  if (maxCost <= 0) maxCost = 20;
+
+  const cellsHtml = dayList
+    .map((dateStr) => {
+      const snap = historyMap.get(dateStr);
+      if (!snap) {
+        return `<div class="quota-heatmap-cell level-0" title="${dateStr}: No capacity calibration"></div>`;
+      }
+      const cost = snap.fiveHourCost || (snap.fiveHourTokens ? snap.fiveHourTokens / 5_000_000 : 0);
+      const ratio = Math.min(1, Math.max(0.1, cost / maxCost));
+      let level = 'level-1';
+      if (ratio > 0.75) level = 'level-4';
+      else if (ratio > 0.5) level = 'level-3';
+      else if (ratio > 0.25) level = 'level-2';
+
+      const cost5hStr = snap.fiveHourCost
+        ? `~$${snap.fiveHourCost.toFixed(2)}`
+        : snap.fiveHourTokens
+          ? `~${formatCompactNumber(snap.fiveHourTokens)} tok`
+          : 'Calibrating';
+      const cost7dStr = snap.sevenDayCost
+        ? `~$${snap.sevenDayCost.toFixed(2)}`
+        : snap.sevenDayTokens
+          ? `~${formatCompactNumber(snap.sevenDayTokens)} tok`
+          : 'Calibrating';
+      const planStr = snap.planName || snap.userTier || 'Pro';
+      const groupStr = snap.groupName ? ` · ${snap.groupName}` : '';
+      const tooltip = `${dateStr} · 5h: ${cost5hStr} · 7d: ${cost7dStr} (${planStr}${groupStr})`;
+
+      return `<div class="quota-heatmap-cell ${level}" title="${escapeHtml(tooltip)}"></div>`;
+    })
+    .join('');
+
+  return `
+    <div class="quota-heatmap-container">
+      <div class="quota-heatmap-meta">
+        <span class="quota-heatmap-title">Capacity Activity (30 Days)</span>
+        <div class="quota-heatmap-legend">
+          <span class="legend-text">Less</span>
+          <span class="quota-heatmap-cell level-0"></span>
+          <span class="quota-heatmap-cell level-1"></span>
+          <span class="quota-heatmap-cell level-2"></span>
+          <span class="quota-heatmap-cell level-3"></span>
+          <span class="quota-heatmap-cell level-4"></span>
+          <span class="legend-text">More</span>
+        </div>
+      </div>
+      <div class="quota-heatmap-grid">
+        ${cellsHtml}
+      </div>
+    </div>
+  `;
+}
+
 export function computeAccountDistributionItems(
   overview: GlobalAnalyticsOverview,
   timeContextOrRange: TimeFilterContext | TimeRangeOption,
@@ -1098,15 +1175,24 @@ export function computeAccountDistributionItems(
   const timeCtx = resolveTimeFilterContext(timeContextOrRange, customStart, customEnd, now);
   const { range, dates } = timeCtx;
 
-  if (range === 'session') {
-    if (activeSessionData?.accounts && activeSessionData.accounts.length > 0) {
-      return [...activeSessionData.accounts];
-    }
-    return [];
-  }
-
   if (scope === 'all-time' || !overview.dailyAccountStats) {
     return overview.accountDistribution ? [...overview.accountDistribution] : [];
+  }
+
+  if (range === 'session') {
+    if (activeSessionData?.accounts && activeSessionData.accounts.length > 0) {
+      return activeSessionData.accounts.map((a) => {
+        const baseAccount = overview.accountDistribution?.find((base) => base.account === a.account);
+        return {
+          ...a,
+          userTier: a.userTier || baseAccount?.userTier,
+          planName: a.planName || baseAccount?.planName,
+          planDetails: a.planDetails || baseAccount?.planDetails,
+          quotaCapacity: a.quotaCapacity || baseAccount?.quotaCapacity
+        };
+      });
+    }
+    return [];
   }
 
   const aggMap = new Map<string, { stat: AccountTokenStat; convIds: Set<string> }>();
@@ -1287,11 +1373,30 @@ export function renderAccountDistribution(
             <span class="project-pct-badge">${pctText}</span>
           `;
 
+      let planPillHtml = '';
+      const p = a.planDetails || a.quotaCapacity?.planDetails;
+      if (p?.planName) {
+        const tooltipLines = [
+          `"planName": "${p.planName}",`,
+          `"teamsTier": "${p.teamsTier || 'TEAMS_TIER_PRO'}",`,
+          typeof p.monthlyPromptCredits === 'number'
+            ? `"monthlyPromptCredits": ${p.monthlyPromptCredits},`
+            : '"monthlyPromptCredits": 50000,',
+          typeof p.monthlyFlowCredits === 'number'
+            ? `"monthlyFlowCredits": ${p.monthlyFlowCredits}`
+            : '"monthlyFlowCredits": 150000',
+          p.userTierId ? `"id": "${p.userTierId}",` : '"id": "g1-pro-tier",'
+        ].filter(Boolean).join('\n');
+
+        planPillHtml = `<span class="account-plan-pill" title="${escapeHtml(tooltipLines)}">${escapeHtml(p.planName)}</span>`;
+      }
+
       return `
         <div class="${rowClass}">
           <div class="project-meta">
             <div class="account-name-group">
               <span class="project-name account-name">${escapeHtml(a.account)}</span>
+              ${planPillHtml}
               ${badgeHtml}
             </div>
             <div class="project-counts">
@@ -1307,6 +1412,7 @@ export function renderAccountDistribution(
             </span>
             ${quotaHtml}
           </div>
+          ${renderQuotaHistoryHeatmap(a.quotaCapacity)}
         </div>
       `;
     })

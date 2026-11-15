@@ -174,6 +174,44 @@ export interface AccountTimelineEntry {
   end: number | null; // null if currently active
 }
 
+export interface AccountPlanDetails {
+  planName?: string;
+  teamsTier?: string;
+  monthlyPromptCredits?: number;
+  monthlyFlowCredits?: number;
+  userTierId?: string;
+  userTierName?: string;
+}
+
+export interface CalibrationSnapshot {
+  timestamp: number;
+  dateKey: string;
+  fiveHourCost?: number;
+  fiveHourTokens?: number;
+  sevenDayCost?: number;
+  sevenDayTokens?: number;
+  userTier?: string;
+  planName?: string;
+  deltaCost: number;
+  deltaTokens: number;
+  deltaQ5h?: number;
+  deltaQWeekly?: number;
+  groupName?: string;
+}
+
+export interface QuotaWindowTransition {
+  timestamp: number;
+  account: string;
+  windowType: '5h' | 'weekly';
+  prevFraction: number;
+  currFraction: number;
+  deltaFraction: number;
+  deltaTokens: number;
+  deltaCost?: number;
+  measuredCapacityTokens: number;
+  measuredCapacityCost?: number;
+}
+
 export interface AccountQuotaCapacity {
   fiveHourTokens?: number;
   sevenDayTokens?: number;
@@ -184,6 +222,11 @@ export interface AccountQuotaCapacity {
   fiveHourFraction?: number;
   weeklyFraction?: number;
   status: 'calibrated' | 'calibrating';
+  userTier?: string;
+  planName?: string;
+  planDetails?: AccountPlanDetails;
+  history?: CalibrationSnapshot[];
+  recentTransitions?: QuotaWindowTransition[];
 }
 
 export interface AccountTokenStat {
@@ -198,6 +241,9 @@ export interface AccountTokenStat {
   conversationCount: number;
   isCurrent?: boolean;
   isUntracked?: boolean;
+  userTier?: string;
+  planName?: string;
+  planDetails?: AccountPlanDetails;
   quotaCapacity?: AccountQuotaCapacity;
 }
 

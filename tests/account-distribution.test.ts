@@ -265,4 +265,76 @@ describe('Account Token Consumption UI & Distribution', () => {
     expect(container.innerHTML).toContain('~$20.00');
     expect(container.innerHTML).toContain('~$100.00');
   });
+
+  test('renderAccountDistribution renders plan pill with exact tooltip and GitHub-style heatmap', () => {
+    const overview = makeBaseOverview();
+    overview.accountDistribution = [
+      {
+        account: 'primary@example.com',
+        cost: 10.0,
+        totalTokens: 100_000,
+        inputTok: 20_000,
+        outTok: 80_000,
+        cacheRead: 0,
+        thinkTok: 0,
+        requests: 5,
+        conversationCount: 1,
+        isCurrent: true,
+        planDetails: {
+          planName: 'Pro',
+          teamsTier: 'TEAMS_TIER_PRO',
+          monthlyPromptCredits: 50000,
+          monthlyFlowCredits: 150000,
+          userTierId: 'g1-pro-tier'
+        },
+        quotaCapacity: {
+          status: 'calibrated',
+          fiveHourCost: 20.0,
+          sevenDayCost: 100.0,
+          history: [
+            {
+              timestamp: Date.now(),
+              dateKey: '2026-11-15',
+              fiveHourCost: 20.5,
+              sevenDayCost: 102.0,
+              deltaCost: 0.35,
+              deltaTokens: 85_000,
+              planName: 'Pro',
+              groupName: 'Gemini Models'
+            }
+          ]
+        }
+      }
+    ];
+
+    const container = {
+      id: 'analytics-accounts-list',
+      innerHTML: '',
+      querySelectorAll: () => []
+    };
+    (globalThis as any).document = {
+      getElementById: (id: string) => (id === 'analytics-accounts-list' ? container : null)
+    };
+
+    renderAccountDistribution(overview, 'last-30-days', null, 'all-time');
+
+    // 1. Verify Plan Pill container and content
+    expect(container.innerHTML).toContain('account-plan-pill');
+    expect(container.innerHTML).toContain('>Pro<');
+
+    // 2. Verify Hover Tooltip contains exact requested fields
+    expect(container.innerHTML).toContain('&quot;planName&quot;: &quot;Pro&quot;');
+    expect(container.innerHTML).toContain('&quot;teamsTier&quot;: &quot;TEAMS_TIER_PRO&quot;');
+    expect(container.innerHTML).toContain('&quot;monthlyPromptCredits&quot;: 50000');
+    expect(container.innerHTML).toContain('&quot;monthlyFlowCredits&quot;: 150000');
+    expect(container.innerHTML).toContain('&quot;id&quot;: &quot;g1-pro-tier&quot;');
+
+    // 3. Verify GitHub-style Heatmap Grid & Legend
+    expect(container.innerHTML).toContain('quota-heatmap-container');
+    expect(container.innerHTML).toContain('Capacity Activity (30 Days)');
+    expect(container.innerHTML).toContain('Less');
+    expect(container.innerHTML).toContain('More');
+    expect(container.innerHTML).toContain('quota-heatmap-grid');
+    expect(container.innerHTML).toContain('2026-11-15 · 5h: ~$20.50 · 7d: ~$102.00 (Pro · Gemini Models)');
+  });
 });

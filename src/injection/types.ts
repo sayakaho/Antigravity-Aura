@@ -65,6 +65,7 @@ export interface AuraGlobals {
   };
   __ag_metrics_ro?: ResizeObserver | null;
   __ag_pill_resize_observer?: ResizeObserver | null;
+  __ag_sidebar_selection_observer?: MutationObserver | null;
   __ag_activity_summary_observer?: MutationObserver | null;
   __agRequestMetrics?: (cascadeId: string) => void;
   __ag_on_session_change?: (cascadeId: string) => void;
