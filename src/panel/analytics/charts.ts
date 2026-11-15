@@ -1215,12 +1215,7 @@ export function renderModelTpsChart(
   const chartWrapper = document.getElementById('analytics-model-tps-chart');
   if (!chartWrapper) return;
 
-  const isSession =
-    range === 'session' &&
-    Boolean(
-      activeSessionData &&
-        (activeSessionData.steps.length > 0 || (activeSessionData.speedTimeline?.slots.length || 0) > 0)
-    );
+  const isSession = range === 'session';
   const isHourly = range === 'today' || range === 'yesterday';
 
   const svgWidth = 600;
@@ -1245,7 +1240,16 @@ export function renderModelTpsChart(
   let showModelLegend = true;
 
   if (isSession) {
-    const timeline = activeSessionData!.speedTimeline;
+    const hasTimeline = Boolean(
+      activeSessionData?.speedTimeline && (activeSessionData.speedTimeline.slots.length || 0) > 0
+    );
+    const hasSteps = Boolean(activeSessionData?.steps && activeSessionData.steps.length > 0);
+    if (!activeSessionData || (!hasTimeline && !hasSteps)) {
+      renderEmptyChartCard(chartWrapper, title, 'No throughput data recorded in this session', subtitle);
+      return;
+    }
+
+    const timeline = activeSessionData.speedTimeline;
     if (timeline && timeline.slots.length > 0) {
       const slots = timeline.slots;
       const bucketSizeSec = timeline.bucketSizeSec;

@@ -296,13 +296,16 @@ async function runRefreshPass(initialOptions: Required<RefreshAnalyticsOptions>)
       }
 
       const seq = ++refreshSeq;
+      const isSessionFollow =
+        currentRange === 'session' &&
+        currentProjectScope === 'follow' &&
+        currentAccountScope === 'follow';
+
       const canDeferOverview =
         opts.mode === 'auto' &&
         !opts.force &&
-        currentRange === 'session' &&
-        currentProjectScope === 'follow' &&
-        rawOverview !== null &&
-        activeSessionData !== null;
+        isSessionFollow &&
+        rawOverview !== null;
 
       if (canDeferOverview) {
         overviewDirty = true;

@@ -671,6 +671,7 @@ describe('Unified TPS & Analytics Metrics', () => {
     const fakeCards = { innerHTML: '' };
     const fakeModels = { innerHTML: '' };
     const fakeTools = { innerHTML: '' };
+    const fakeTps = { innerHTML: '' };
     const origDocument = (globalThis as { document?: unknown }).document;
     (globalThis as { document?: unknown }).document = {
       getElementById: (id: string) =>
@@ -680,7 +681,9 @@ describe('Unified TPS & Analytics Metrics', () => {
             ? fakeModels
             : id === 'analytics-tools-list'
               ? fakeTools
-              : null
+              : id === 'analytics-model-tps-chart'
+                ? fakeTps
+                : null
     };
 
     try {
@@ -700,6 +703,13 @@ describe('Unified TPS & Analytics Metrics', () => {
       renderToolDistribution(overview, 'session', emptySession);
       expect(fakeTools.innerHTML).toContain('No tool executions recorded in this session');
       expect(fakeTools.innerHTML).not.toContain('Global Tool');
+
+      renderModelTpsChart(overview, 'session', emptySession);
+      expect(fakeTps.innerHTML).toContain('No throughput data recorded in this session');
+      expect(fakeTps.innerHTML).not.toContain('Global Only Model');
+
+      renderModelTpsChart(overview, 'session', null);
+      expect(fakeTps.innerHTML).toContain('No throughput data recorded in this session');
     } finally {
       if (origDocument === undefined) {
         delete (globalThis as { document?: unknown }).document;

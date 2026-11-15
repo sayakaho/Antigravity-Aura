@@ -575,7 +575,7 @@ describe('Subagent session tree & analytics integration', () => {
     };
 
     try {
-      renderSubagentDistribution(overview, 'last-7-days', null, processed);
+      renderSubagentDistribution(overview, 'last-7-days', null, processed, '', '', now);
       expect(fakeSection.style.display).toBe('');
       expect(fakeContainer.innerHTML).toContain('Main Agent');
       expect(fakeContainer.innerHTML).toContain('40.0%');

@@ -31,6 +31,7 @@ export function getRangeBounds(
   const today = formatLocalDateKey(now);
 
   switch (range) {
+    case 'session':
     case 'today':
       return { startDate: today, endDate: today };
     case 'yesterday': {

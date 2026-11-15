@@ -1632,7 +1632,8 @@ export function renderSubagentDistribution(
   activeSessionData: SessionAnalyticsData | null,
   processedMetrics: ProcessedRangeMetrics,
   customStart = '',
-  customEnd = ''
+  customEnd = '',
+  now = new Date()
 ): void {
   const section = document.getElementById('analytics-subagents-section');
   const container = document.getElementById('analytics-subagents-list');
@@ -1644,7 +1645,8 @@ export function renderSubagentDistribution(
     activeSessionData,
     processedMetrics,
     customStart,
-    customEnd
+    customEnd,
+    now
   );
 
   if (!breakdown || breakdown.items.length === 0) {
