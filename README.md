@@ -47,13 +47,10 @@ English | [简体中文](README.zh-CN.md)
 
 ## Features
 
-- **Multi-Account Quota & Local Analytics**: Deep observability into local Antigravity conversations, account distribution, and physical capacity.
-  - **Account Token & Quota Tracking**: Multi-account token distribution across selectable time ranges (`Active Session`, `Today`, `Last 7 Days`, `Last 30 Days`, `Custom`, `All-Time`) with commercial API cost conversion, differential quota calibration (`ΔTokens / ΔQ`), rolling 5h / 7d capacity estimation, and physical boundary clamping.
-  - **1-Year Capacity Activity Heatmap**: Interactive GitHub-style 365-day capacity activity heatmap with daily 5h & 7d quota bucket hover inspection.
-  - **Gemini-First Commercial Pricing**: Accurate rate calculation strictly focused on official Gemini series models (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Gemini 4 Hydrogen`, `Gemini 3.8 Flash`) with cache discounts and offline fallback.
-  - **Subagent Session Trees & Telemetry**: Full multi-agent hierarchy tracking with subagent breakdown, parent-child conversation linking, and deduplicated token aggregation.
-  - **Inline Telemetry Capsule**: Real-time generation speed (`tok/s`), TTFT, context volume, and output token counters on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
-  - **Interactive Analytics Dashboard**: Per-model speed timelines (TPS), latency percentiles (`p50`, `p90`, `p99` TTFT), cache hit rate break-point tracking, and tool or workspace distribution charts.
+- **Real-Time Telemetry & Local Analytics**: Track live generation metrics and historical usage directly from your local Antigravity conversations.
+  - **Inline Telemetry Capsule**: Displays the latest response's speed (`tok/s`), TTFT, context usage, and output tokens on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
+  - **Analytics Dashboard**: Filter by the active session or time range (`Today`, `Last 7 Days`, `Last 30 Days`, `Custom`) to track token efficiency, Gemini API equivalent costs, per-model speed and latency trends, and tool or workspace breakdowns.
+  - **Account Quota & Capacity Heatmap**: Inspect per-account token consumption and plan tiers alongside a 1-year capacity activity heatmap and rolling 5h / 7d quota bucket estimates.
 - **Claude-Inspired Themes & Typography**: Cohesive light and dark palettes paired with clean multilingual text rendering.
   - **Independent Light & Dark Presets**: Configure separate themes for light (`Claude Light`, `Pure Light`, `Native Default`) and dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances that follow your OS theme automatically.
   - **Dedicated Font Stacks**: Enumerates locally installed fonts with separate controls for Latin UI sans, CJK fallback, monospace code blocks, and chat reading size.
