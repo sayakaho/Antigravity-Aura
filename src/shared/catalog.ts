@@ -105,19 +105,9 @@ export function getModelColor(modelKey: string, index = 0, usedColors?: Set<stri
   return color;
 }
 
-export interface ModelPricingRates {
-  inputRate: number;
-  outputRate: number;
-  cacheRate: number;
-}
-
-export function getModelPricingRates(nameOrId: string): ModelPricingRates {
-  const s = (nameOrId || '').toLowerCase();
-  if (s.includes('argon') || s.includes('gemini-4') || s.includes('pro') || s.includes('sonnet') || s.includes('opus')) {
-    return { inputRate: 2.00, outputRate: 10.00, cacheRate: 0.10 };
-  }
-  if (s.includes('flash') || s.includes('3.8') || s.includes('3.7') || s.includes('gemini-2') || s.includes('haiku') || s.includes('mini')) {
-    return { inputRate: 0.75, outputRate: 3.75, cacheRate: 0.075 };
-  }
-  return { inputRate: 1.00, outputRate: 4.00, cacheRate: 0.10 };
-}
+export {
+  type ModelPricingRates,
+  getModelPricingRates,
+  getPricingTooltipHtml,
+  getPricingTooltipText
+} from './pricing';
