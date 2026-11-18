@@ -103,35 +103,30 @@ export async function runBuild(isDev = false): Promise<void> {
   }
   const coreRuntimeJs = await runtimeRes.outputs[0].text();
 
-  // 4. Collect read-only panel + injection assets for inline embedding (with CSS minification)
+  // 4. Collect read-only panel + injection assets for inline embedding (Bundle & flatten @import)
   const rawHtml = fs.readFileSync(path.join(SRC_DIR, 'panel', 'index.html'), 'utf8');
   const panelHtml = rawHtml.replace(/__AURA_VERSION__/g, cacheBustToken);
 
-  let panelCss = fs.readFileSync(path.join(SRC_DIR, 'panel', 'styles.css'), 'utf8');
-  let coreThemeCss = fs.readFileSync(path.join(SRC_DIR, 'injection', 'theme.css'), 'utf8');
+  const [panelCssRes, themeCssRes] = await Promise.all([
+    build({
+      entrypoints: [path.join(SRC_DIR, 'panel', 'styles.css')],
+      minify: shouldMinify
+    }),
+    build({
+      entrypoints: [path.join(SRC_DIR, 'injection', 'theme.css')],
+      minify: shouldMinify
+    })
+  ]);
 
-  if (shouldMinify) {
-    const [panelCssRes, themeCssRes] = await Promise.all([
-      build({
-        entrypoints: [path.join(SRC_DIR, 'panel', 'styles.css')],
-        minify: true
-      }),
-      build({
-        entrypoints: [path.join(SRC_DIR, 'injection', 'theme.css')],
-        minify: true
-      })
-    ]);
-    if (panelCssRes.success && panelCssRes.outputs.length > 0) {
-      panelCss = await panelCssRes.outputs[0].text();
-    }
-    if (themeCssRes.success && themeCssRes.outputs.length > 0) {
-      coreThemeCss = await themeCssRes.outputs[0].text();
-    }
+  if (!panelCssRes.success || panelCssRes.outputs.length === 0) {
+    throw new Error(`Panel CSS bundling failed:\n${panelCssRes.logs.map(String).join('\n')}`);
+  }
+  if (!themeCssRes.success || themeCssRes.outputs.length === 0) {
+    throw new Error(`Theme CSS bundling failed:\n${themeCssRes.logs.map(String).join('\n')}`);
   }
 
-  const coreI18n = JSON.parse(
-    fs.readFileSync(path.join(SRC_DIR, 'injection', 'i18n.json'), 'utf8')
-  ) as Record<string, string>;
+  const panelCss = await panelCssRes.outputs[0].text();
+  const coreThemeCss = await themeCssRes.outputs[0].text();
 
   const embeddedAssets: EmbeddedAssets = {
     panelHtml,
@@ -139,7 +134,7 @@ export async function runBuild(isDev = false): Promise<void> {
     panelJs,
     coreThemeCss,
     coreRuntimeJs,
-    coreI18n
+    coreI18n: {}
   };
 
   // 5. Compile Single-File Sidecar Server with Embedded Assets (Node ESM)

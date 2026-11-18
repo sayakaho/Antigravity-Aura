@@ -92,6 +92,15 @@ export function detectEffectiveTheme(): 'dark' | 'light' {
   return 'light';
 }
 
+export function syncPreset(preset?: string): void {
+  const html = document.documentElement;
+  if (!preset || preset === 'default') {
+    html.removeAttribute('data-preset');
+  } else if (html.getAttribute('data-preset') !== preset) {
+    html.setAttribute('data-preset', preset);
+  }
+}
+
 export function syncTheme(forcedTheme?: 'dark' | 'light'): void {
   const effectiveTheme = forcedTheme || detectEffectiveTheme();
   const html = document.documentElement;
@@ -114,6 +123,9 @@ export function initThemeListener(): void {
       if (payload.scheme === 'light' || payload.scheme === 'dark') {
         hostColorMode = payload.scheme;
         syncTheme(hostColorMode);
+      }
+      if (typeof payload.preset === 'string') {
+        syncPreset(payload.preset);
       }
     } else if (msg.type === 'theme-change') {
       const payload = msg.payload || {};

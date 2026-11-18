@@ -9,7 +9,7 @@ import {
   resolveThemeAttrs,
   resolveTypographyVars
 } from '../src/server/config-bundle';
-import { EMBEDDED_ASSETS } from '../src/server/paths';
+import { EMBEDDED_ASSETS, readCssWithImportsSafe } from '../src/server/paths';
 
 describe('Config bundle assembly & disk fallback', () => {
   test('EMBEDDED_ASSETS defaults to null outside compiled production build and rebuilds valid injectScript', () => {
@@ -54,7 +54,7 @@ describe('Config bundle assembly & disk fallback', () => {
   });
 
   test('theme.css overrides body[data-agy-font] --font-sans and applies custom sans stack to menus/portals/dialogs', () => {
-    const css = fs.readFileSync(path.resolve(import.meta.dir, '../src/injection/theme.css'), 'utf8');
+    const css = readCssWithImportsSafe(path.resolve(import.meta.dir, '../src/injection/theme.css'), '');
 
     expect(css).toContain('html[data-ag-custom-font="true"] body[data-agy-font]');
     expect(css).toContain('html[data-ag-custom-font="true"] body[data-agy-font] .font-sans');

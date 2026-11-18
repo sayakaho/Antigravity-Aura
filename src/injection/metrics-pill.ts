@@ -1,4 +1,5 @@
 import type { AuraConfig, LiveMetricsPayload, SelectorsConfig } from '../types';
+import { getLocalePackage, type LocalePackage } from './locales';
 import { agGlobal } from './types';
 
 function extractCascadeId(): string {
@@ -284,15 +285,14 @@ export function toggleAuraSidecar(): void {
   }
 }
 
-function getPillAriaLabel(language?: AuraConfig['language']): string {
-  return language === 'zh-CN'
-    ? '点击展开或折叠 Aura Dashboard 侧边栏'
-    : 'Click to toggle Aura Dashboard sidebar';
+function getPillAriaLabel(localeOrPkg?: LocalePackage | string | null): string {
+  const pkg = typeof localeOrPkg === 'string' ? getLocalePackage(localeOrPkg) : (localeOrPkg ?? null);
+  return pkg?.messages?.metricsPillAriaLabel ?? 'Click to toggle Aura Dashboard sidebar';
 }
 
-function syncPillAccessibility(pill: HTMLElement, language?: AuraConfig['language']): void {
+function syncPillAccessibility(pill: HTMLElement, localeOrPkg?: LocalePackage | string | null): void {
   pill.removeAttribute('title');
-  pill.setAttribute('aria-label', getPillAriaLabel(language));
+  pill.setAttribute('aria-label', getPillAriaLabel(localeOrPkg));
 }
 
 function bindMetricsPillHandlers(pill: HTMLElement): void {
@@ -320,12 +320,12 @@ function bindMetricsPillHandlers(pill: HTMLElement): void {
   };
 }
 
-function createMetricsPillElement(language?: AuraConfig['language']): HTMLElement {
+function createMetricsPillElement(localeOrPkg?: LocalePackage | string | null): HTMLElement {
   const pill = document.createElement('div');
   pill.id = 'ag-live-metrics-pill';
   pill.setAttribute('data-v', '4');
   pill.setAttribute('data-ag-row-mode', 'middle');
-  syncPillAccessibility(pill, language);
+  syncPillAccessibility(pill, localeOrPkg);
   pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
   bindMetricsPillHandlers(pill);
   return pill;
@@ -336,12 +336,13 @@ export function initMetricsCapsule(
   selectors: SelectorsConfig,
   language: AuraConfig['language'] = 'default'
 ): (forceLayout?: boolean) => HTMLElement | null {
+  const pkg = getLocalePackage(language);
   agGlobal.__ag_metrics_config = { enabled, selectors, language };
 
   // Rebind existing DOM pill on hot re-injection so click never stays attached to a stale closure.
   const existingPill = document.getElementById('ag-live-metrics-pill');
   if (existingPill) {
-    syncPillAccessibility(existingPill, language);
+    syncPillAccessibility(existingPill, pkg);
     bindMetricsPillHandlers(existingPill);
   }
 

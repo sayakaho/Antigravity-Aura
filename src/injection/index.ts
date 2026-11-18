@@ -2,6 +2,7 @@ import { initActivitySummary, uninstallActivitySummary } from './activity-summar
 import { setupExperiments } from './experiments';
 import { installHealers } from './healer';
 import { initI18n, restoreAllTranslations } from './i18n';
+import { getLocalePackage } from './locales';
 import { initMetricsCapsule } from './metrics-pill';
 import { initThemePresetSync } from './theme-preset';
 import { agGlobal } from './types';
@@ -154,16 +155,19 @@ function bootstrap(): void {
   const syncPreset = initThemePresetSync(presetsCfg, boot.themeMode);
   agGlobal.__ag_patch_version = patchVersion;
 
-  // 4. 输入栏性能指标胶囊
+  // 4. 解析当前语言包
+  const currentLocale = getLocalePackage(boot.language);
+
+  // 5. 输入栏性能指标胶囊
   const ensureMetricsPill = initMetricsCapsule(modules.metrics !== false, selectors, boot.language || 'default');
 
-  // 5. 折叠操作卡片行为摘要
-  initActivitySummary(modules.activitySummary !== false, boot.language || 'default');
+  // 6. 折叠操作卡片行为摘要
+  initActivitySummary(modules.activitySummary !== false, currentLocale);
 
-  // 6. 界面汉化引擎
-  const dict = initI18n(modules.i18n === true, boot.i18nDict || {}, selectors.excludeI18n, patchVersion);
+  // 7. 界面汉化与本地化引擎
+  const dict = initI18n(modules.i18n === true, currentLocale, boot.i18nDict || {}, selectors.excludeI18n, patchVersion);
 
-  // 7. 开放用户自定义前端脚本钩子 (user/custom.js)
+  // 8. 开放用户自定义前端脚本钩子 (user/custom.js)
   agGlobal.__AG_PATCH_CTX__ = {
     version: patchVersion,
     preset: presetsCfg.light,

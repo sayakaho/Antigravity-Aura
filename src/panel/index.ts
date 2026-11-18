@@ -5,6 +5,7 @@
 import type { SidecarStatusResponse } from '../types';
 import { AnalyticsAutoRefreshController } from './analytics/auto-refresh';
 import { getActiveSessionId, initTimeRangeControls, refreshAnalytics } from './analytics/index';
+import { applyPanelTranslations, t } from './i18n';
 import {
   PANEL_TAB_STORAGE_KEY,
   loadPanelTabState,
@@ -139,15 +140,15 @@ export async function updateStatus(): Promise<void> {
 
     if (data.connected) {
       dot?.classList.remove('disconnected');
-      if (text) text.textContent = 'Connected';
+      if (text) text.textContent = t('Connected');
       if (sublabel) {
-        sublabel.textContent = `Connected to host (${data.targetCount || 1} window(s) · port ${data.cdpPort || '-'})`;
+        sublabel.textContent = `${t('Connected to host')} (${data.targetCount || 1} ${t('window(s)')} · ${t('port')} ${data.cdpPort || '-'})`;
       }
     } else {
       dot?.classList.add('disconnected');
-      if (text) text.textContent = 'Searching window...';
+      if (text) text.textContent = t('Searching window...');
       if (sublabel) {
-        sublabel.textContent = 'Detecting Antigravity CDP port...';
+        sublabel.textContent = t('Detecting Antigravity CDP port...');
       }
     }
 
@@ -168,6 +169,7 @@ export async function updateStatus(): Promise<void> {
 }
 
 async function initApp(): Promise<void> {
+  applyPanelTranslations();
   initThemeListener();
   syncTheme();
 

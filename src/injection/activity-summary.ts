@@ -1,3 +1,4 @@
+import { getLocalePackage, type LocalePackage } from './locales';
 import { agGlobal } from './types';
 
 export interface ActivityCounts {
@@ -11,36 +12,38 @@ export interface ActivityCounts {
   failed: number;
 }
 
-export function formatActivitySummary(counts: ActivityCounts, language: 'default' | 'zh-CN' = 'default'): string {
-  const isZh = language === 'zh-CN';
+export function formatActivitySummary(counts: ActivityCounts, localeOrPkg?: LocalePackage | string | null): string {
+  const pkg = typeof localeOrPkg === 'string' ? getLocalePackage(localeOrPkg) : (localeOrPkg ?? null);
+  const msg = pkg?.messages?.activitySummary;
   const parts: string[] = [];
 
   if (counts.commands > 0) {
-    parts.push(isZh ? `${counts.commands} 个命令` : `${counts.commands} command${counts.commands > 1 ? 's' : ''}`);
+    parts.push(msg ? msg.commands(counts.commands) : `${counts.commands} command${counts.commands > 1 ? 's' : ''}`);
   }
   if (counts.searches > 0) {
-    parts.push(isZh ? `${counts.searches} 次搜索` : `${counts.searches} search${counts.searches > 1 ? 'es' : ''}`);
+    parts.push(msg ? msg.searches(counts.searches) : `${counts.searches} search${counts.searches > 1 ? 'es' : ''}`);
   }
   if (counts.pages > 0) {
-    parts.push(isZh ? `${counts.pages} 个网页` : `${counts.pages} page${counts.pages > 1 ? 's' : ''}`);
+    parts.push(msg ? msg.pages(counts.pages) : `${counts.pages} page${counts.pages > 1 ? 's' : ''}`);
   }
   if (counts.filesRead > 0) {
-    parts.push(isZh ? `读 ${counts.filesRead} 个文件` : `read ${counts.filesRead} file${counts.filesRead > 1 ? 's' : ''}`);
+    parts.push(msg ? msg.filesRead(counts.filesRead) : `read ${counts.filesRead} file${counts.filesRead > 1 ? 's' : ''}`);
   }
   if (counts.filesEdited > 0) {
-    parts.push(isZh ? `改 ${counts.filesEdited} 个文件` : `edited ${counts.filesEdited} file${counts.filesEdited > 1 ? 's' : ''}`);
+    parts.push(msg ? msg.filesEdited(counts.filesEdited) : `edited ${counts.filesEdited} file${counts.filesEdited > 1 ? 's' : ''}`);
   }
   if (counts.subagents > 0) {
-    parts.push(isZh ? `${counts.subagents} 个子任务` : `${counts.subagents} subagent${counts.subagents > 1 ? 's' : ''}`);
+    parts.push(msg ? msg.subagents(counts.subagents) : `${counts.subagents} subagent${counts.subagents > 1 ? 's' : ''}`);
   }
   if (counts.otherTools > 0) {
-    parts.push(isZh ? `${counts.otherTools} 个操作` : `${counts.otherTools} tool${counts.otherTools > 1 ? 's' : ''}`);
+    parts.push(msg ? msg.otherTools(counts.otherTools) : `${counts.otherTools} tool${counts.otherTools > 1 ? 's' : ''}`);
   }
   if (counts.failed > 0) {
-    parts.push(isZh ? `${counts.failed} 次失败` : `${counts.failed} failed`);
+    parts.push(msg ? msg.failed(counts.failed) : `${counts.failed} failed`);
   }
 
-  return parts.join(isZh ? '，' : ', ');
+  const separator = msg?.separator ?? ', ';
+  return parts.join(separator);
 }
 
 export function extractActivityCountsFromSegment(segment: unknown): ActivityCounts {
@@ -115,18 +118,20 @@ export function findSegmentFromButton(btn: HTMLElement): unknown | null {
   return null;
 }
 
-export function updateButtonSummary(btn: HTMLElement, language: 'default' | 'zh-CN'): void {
+export function updateButtonSummary(btn: HTMLElement, localeOrPkg?: LocalePackage | string | null): void {
   const segment = findSegmentFromButton(btn);
   if (!segment) return;
 
+  const pkg = typeof localeOrPkg === 'string' ? getLocalePackage(localeOrPkg) : (localeOrPkg ?? null);
   const counts = extractActivityCountsFromSegment(segment);
-  const text = formatActivitySummary(counts, language);
+  const text = formatActivitySummary(counts, pkg);
   if (!text) {
     btn.querySelector('.ag-activity-summary-badge')?.remove();
     return;
   }
 
-  const sig = `${counts.commands}-${counts.searches}-${counts.pages}-${counts.filesRead}-${counts.filesEdited}-${counts.subagents}-${counts.failed}-${language}`;
+  const langKey = pkg?.code ?? 'default';
+  const sig = `${counts.commands}-${counts.searches}-${counts.pages}-${counts.filesRead}-${counts.filesEdited}-${counts.subagents}-${counts.failed}-${langKey}`;
   let badge = btn.querySelector('.ag-activity-summary-badge') as HTMLElement | null;
 
   if (badge && badge.dataset.agSig === sig) return;
@@ -162,13 +167,14 @@ function cancelScheduledUpdate(): void {
   }
 }
 
-export function initActivitySummary(enabled: boolean, language: 'default' | 'zh-CN' = 'default'): void {
+export function initActivitySummary(enabled: boolean, localeOrPkg?: LocalePackage | string | null): void {
   uninstallActivitySummary();
   if (!enabled || typeof document === 'undefined') return;
 
+  const pkg = typeof localeOrPkg === 'string' ? getLocalePackage(localeOrPkg) : (localeOrPkg ?? null);
   const updateAll = () => {
     const btns = document.querySelectorAll('[data-testid="worked-for-collapsible"]');
-    btns.forEach((b) => updateButtonSummary(b as HTMLElement, language));
+    btns.forEach((b) => updateButtonSummary(b as HTMLElement, pkg));
   };
 
   updateAll();

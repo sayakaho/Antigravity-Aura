@@ -52,11 +52,41 @@ export function readTextSafe(filePath: string, fallback = ''): string {
   }
 }
 
+export function readCssWithImportsSafe(filePath: string, fallback = ''): string {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    const content = fs.readFileSync(filePath, 'utf8');
+    const baseDir = path.dirname(filePath);
+    return content.replace(/@import\s+['"]([^'"]+)['"];?/g, (match, relPath) => {
+      const fullPath = path.resolve(baseDir, relPath);
+      if (fs.existsSync(fullPath)) {
+        return readCssWithImportsSafe(fullPath, '');
+      }
+      return match;
+    });
+  } catch {
+    return fallback;
+  }
+}
+
 export function getFileMtimeSig(filePath: string): string {
   try {
     if (!fs.existsSync(filePath)) return '0:0';
     const st = fs.statSync(filePath);
-    return `${st.mtimeMs}:${st.size}`;
+    let sig = `${st.mtimeMs}:${st.size}`;
+    if (filePath.endsWith('.css')) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const baseDir = path.dirname(filePath);
+      const imports = content.matchAll(/@import\s+['"]([^'"]+)['"];?/g);
+      for (const m of imports) {
+        const subPath = path.resolve(baseDir, m[1]);
+        if (fs.existsSync(subPath)) {
+          const subSt = fs.statSync(subPath);
+          sig += `;${subSt.mtimeMs}:${subSt.size}`;
+        }
+      }
+    }
+    return sig;
   } catch {
     return '0:0';
   }

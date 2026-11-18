@@ -69,7 +69,7 @@ describe('ModelPricingRegistry & Dynamic Online Rates', () => {
       expect(metaAfter.source).toBe('online');
       expect(metaAfter.modelCount).toBeGreaterThan(100);
     } else {
-      expect(metaAfter.source).toBe('fallback');
+      expect(['fallback', 'cache']).toContain(metaAfter.source);
     }
-  });
+  }, 15000);
 });

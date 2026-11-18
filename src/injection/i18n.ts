@@ -1,32 +1,9 @@
+import type { LocalePackage } from './locales';
 import { agGlobal } from './types';
 
 const RE_HAS_CJK = /[\u4e00-\u9fa5]/;
 const RE_PURE_ALPHA = /^\s*[a-zA-Z]+\s*$/;
 const RE_HAS_ALPHA = /[a-zA-Z]/;
-const RE_FILES_CHANGED = /^(\d+)\s+files?\s+changed$/i;
-const RE_TOOLS = /^(\d+)\s+tools?$/i;
-const RE_DEMOTED = /^(\d+)\s+demoted$/i;
-const RE_EXCLUDED = /^(\d+)\s+excluded$/i;
-const RE_TOOLS_EXCLUDED = /^(\d+)\s+tools?\s+excluded$/i;
-const RE_ACTIVE_CONVS = /^(\d+)\s+active\s+conversations$/i;
-const RE_SEE_ALL = /^See all\s*\((\d+)\)$/i;
-const RE_SHOW_BREAKDOWNS = /^Show\s+(\d+)\s+breakdowns?$/i;
-const RE_PERM_DELETE = /^Permanently delete\s+(.*)\s+including\s+(\d+)\s+active\s+conversations\.?$/i;
-const RE_WORKED_FOR = /^Worked for\s+(\d+[smhd])$/i;
-const RE_THOUGHT_FOR = /^Thought for\s+(\d+[smhd])$/i;
-const RE_USED_LIMIT =
-  /^You have used (some|all|most) of your (weekly|5-hour|five-hour|daily) limit,?\s*it will fully refresh in (.*)\.?$/i;
-const RE_NOT_USED_LIMIT = /^You have not used any of your (weekly|5-hour|five-hour|daily) limit\.?$/i;
-const RE_ARIA_BRANCH = /^Branch, current:\s*(.*)$/i;
-const RE_ARIA_PROJECT = /^Select project, current:\s*(.*)$/i;
-
-const DEGREE_MAP: Record<string, string> = { some: '部分', all: '全部', most: '大部分' };
-const LIMIT_TYPE_MAP: Record<string, string> = {
-  weekly: '每周',
-  '5-hour': '5 小时',
-  'five-hour': '5 小时',
-  daily: '每日'
-};
 
 function getOrigTextMap() {
   if (!agGlobal.__ag_orig_text_map) {
@@ -79,7 +56,8 @@ export function restoreAllTranslations(root: Element | null = document.body): vo
 
 export function initI18n(
   enabled: boolean,
-  rawDict: Record<string, string>,
+  pkg: LocalePackage | null,
+  userOverrideDict: Record<string, string>,
   excludeSelector: string,
   patchVersion: string
 ): Record<string, string> {
@@ -90,10 +68,12 @@ export function initI18n(
     agGlobal.__ag_i18n_observer = null;
   }
 
-  const dict = Object.assign(Object.create(null) as Record<string, string>, rawDict || {});
+  const baseDict = pkg ? pkg.translations : {};
+  const dict = Object.assign(Object.create(null) as Record<string, string>, baseDict, userOverrideDict || {});
   agGlobal.__ag_i18n_dict = dict;
 
-  if (!enabled) {
+  const hasTranslations = Object.keys(dict).length > 0 || Boolean(pkg?.patterns?.length);
+  if (!enabled || !hasTranslations) {
     restoreAllTranslations(document.body);
     return dict;
   }
@@ -126,48 +106,12 @@ export function initI18n(
 
     if (!RE_HAS_ALPHA.test(trimmed)) return null;
 
-    const c0 = trimmed.charCodeAt(0);
-    if (c0 >= 48 && c0 <= 57) {
-      if (RE_FILES_CHANGED.test(trimmed)) return raw.replace(RE_FILES_CHANGED, '$1 个文件变更');
-      if (RE_TOOLS.test(trimmed)) return raw.replace(RE_TOOLS, '$1 个工具');
-      if (RE_DEMOTED.test(trimmed)) return raw.replace(RE_DEMOTED, '$1 项已降级');
-      if (RE_EXCLUDED.test(trimmed)) return raw.replace(RE_EXCLUDED, '$1 项已排除');
-      if (RE_TOOLS_EXCLUDED.test(trimmed)) return raw.replace(RE_TOOLS_EXCLUDED, '$1 个工具已排除');
-      if (RE_ACTIVE_CONVS.test(trimmed)) return raw.replace(RE_ACTIVE_CONVS, '$1 个进行中的会话');
-      return null;
-    }
-
-    const firstUpper = trimmed[0].toUpperCase();
-    if (firstUpper === 'S') {
-      if (RE_SEE_ALL.test(trimmed)) return raw.replace(RE_SEE_ALL, '查看全部 ($1)');
-      if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
-    } else if (firstUpper === 'P') {
-      if (RE_PERM_DELETE.test(trimmed)) {
-        return raw.replace(RE_PERM_DELETE, '永久删除 $1 及 $2 个进行中的会话。');
-      }
-    } else if (firstUpper === 'W') {
-      if (RE_WORKED_FOR.test(trimmed)) return raw.replace(RE_WORKED_FOR, '已工作 $1');
-    } else if (firstUpper === 'T') {
-      if (RE_THOUGHT_FOR.test(trimmed)) return raw.replace(RE_THOUGHT_FOR, '已思考 $1');
-    } else if (firstUpper === 'Y') {
-      const mUsed = trimmed.match(RE_USED_LIMIT);
-      if (mUsed) {
-        const degree = DEGREE_MAP[mUsed[1].toLowerCase()] || mUsed[1];
-        const limitType = LIMIT_TYPE_MAP[mUsed[2].toLowerCase()] || mUsed[2];
-        const timeStr = mUsed[3]
-          .replace(/\.$/, '')
-          .replace(/(\d+)\s*days?/gi, '$1 天')
-          .replace(/(\d+)\s*hours?/gi, '$1 小时')
-          .replace(/(\d+)\s*minutes?/gi, '$1 分钟')
-          .replace(/(\d+)\s*seconds?/gi, '$1 秒')
-          .replace(/,\s*/g, ' ')
-          .trim();
-        return `您已消耗${degree}${limitType}额度，将在 ${timeStr} 后完全重置。`;
-      }
-      const mNotUsed = trimmed.match(RE_NOT_USED_LIMIT);
-      if (mNotUsed) {
-        const limitType = LIMIT_TYPE_MAP[mNotUsed[1].toLowerCase()] || mNotUsed[1];
-        return `您尚未消耗任何${limitType}额度。`;
+    if (pkg?.patterns && pkg.patterns.length > 0) {
+      for (let i = 0; i < pkg.patterns.length; i++) {
+        const rule = pkg.patterns[i];
+        if (rule.pattern.test(trimmed)) {
+          return raw.replace(rule.pattern, rule.replace as any);
+        }
       }
     }
 
@@ -231,15 +175,13 @@ export function initI18n(
     translateSingleAttr(el, 'placeholder', 'data-ag-orig-placeholder', null);
     translateSingleAttr(el, 'aria-label', 'data-ag-orig-aria-label', (atrim) => {
       if (typeof dict[atrim] === 'string') return dict[atrim];
-      const mBranch = atrim.match(RE_ARIA_BRANCH);
-      if (mBranch) {
-        const bName = mBranch[1].trim();
-        return `分支，当前：${bName === 'Select branch' ? '选择分支' : bName}`;
-      }
-      const mProj = atrim.match(RE_ARIA_PROJECT);
-      if (mProj) {
-        const pName = mProj[1].trim();
-        return `选择项目，当前：${pName === 'No project' ? '未关联项目' : pName}`;
+      if (pkg?.attributePatterns) {
+        for (let i = 0; i < pkg.attributePatterns.length; i++) {
+          const rule = pkg.attributePatterns[i];
+          if (rule.pattern.test(atrim)) {
+            return atrim.replace(rule.pattern, rule.replace as any);
+          }
+        }
       }
       return null;
     });

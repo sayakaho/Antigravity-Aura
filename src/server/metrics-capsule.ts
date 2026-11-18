@@ -111,6 +111,60 @@ const METRICS_I18N: Record<AuraConfig['language'], MetricsTooltipLocale> = {
     hitRate: (rate) => `命中 ${rate}%`,
     totalOutput: '累计输出',
     footerHint: '点击胶囊切换 Aura Dashboard 侧边栏'
+  },
+  'ja-JP': {
+    latestCall: '最新の呼び出し',
+    stepsBadge: (steps) => `${steps} ステップ`,
+    speed: '生成速度',
+    speedSubStream: (e2e) => `ストリーム · E2E ${e2e}`,
+    speedSubE2e: 'エンドツーエンド速度',
+    latency: '応答レイテンシ',
+    ttftLabel: 'TTFT',
+    streamShort: '生成',
+    context: 'コンテキスト',
+    cachedRate: (rate) => `キャッシュ ${rate}%`,
+    stepInput: 'ステップ入力',
+    stepOutput: 'ステップ出力',
+    turnTotal: (steps) => `ターン合計 (${steps} ステップ)`,
+    newShort: '新規',
+    cachedShort: 'キャッシュ',
+    thinkShort: '思考',
+    respShort: '本文',
+    sessionTotals: 'セッション累計',
+    sessionMeta: (turns, calls) => `${turns} ターン · ${calls} 回の呼び出し`,
+    waterline: '圧縮ウォーターライン',
+    remainCtx: (remain) => `圧縮まで残り ${remain}`,
+    totalInput: '総入力',
+    hitRate: (rate) => `ヒット率 ${rate}%`,
+    totalOutput: '総出力',
+    footerHint: 'クリックして Aura Dashboard を切り替え'
+  },
+  'ko-KR': {
+    latestCall: '최근 호출',
+    stepsBadge: (steps) => `${steps}단계`,
+    speed: '생성 속도',
+    speedSubStream: (e2e) => `스트림 · E2E ${e2e}`,
+    speedSubE2e: '엔드투엔드 속도',
+    latency: '응답 지연시간',
+    ttftLabel: 'TTFT',
+    streamShort: '생성',
+    context: '컨텍스트',
+    cachedRate: (rate) => `캐시 ${rate}%`,
+    stepInput: '단계 입력',
+    stepOutput: '단계 출력',
+    turnTotal: (steps) => `턴 합계 (${steps}단계)`,
+    newShort: '신규',
+    cachedShort: '캐시',
+    thinkShort: '생각',
+    respShort: '응답',
+    sessionTotals: '세션 누적',
+    sessionMeta: (turns, calls) => `${turns}턴 · ${calls}회 호출`,
+    waterline: '압축 워터라인',
+    remainCtx: (remain) => `압축까지 ${remain} 남음`,
+    totalInput: '총 입력',
+    hitRate: (rate) => `적중률 ${rate}%`,
+    totalOutput: '총 출력',
+    footerHint: '캡슐을 클릭하여 Aura Dashboard 전환'
   }
 };
 
@@ -138,7 +192,10 @@ export function parseConversationMetrics(
   const sig = getDbSignature(dbPath);
   if (!sig) return { cascadeId, hasData: false };
 
-  const language: AuraConfig['language'] = config.language === 'zh-CN' ? 'zh-CN' : 'default';
+  const language: AuraConfig['language'] =
+    config.language === 'zh-CN' || config.language === 'ja-JP' || config.language === 'ko-KR'
+      ? config.language
+      : 'default';
   const contextLimitTokens = resolveContextLimitTokens(config);
 
   const cached = metricsCache.get(dbPath);

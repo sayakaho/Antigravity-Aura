@@ -1,4 +1,6 @@
 import type { AuraConfig, DeepPartial, PanelConfigDTO } from '../types';
+import { applyPanelTranslations, t } from './i18n';
+import { detectEffectiveTheme, syncPreset } from './theme-sync';
 
 let currentConfig: PanelConfigDTO | null = null;
 let systemFontsList: string[] = [];
@@ -11,7 +13,7 @@ export function showToast(msg: string): void {
     clearTimeout(toastTimer);
     toastTimer = null;
   }
-  toastEl.textContent = msg;
+  toastEl.textContent = t(msg);
   toastEl.classList.add('show');
   toastTimer = setTimeout(() => {
     toastEl.classList.remove('show');
@@ -170,12 +172,19 @@ export async function loadConfig(): Promise<void> {
     if (!body.config) return;
     const config = body.config;
     currentConfig = config;
+    applyPanelTranslations(config.language);
 
     const langSelect = document.getElementById('select-language') as HTMLSelectElement | null;
     if (langSelect) langSelect.value = config.language || 'default';
 
     updateSegmentedUI('preset-light-segmented', config.presets?.light || 'high-contrast');
     updateSegmentedUI('preset-dark-segmented', config.presets?.dark || 'claude-dark');
+
+    const initialPreset =
+      detectEffectiveTheme() === 'dark'
+        ? config.presets?.dark || 'claude-dark'
+        : config.presets?.light || 'high-contrast';
+    syncPreset(initialPreset);
 
     const waxToggle = document.getElementById('toggle-wax-seal') as HTMLInputElement | null;
     if (waxToggle) waxToggle.checked = config.composer?.waxSeal !== false;
@@ -261,7 +270,10 @@ function bindFontSelectAndCustomInput(opts: {
 export function bindSettingsControls(): void {
   const langSelect = document.getElementById('select-language') as HTMLSelectElement | null;
   langSelect?.addEventListener('change', () => {
-    const language: AuraConfig['language'] = langSelect.value === 'zh-CN' ? 'zh-CN' : 'default';
+    const val = langSelect.value;
+    const language: AuraConfig['language'] =
+      val === 'zh-CN' || val === 'ja-JP' || val === 'ko-KR' ? val : 'default';
+    applyPanelTranslations(language);
     void saveConfig({ language });
   });
 
@@ -272,6 +284,9 @@ export function bindSettingsControls(): void {
       btn.addEventListener('click', () => {
         const val = btn.getAttribute('data-val') || 'high-contrast';
         updateSegmentedUI('preset-light-segmented', val);
+        if (detectEffectiveTheme() === 'light') {
+          syncPreset(val);
+        }
         void saveConfig(patchPresets({ light: val }));
       });
     });
@@ -283,6 +298,9 @@ export function bindSettingsControls(): void {
       btn.addEventListener('click', () => {
         const val = btn.getAttribute('data-val') || 'claude-dark';
         updateSegmentedUI('preset-dark-segmented', val);
+        if (detectEffectiveTheme() === 'dark') {
+          syncPreset(val);
+        }
         void saveConfig(patchPresets({ dark: val }));
       });
     });

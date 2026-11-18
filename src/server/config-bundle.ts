@@ -21,6 +21,7 @@ import {
   USER_DIR,
   getAppVersion,
   getFileMtimeSig,
+  readCssWithImportsSafe,
   readJsonSafe,
   readTextSafe
 } from './paths';
@@ -194,17 +195,14 @@ export function rebuildBundleIfNeeded(force = false): boolean {
 
   const baseCss = EMBEDDED_ASSETS
     ? EMBEDDED_ASSETS.coreThemeCss
-    : readTextSafe(path.join(CORE_DIR, 'theme.css'), '');
+    : readCssWithImportsSafe(path.join(CORE_DIR, 'theme.css'), '');
   const customCss = modules.customCss ? readTextSafe(path.join(USER_DIR, 'custom.css'), '') : '';
   currentCssBytes = Buffer.byteLength(baseCss, 'utf8') + Buffer.byteLength(customCss, 'utf8');
 
   let mergedDict: Record<string, string> = {};
   if (modules.i18n) {
-    const baseDict = EMBEDDED_ASSETS
-      ? EMBEDDED_ASSETS.coreI18n
-      : readJsonSafe<Record<string, string>>(path.join(CORE_DIR, 'i18n.json'), {});
     const rawOverride = readJsonSafe<unknown>(path.join(USER_DIR, 'i18n.override.json'), {});
-    mergedDict = { ...baseDict, ...normalizeOverrideDict(rawOverride) };
+    mergedDict = normalizeOverrideDict(rawOverride);
   }
 
   const customJs = modules.customJs ? readTextSafe(path.join(USER_DIR, 'custom.js'), '') : '';

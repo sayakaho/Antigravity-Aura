@@ -78,7 +78,7 @@ export interface SelectorsConfig {
 export interface AuraConfig {
   enabled: boolean;
   channel: 'auto' | 'light' | 'dark';
-  language: 'default' | 'zh-CN';
+  language: 'default' | 'zh-CN' | 'ja-JP' | 'ko-KR';
   presets: PresetConfig;
   composer: ComposerConfig;
   typography: TypographyConfig;

@@ -1,5 +1,6 @@
 import { buildSessionAnalyticsEndpoint } from '../../shared/session';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../../types';
+import { applyPanelTranslations } from '../i18n';
 import { type AnalyticsRefreshMode } from './auto-refresh';
 import {
   ACCOUNT_SCOPE_STORAGE_KEY,
@@ -183,6 +184,7 @@ function renderRangeDependentViews(
   );
   renderModelTpsChart(overview, timeCtx, activeSessionData);
   renderLatencyTtftDistributionChart(overview, timeCtx, activeSessionData);
+  applyPanelTranslations();
 }
 
 async function applyExternalRangeState(next: AnalyticsRangeState): Promise<void> {
