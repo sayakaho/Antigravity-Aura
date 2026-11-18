@@ -82,8 +82,14 @@ export function initThemePresetSync(presetsCfg: PresetConfig, themeMode?: string
         html.setAttribute('data-ag-color-scheme', scheme);
       }
 
-      const activeLightPreset = normalizeLightPreset(presetsCfg.light, 'high-contrast');
-      const activeDarkPreset = normalizeDarkPreset(presetsCfg.dark, 'claude-dark');
+      const activeLightPreset = normalizeLightPreset(
+        html.getAttribute('data-ag-light-preset') || presetsCfg.light,
+        'high-contrast'
+      );
+      const activeDarkPreset = normalizeDarkPreset(
+        html.getAttribute('data-ag-dark-preset') || presetsCfg.dark,
+        'claude-dark'
+      );
 
       html.setAttribute('data-ag-light-preset', activeLightPreset);
       html.setAttribute('data-ag-dark-preset', activeDarkPreset);
@@ -170,6 +176,9 @@ export function initThemePresetSync(presetsCfg: PresetConfig, themeMode?: string
         if (key === 'theme-preset-light' && val && ALL_CUSTOM_PRESET_NAMES.has(val)) {
           return 'Default Light';
         }
+        if (key === 'theme-preset-dark' && val && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+          return 'Default Dark';
+        }
         return val;
       };
 
@@ -177,9 +186,16 @@ export function initThemePresetSync(presetsCfg: PresetConfig, themeMode?: string
       localStorage.setItem = function (key: string, val: string): void {
         if (key === 'theme-preset-light' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
           val = 'Default Light';
+        } else if (key === 'theme-preset-dark' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+          val = 'Default Dark';
         }
         origSetItem(key, val);
-        if (key === 'theme-preset-light' || key === 'theme-mode' || key === 'theme-color-flavor') {
+        if (
+          key === 'theme-preset-light' ||
+          key === 'theme-preset-dark' ||
+          key === 'theme-mode' ||
+          key === 'theme-color-flavor'
+        ) {
           setTimeout(() => {
             agGlobal.__ag_sync_preset_fn?.();
             agGlobal.__ag_sync_color_scheme_fn?.();

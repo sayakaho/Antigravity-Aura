@@ -1,0 +1,99 @@
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: local('Anthropic Serif Web'), local('Anthropic Serif Web Text Light'), local('Anthropic Serif');
+  font-weight: 300 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans');
+  font-weight: 300 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anthropic Mono';
+  src: local('Anthropic Mono Web'), local('Anthropic Mono');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 1. 自定义无衬线字体（隔离代码块与等宽文本；同步覆盖 body[data-agy-font] 以防止宿主重定义 --font-sans 遮蔽 Portal/菜单） */
+html[data-ag-custom-font="true"],
+html[data-ag-custom-font="true"] body,
+html[data-ag-custom-font="true"] body[data-agy-font],
+html[data-ag-custom-font="true"] body[data-agy-font] .font-sans {
+  --vscode-font-family: var(--ag-cfg-font-sans) !important;
+  --font-sans: var(--ag-cfg-font-sans) !important;
+  --default-font-family: var(--ag-cfg-font-sans) !important;
+}
+
+html[data-ag-custom-font="true"],
+html[data-ag-custom-font="true"] body,
+html[data-ag-custom-font="true"] body[data-agy-font],
+html[data-ag-custom-font="true"] button,
+html[data-ag-custom-font="true"] select,
+html[data-ag-custom-font="true"] nav,
+html[data-ag-custom-font="true"] header,
+html[data-ag-custom-font="true"] aside,
+html[data-ag-custom-font="true"] #antigravity\.agentSidePanelInputBox,
+html[data-ag-custom-font="true"] div[contenteditable="true"],
+html[data-ag-custom-font="true"] textarea,
+html[data-ag-custom-font="true"] .select-text,
+html[data-ag-custom-font="true"] .prose,
+html[data-ag-custom-font="true"] .markdown,
+html[data-ag-custom-font="true"] article,
+html[data-ag-custom-font="true"] .select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, b, i, dd, dt, th, td, figcaption) {
+  font-family: var(--ag-cfg-font-sans, var(--font-sans)) !important;
+  letter-spacing: -0.003em;
+}
+
+/* 2. 自定义等宽代码字体 */
+html[data-ag-custom-mono="true"] :is(
+  .code-block .line-content,
+  .code-block .line-content *,
+  .code-line .line-content,
+  .code-line .line-content *,
+  pre > code,
+  pre > code *,
+  .select-text code:not(pre code),
+  kbd,
+  samp,
+  .monaco-editor .view-lines,
+  .monaco-editor .view-lines *,
+  .xterm-rows,
+  .xterm-rows *
+) {
+  font-family: var(--ag-cfg-font-mono, ui-monospace, monospace) !important;
+}
+
+html[data-ag-custom-font-size="true"] .select-text,
+html[data-ag-custom-font-size="true"] .select-text :is(p, li, blockquote, dd, dt),
+html[data-ag-custom-font-size="true"] .prose,
+html[data-ag-custom-font-size="true"] .prose :is(p, li, blockquote),
+html[data-ag-custom-font-size="true"] .markdown,
+html[data-ag-custom-font-size="true"] .markdown :is(p, li, blockquote),
+html[data-ag-custom-font-size="true"] [class*="chat-message"],
+html[data-ag-custom-font-size="true"] [class*="chat-message"] :is(p, li, blockquote) {
+  font-size: var(--ag-chat-font-size) !important;
+}

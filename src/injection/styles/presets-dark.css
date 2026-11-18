@@ -1,0 +1,200 @@
+/* ============================================================================
+ * 深色通道体系 (Dark Channel: claude-dark 默认 / vintage-dark 预设)
+ * ============================================================================ */
+
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) {
+  --background: #1F1E1D !important;
+  --foreground: #ECE6D8 !important;
+  --sidebar: #181716 !important;
+  --sidebar-secondary: #262523 !important;
+  --sidebar-muted: #22211F !important;
+  --sidebar-border: rgba(255, 255, 255, 0.08) !important;
+  --border: rgba(255, 255, 255, 0.12) !important;
+  --vscode-sideBar-background: #181716 !important;
+  --card: #262523 !important;
+  --card-border: rgba(255, 255, 255, 0.12) !important;
+  --card-edge: rgba(255, 255, 255, 0.12) !important;
+  --sash-line: rgba(255, 255, 255, 0.14) !important;
+  --secondary-foreground: #C4BEB3 !important;
+  --muted-foreground: #948F85 !important;
+}
+
+html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] {
+  --background: #171512 !important;
+  --foreground: #E5DEC9 !important;
+  --sidebar: #12100E !important;
+  --sidebar-secondary: #1F1C18 !important;
+  --sidebar-muted: #1A1815 !important;
+  --sidebar-border: rgba(229, 222, 201, 0.08) !important;
+  --border: rgba(229, 222, 201, 0.1) !important;
+  --vscode-sideBar-background: #12100E !important;
+  --card: #1F1C18 !important;
+  --card-border: rgba(229, 222, 201, 0.1) !important;
+  --secondary-foreground: #BDB59F !important;
+  --muted-foreground: #8C8572 !important;
+  --ag-wax-seal-hover: #A63C32 !important;
+}
+
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) body {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) .contents:has(> .bg-sidebar),
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) .bg-sidebar,
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) aside {
+  --color-sidebar: var(--ag-theme-sidebar, var(--sidebar)) !important;
+  --shell-canvas: var(--ag-theme-sidebar, var(--sidebar)) !important;
+  --sidebar: var(--ag-theme-sidebar, var(--sidebar)) !important;
+  background-color: var(--ag-theme-sidebar, var(--sidebar)) !important;
+}
+
+/* 卡片底板画布与侧边栏底色统一 */
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) .agy-inset-shell,
+html[data-ag-color-scheme="dark"]:not([data-ag-preset="default"]) .agy-shell {
+  --shell-canvas: var(--ag-theme-sidebar, var(--sidebar)) !important;
+  background-color: var(--ag-theme-sidebar, var(--sidebar)) !important;
+}
+
+html[data-ag-color-scheme="dark"] .agy-inset-shell {
+  --card-edge: rgba(255, 255, 255, 0.1) !important;
+  --sash-line: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 清除宿主 ::before 重叠的左侧内阴影，由 ::after 统一绘制 1px 细腻单层外框 */
+html[data-ag-color-scheme="dark"] .agy-sheet[data-sheet-inset] [data-main-content-body]::before,
+html[data-ag-color-scheme="dark"] .agy-inset-shell [data-side-panel-body]::before,
+html[data-ag-color-scheme="dark"] [data-main-content-body]::before {
+  box-shadow: none !important;
+}
+
+html[data-ag-color-scheme="dark"] .agy-sheet[data-sheet-inset] [data-main-content-body]::after,
+html[data-ag-color-scheme="dark"] .agy-inset-shell [data-side-panel-body]::after,
+html[data-ag-color-scheme="dark"] [data-main-content-body]::after {
+  box-shadow: inset 0 0 0 1px var(--card-edge, rgba(255, 255, 255, 0.1)) !important;
+}
+
+html[data-ag-color-scheme="dark"] .relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\],
+html[data-ag-color-scheme="dark"] div.flex-shrink-0.relative.z-30.w-\[1px\] {
+  background-color: transparent !important;
+}
+
+/* 深色共线输入框卡片底色、默认边框与蜡封边框 */
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
+  background-color: #1F1E1D !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox .surface-composer-card {
+  border: 1.5px solid rgba(196, 68, 58, 0.45) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:hover .surface-composer-card,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"][data-ag-wax-seal="on"] #antigravity\.agentSidePanelInputBox:focus-within .surface-composer-card {
+  border: 1.5px solid var(--ag-wax-seal-hover, #C4443A) !important;
+  box-shadow: 0 0 12px rgba(196, 68, 58, 0.25), inset 0 0 4px rgba(196, 68, 58, 0.15) !important;
+}
+
+/* vintage-dark 预设独立卡片底色（置于深色基线之后以确保在共线模式正确生效） */
+html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] #antigravity\.agentSidePanelInputBox .surface-composer-card,
+html[data-ag-color-scheme="dark"][data-ag-preset="vintage-dark"] .surface-composer-card.bg-card {
+  background-color: #171512 !important;
+}
+
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child button,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child span,
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child svg {
+  color: #C4BEB3 !important;
+}
+
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox > div:first-child button:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ECE6D8 !important;
+}
+
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not([class*="opacity-"]):not(.opacity-70),
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not([class*="opacity-"]):not(.opacity-70),
+html[data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
+  color: #ECE6D8 !important;
+  opacity: 1 !important;
+}
+
+html[data-ag-color-scheme="dark"] .bg-sidebar a,
+html[data-ag-color-scheme="dark"] .bg-sidebar button,
+html[data-ag-color-scheme="dark"] .bg-sidebar [class*="truncate"],
+html[data-ag-color-scheme="dark"] aside a,
+html[data-ag-color-scheme="dark"] aside button {
+  color: rgb(214, 208, 197) !important;
+  text-shadow: none !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"] *,
+html[data-ag-color-scheme="dark"] .agy-sidebar-row * {
+  text-shadow: none !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"],
+html[data-ag-color-scheme="dark"] .agy-sidebar-row[data-selected="true"],
+html[data-ag-color-scheme="dark"] .bg-sidebar [data-active="true"] {
+  text-shadow: none !important;
+  --row-bg: color-mix(in srgb, #fff 8%, var(--sidebar)) !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] * {
+  color: #ECE6D8 !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] span.truncate:first-child,
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] > div > div > span:first-child {
+  color: #FFFFFF !important;
+  font-weight: 500 !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="text-muted"],
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] span.text-xs,
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"][data-selected="true"] svg {
+  color: #BDB59F !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"]:not([data-selected="true"]):hover,
+html[data-ag-color-scheme="dark"] .agy-sidebar-row:not([data-selected="true"]):hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  border-radius: 8px !important;
+}
+
+html[data-ag-color-scheme="dark"] [data-testid="conversation-row-sidebar"]:not([data-selected="true"]):hover span,
+html[data-ag-color-scheme="dark"] .agy-sidebar-row:not([data-selected="true"]):hover span {
+  color: #FFFFFF !important;
+}
+
+html[data-ag-color-scheme="dark"] .bg-sidebar [class*="text-muted"],
+html[data-ag-color-scheme="dark"] .bg-sidebar [class*="text-[11px]"] {
+  color: rgb(140, 134, 125) !important;
+}
+
+html[data-ag-color-scheme="dark"] [role="menu"],
+html[data-ag-color-scheme="dark"] [role="dialog"],
+html[data-ag-color-scheme="dark"] .agy-overlay,
+html[data-ag-color-scheme="dark"] [data-radix-menu-content] {
+  background-color: #262523 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-ag-color-scheme="dark"] [role="menu"] [role="menuitem"],
+html[data-ag-color-scheme="dark"] [role="dialog"] h2,
+html[data-ag-color-scheme="dark"] [role="dialog"] h3,
+html[data-ag-color-scheme="dark"] [role="dialog"] span {
+  color: #ECE6D8 !important;
+}

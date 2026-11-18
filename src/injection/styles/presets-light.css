@@ -1,0 +1,234 @@
+/* ============================================================================
+ * 浅色通道预设体系 (Light Channel Presets)
+ * ============================================================================ */
+
+/* 1. Claude Desktop 净白 (claude-desktop-purewhite) */
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"],
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] body.theme-light {
+  --ag-theme-sidebar: #F7F8FA !important;
+  --background: #FFFFFF !important;
+  --foreground: #111110 !important;
+  --sidebar: #F7F8FA !important;
+  --sidebar-secondary: #EEF0F3 !important;
+  --sidebar-muted: #F2F4F7 !important;
+  --sidebar-border: #E5E7EB !important;
+  --border: rgba(0, 0, 0, 0.12) !important;
+  --vscode-sideBar-background: #F7F8FA !important;
+  --card: #FFFFFF !important;
+  --card-border: rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] .contents:has(> .bg-sidebar),
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] .bg-sidebar,
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] aside {
+  --color-sidebar: var(--ag-theme-sidebar, #F7F8FA) !important;
+  --shell-canvas: var(--ag-theme-sidebar, #F7F8FA) !important;
+  --sidebar: var(--ag-theme-sidebar, #F7F8FA) !important;
+  background-color: var(--ag-theme-sidebar, #F7F8FA) !important;
+}
+
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="claude-desktop-purewhite"] body {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+/* 2. 高对比暖纸 (high-contrast / Claude Light) */
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"],
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] body.theme-light {
+  --ag-theme-sidebar: #F4F3EF !important;
+  --background: #FAF9F5 !important;
+  --foreground: #1F1E1D !important;
+  --sidebar: #F4F3EF !important;
+  --sidebar-secondary: #EBE8E1 !important;
+  --sidebar-muted: #EFECE4 !important;
+  --sidebar-border: rgba(31, 30, 29, 0.12) !important;
+  --border: rgba(31, 30, 29, 0.15) !important;
+  --vscode-sideBar-background: #F4F3EF !important;
+  --card: #FFFFFF !important;
+  --card-border: rgba(31, 30, 29, 0.12) !important;
+  --card-edge: rgba(31, 30, 29, 0.12) !important;
+  --sash-line: rgba(31, 30, 29, 0.14) !important;
+  --secondary-foreground: #0A0A0A !important;
+  --muted-foreground: #1A1A1A !important;
+}
+
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .contents:has(> .bg-sidebar),
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar,
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] aside {
+  --color-sidebar: var(--ag-theme-sidebar, #F4F3EF) !important;
+  --shell-canvas: var(--ag-theme-sidebar, #F4F3EF) !important;
+  --sidebar: var(--ag-theme-sidebar, #F4F3EF) !important;
+  background-color: var(--ag-theme-sidebar, #F4F3EF) !important;
+}
+
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] body {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+/* 3. 右侧交互页面外框线与中缝分割线（浅色通道卡片单层温润轮廓与底板对齐） */
+html:not([data-ag-color-scheme="dark"]):not([data-ag-preset="default"]) .agy-inset-shell,
+html:not([data-ag-color-scheme="dark"]):not([data-ag-preset="default"]) .agy-shell {
+  --shell-canvas: var(--ag-theme-sidebar, var(--sidebar)) !important;
+  background-color: var(--ag-theme-sidebar, var(--sidebar)) !important;
+}
+
+.agy-inset-shell {
+  --card-edge: rgba(31, 30, 29, 0.12) !important;
+  --sash-line: rgba(31, 30, 29, 0.12) !important;
+}
+
+/* 清除宿主 ::before 重叠的左侧内阴影，由 ::after 统一绘制 1px 细腻单层外框 */
+.agy-sheet[data-sheet-inset] [data-main-content-body]::before,
+.agy-inset-shell [data-side-panel-body]::before,
+[data-main-content-body]::before {
+  box-shadow: none !important;
+}
+
+.agy-sheet[data-sheet-inset] [data-main-content-body]::after,
+.agy-inset-shell [data-side-panel-body]::after,
+[data-main-content-body]::after {
+  box-shadow: inset 0 0 0 1px var(--card-edge, rgba(31, 30, 29, 0.12)) !important;
+}
+
+/* 恢复中缝拖拽条原生透明，消除通顶直通竖线与圆角冲突 */
+.relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\],
+div.flex-shrink-0.relative.z-30.w-\[1px\] {
+  background-color: transparent !important;
+}
+
+/* 4. 高对比浅色模式细节强化 */
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"],
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar a,
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-sidebar button {
+  border-color: rgba(0, 0, 0, 0.32) !important;
+}
+
+html:not([data-ag-color-scheme="dark"])[data-ag-preset="high-contrast"] .bg-border {
+  background-color: rgba(0, 0, 0, 0.28) !important;
+}
+
+/* 5. 浅色通道字体墨感与侧栏排版 */
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar a,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar button,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-sm"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-xs"],
+html:not([data-ag-color-scheme="dark"]) aside a,
+html:not([data-ag-color-scheme="dark"]) aside button {
+  font-weight: 450 !important;
+  letter-spacing: -0.012em !important;
+  color: #262422 !important;
+  text-rendering: optimizeLegibility;
+  text-shadow: var(--ag-ink-shadow-sm);
+}
+
+html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span.truncate,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) .agy-sidebar-row:not([data-selected="true"]) span.truncate,
+html:not([data-ag-color-scheme="dark"]) aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
+  font-weight: 400 !important;
+  letter-spacing: -0.005em !important;
+  color: #262422 !important;
+  text-shadow: none !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) button[data-testid="project-header"],
+html:not([data-ag-color-scheme="dark"]) button[data-project-card="true"],
+html:not([data-ag-color-scheme="dark"]) [data-project-label],
+html:not([data-ag-color-scheme="dark"]) [data-subtext] span[class*="text-muted"],
+html:not([data-ag-color-scheme="dark"]) span:has(> svg) + span {
+  font-weight: 450 !important;
+  color: #383533 !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) button[data-testid="project-header"] span,
+html:not([data-ag-color-scheme="dark"]) button[data-project-card="true"] span {
+  font-weight: 450 !important;
+  color: #2C2B29 !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
+  letter-spacing: -0.01em !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"][data-selected="true"],
+html:not([data-ag-color-scheme="dark"]) [data-testid="conversation-row-sidebar"][data-selected="true"] span,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-active="true"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [data-active="true"] span,
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [aria-selected="true"] {
+  font-weight: 520 !important;
+  color: #0A0A0A !important;
+  text-shadow: var(--ag-ink-shadow-md) !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-muted"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="text-[11px]"],
+html:not([data-ag-color-scheme="dark"]) .bg-sidebar [class*="uppercase"] {
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+  color: #7A7670 !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"],
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button,
+html:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox span {
+  font-weight: 500 !important;
+  letter-spacing: -0.012em !important;
+  text-shadow: var(--ag-ink-shadow-md);
+}
+
+/* 6. 浅色通道菜单与对话框文字颜色与墨感 */
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="truncate"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-xs"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-[13px]"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] span {
+  font-weight: 400 !important;
+  letter-spacing: -0.01em !important;
+  color: #1F1E1D !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] > span,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] span[class*="flex-1"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [role="menuitem"] span.truncate,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item > span,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item span[class*="flex-1"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] .agy-overlay-item span.truncate,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item > span,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item span[class*="flex-1"],
+html:not([data-ag-color-scheme="dark"]) .agy-overlay .agy-overlay-item span.truncate {
+  font-weight: 450 !important;
+  letter-spacing: -0.01em !important;
+  color: #1F1E1D !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="font-medium"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] [class*="text-muted-foreground"],
+html:not([data-ag-color-scheme="dark"]) [role="menu"] h2,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] h3,
+html:not([data-ag-color-scheme="dark"]) [role="menu"] h4,
+html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="font-medium"],
+html:not([data-ag-color-scheme="dark"]) .agy-overlay [class*="text-muted-foreground"] {
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  color: #1A1A1A !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] h2,
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] h3 {
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  color: #1F1E1D !important;
+}
+
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] .agy-card span.text-sm,
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] [class*="agy-card"] span.text-sm,
+html:not([data-ag-color-scheme="dark"]) [role="dialog"] [class*="divide-border"] span.text-sm {
+  font-weight: 450 !important;
+  letter-spacing: -0.01em !important;
+  color: #1F1E1D !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
+}
