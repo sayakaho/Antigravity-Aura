@@ -20,7 +20,7 @@
 
 ## 简介
 
-**Antigravity Aura** 运行于 Google Antigravity 的原生 Plugin + Sidecar 生命周期内，无需修改客户端 `.asar` 归档或常驻系统守护进程。Sidecar 随宿主启动后，通过 CDP 协议向活跃窗口热注入样式与脚本，并自适应使用原生 SQLite 驱动或内置 WASM 引擎解析本地对话库，在侧边栏提供实时性能统计与偏好设置面板。
+**Antigravity Aura** 运行于 Google Antigravity 的原生 Plugin + Sidecar 生命周期内，无需常驻系统守护进程或手动启动参数。Sidecar 随宿主启动后会自动检测 CDP 就绪状态（必要时自动备份 `app.asar.bak` 并幂等注入 `--remote-debugging-port=0` 实现零配置接入），通过 CDP 协议向活跃窗口热注入样式与脚本，并自适应使用原生 SQLite 驱动或内置 WASM 引擎解析本地对话库，在侧边栏提供实时性能统计与偏好设置面板。
 
 ## 界面预览
 
@@ -54,14 +54,14 @@
 - **Claude 风格主题与字体混排**：统一明暗视觉观感，解决原版界面中英混排的割裂问题。
   - **双模式独立预设**：为亮色（`Claude Light`、`Pure Light`、`Native Default`）与暗色（`Claude Dark`、`Vintage Deep`、`Native Default`）分别指定独立方案，随系统外观自动切换。
   - **三轨字体独立配置**：自动识别本机已安装字体，支持西文主字体、CJK 中文回退、等宽代码字体与对话阅读字号分别设置。
-- **无损双语、细节打磨与跨窗口热重载**：支持英文与简体中文界面无损切换及自定义词典覆盖，提供输入框工具栏水平对齐与可选暗红蜡封聚焦边框；所有面板设置与 `custom.css` / `custom.js` 扩展均跨窗口即时生效，免改包、无需重启。
-- **宿主兼容修复与实验开关**：修复设置弹窗偶发无法打开的问题并恢复窗口缩放快捷键，同时支持跨窗口安全开启 Antigravity 内置 Labs 与开发者实验特性。
+- **多语言本地化、细节打磨与跨窗口热重载**：支持英文、简体中文（`zh-CN`）、日语（`ja-JP`）与韩语（`ko-KR`）在宿主界面与 Aura 侧边栏面板间无损切换，并支持自定义词典覆盖；提供输入框工具栏水平对齐与可选暗红蜡封聚焦边框，所有面板设置与 `custom.css` / `custom.js` 扩展均跨窗口即时生效、无需重启。
+- **零配置自愈、宿主兼容修复与实验开关**：启动时自动保障宿主 CDP 注入就绪（自动保留 `.bak` 备份），修复设置弹窗偶发无法打开的问题并恢复窗口缩放快捷键，同时支持跨窗口安全开启 Antigravity 内置 Labs 与开发者实验特性。
 
 ## 环境要求
 
 | 依赖 | 要求 | 适用阶段 |
 | :--- | :--- | :--- |
-| **Google Antigravity** | 支持 Plugin + Sidecar 且开启 CDP 端口 | 运行时 |
+| **Google Antigravity** | 支持 Plugin + Sidecar（若未开启 CDP，首次启动将自动安全自愈） | 运行时 |
 | **Node.js** | `>= 18.0.0`（Node 22+ 原生加速，低版本自动 WASM 兜底）或 **Bun** | 运行时 |
 | **Bun** | `>= 1.2` | 源码构建与测试 |
 | **系统** | macOS / Windows / Linux | 运行与构建 |
@@ -119,7 +119,8 @@ agy plugin disable aura-dashboard
 | `config.json` | 插件主配置文件 |
 | `custom.css` | 启用 `modules.customCss` 后追加加载的自定义样式表 |
 | `custom.js` | 启用 `modules.customJs` 后在顶层窗口执行的扩展脚本 |
-| `i18n.override.json` | 覆盖内置中文词典的自定义词条 |
+| `i18n.override.json` | 覆盖当前激活语言词典的自定义词条 |
+| `account_timeline.json` / `quota_calibration.json` | 运行时自动维护的账号时间线与配额差分校准持久化文件 |
 
 ## 架构
 
@@ -127,14 +128,15 @@ agy plugin disable aura-dashboard
 Antigravity Host
    │
    ├──► Sidecar Server — dist/sidecars/dashboard/main.mjs
-   │       ├── SQLite 与 Protobuf 对话记录解析
+   │       ├── 零配置宿主 app.asar 自愈（自动保留 .bak 备份）
+   │       ├── SQLite/Protobuf 对话解析与 Language Server 配额/账号遥测
    │       ├── 配置校验与注入脚本编译
    │       ├── CDP 窗口发现与 CSS/JS 热推送
    │       └── 本地 HTTP 服务与侧边栏 Webview 接口
    │
    └──► Host Window — Injected Runtime
-           ├── 主题变量、字体栈与输入框布局样式
-           ├── WeakMap 本地化替换与路由/缩放修复
+           ├── 模块化主题样式表、字体栈与输入框布局样式
+           ├── WeakMap 多语言本地化（zh-CN / ja-JP / ko-KR）与宿主修复
            └── 实时指标胶囊与实验特性同步
 ```
 
@@ -148,10 +150,10 @@ Antigravity-Aura/
 ├── scripts/                        # 构建与插件软链脚本
 ├── skills/aura-theme/SKILL.md      # 内置技能声明、配置 Schema 与 HTTP 接口规范
 ├── src/
-│   ├── injection/                  # 窗口注入运行时、主题样式与修复模块
-│   ├── panel/                      # 侧边栏 Webview 前端
+│   ├── injection/                  # 窗口注入运行时、模块化 styles/、locales/ 与修复模块
+│   ├── panel/                      # 侧边栏 Webview 前端与面板多语言引擎
 │   ├── presets/                    # 用户配置目录初始模板
-│   ├── server/                     # Sidecar 后端服务与数据解析
+│   ├── server/                     # Sidecar 后端、宿主自愈、数据解析与 CDP 客户端
 │   ├── shared/                     # 共享定价注册表、TPS 速率计算与配置校验
 │   └── types/                      # TypeScript 类型与 SDK 声明
 ├── tests/                          # 单元测试

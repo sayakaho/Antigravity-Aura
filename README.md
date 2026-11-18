@@ -20,7 +20,7 @@ English | [简体中文](README.zh-CN.md)
 
 ## Overview
 
-**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without patching `.asar` archives or running external OS daemons. The sidecar starts with the host application, attaches to active windows over CDP for live style and script injection, and adaptively reads the local SQLite conversation store via native drivers or built-in WASM fallback to serve an analytics and preferences panel in the Auxiliary Pane.
+**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without external OS daemons. On startup, the sidecar automatically checks host CDP readiness (safely backing up and idempotently patching `app.asar` to enable `--remote-debugging-port=0` if needed), attaches to active windows over CDP for live style and script injection, and adaptively reads the local SQLite conversation store via native drivers or built-in WASM fallback to serve an analytics and preferences panel in the Auxiliary Pane.
 
 ## Screenshots
 
@@ -54,14 +54,14 @@ English | [简体中文](README.zh-CN.md)
 - **Claude-Inspired Themes & Typography**: Cohesive light and dark palettes paired with clean multilingual text rendering.
   - **Independent Light & Dark Presets**: Configure separate themes for light (`Claude Light`, `Pure Light`, `Native Default`) and dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances that follow your OS theme automatically.
   - **Dedicated Font Stacks**: Enumerates locally installed fonts with separate controls for Latin UI sans, CJK fallback, monospace code blocks, and chat reading size.
-- **Localization, Composer Polish & Live Reload**: Switch the host UI cleanly between English and Simplified Chinese (with custom dictionary overrides), refine bottom composer toolbar alignment and optional wax-seal focus styling, and apply panel changes or `custom.css` / `custom.js` hooks live across open windows without restarting.
-- **Host Fixes & Experimental Flags**: Resolves stuck settings dialogs, restores broken window zoom shortcuts, and safely enables Antigravity's built-in Labs and Developer Mode flags across windows.
+- **Multilingual Localization, Composer Polish & Live Reload**: Switch both the host UI and the Aura panel cleanly across English, Simplified Chinese (`zh-CN`), Japanese (`ja-JP`), and Korean (`ko-KR`) with custom dictionary overrides, refine bottom composer toolbar alignment and optional wax-seal focus styling, and apply panel changes or `custom.css` / `custom.js` hooks live across open windows without restarting.
+- **Host Auto-Healing, Fixes & Experimental Flags**: Automatically ensures zero-config CDP injection on launch (with `.bak` backup), resolves stuck settings dialogs, restores broken window zoom shortcuts, and safely enables Antigravity's built-in Labs and Developer Mode flags across windows.
 
 ## Requirements
 
 | Dependency | Requirement | Scope |
 | :--- | :--- | :--- |
-| **Google Antigravity** | Native Plugin + Sidecar support with CDP enabled | Runtime |
+| **Google Antigravity** | Native Plugin + Sidecar support (CDP auto-healed on first launch if disabled) | Runtime |
 | **Node.js** | `>= 18.0.0` (native acceleration on Node 22+, automatic WASM fallback on older versions) or **Bun** | Runtime |
 | **Bun** | `>= 1.2` | Build & test |
 | **OS** | macOS, Windows, or Linux | Runtime & build |
@@ -119,7 +119,8 @@ On first launch, Antigravity initializes a persistent data directory at `~/.gemi
 | `config.json` | Main plugin configuration |
 | `custom.css` | User stylesheet appended when `modules.customCss` is enabled |
 | `custom.js` | Top-level window script executed when `modules.customJs` is enabled |
-| `i18n.override.json` | Custom key-value overrides merged over the built-in `zh-CN` dictionary |
+| `i18n.override.json` | Custom key-value overrides merged over the active locale dictionary |
+| `account_timeline.json` / `quota_calibration.json` | Auto-managed runtime state for account timelines and differential quota calibration |
 
 ## Architecture
 
@@ -127,14 +128,15 @@ On first launch, Antigravity initializes a persistent data directory at `~/.gemi
 Antigravity Host
    │
    ├──► Sidecar Server — dist/sidecars/dashboard/main.mjs
-   │       ├── Local SQLite & Protobuf conversation parser
+   │       ├── Zero-config host app.asar auto-healer (with .bak backup)
+   │       ├── Local SQLite/Protobuf parser & Language Server quota/account telemetry
    │       ├── Config validation & injection bundle compiler
    │       ├── CDP target discovery & hot CSS/JS injection
    │       └── HTTP server for the Auxiliary Pane Webview
    │
    └──► Host Window — Injected Runtime
-           ├── Theme CSS variables, font stacks & composer layout
-           ├── WeakMap UI localizer & routing/zoom fixes
+           ├── Modular theme stylesheets, font stacks & composer layout
+           ├── WeakMap multilingual localizer (zh-CN / ja-JP / ko-KR) & host fixes
            └── Inline telemetry capsule & experimental flag sync
 ```
 
@@ -148,10 +150,10 @@ Antigravity-Aura/
 ├── scripts/                        # Build and plugin symlink scripts
 ├── skills/aura-theme/SKILL.md      # Bundled skill manifest, config schema & HTTP API reference
 ├── src/
-│   ├── injection/                  # In-window runtime, theme CSS, i18n, and host fixes
-│   ├── panel/                      # Auxiliary Pane Webview frontend
+│   ├── injection/                  # In-window runtime, modular styles/, locales/, and host fixes
+│   ├── panel/                      # Auxiliary Pane Webview frontend & panel i18n
 │   ├── presets/                    # Default templates for persistent user config
-│   ├── server/                     # Sidecar backend, SQLite/Protobuf parser, and CDP client
+│   ├── server/                     # Sidecar backend, host healer, SQLite/Protobuf parser, and CDP client
 │   ├── shared/                     # Shared pricing registry, TPS calculation, and schema validation
 │   └── types/                      # TypeScript contracts and Sidecar SDK declarations
 ├── tests/                          # Unit tests
