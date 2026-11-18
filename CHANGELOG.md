@@ -2,6 +2,18 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.3.1] - 2026-11-18
+
+### Added
+- **Multilingual Localization Engine**: Migrated monolithic `i18n.json` into a typed locales registry supporting `zh-CN`, `ja-JP`, and `ko-KR` across both host UI injection and the Aura Dashboard control panel.
+- **Zero-Config Host Auto-Healing**: Added `host-healer` support to automatically prepare host CDP injection readiness.
+
+### Changed
+- **Modular Injection Stylesheet Architecture**: Split monolithic `theme.css` into focused modules under `src/injection/styles/` (`base`, `typography`, `presets-light`, `presets-dark`, `composer`, `metrics-capsule`) with symmetric theme preset synchronization and refined panel contrast.
+
+### Fixed
+- **Dark Mode Sidebar Hover Mask Collapse**: Defined `--ag-theme-sidebar` in dark presets to eliminate the cyclic `--sidebar` variable reference that collapsed `.agy-row-actions::before` fade masks into full transparency, synced hover `--row-bg` blending, aligned dark/light sidebar typography, project headers, and menu/dialog hierarchy, and scoped light-only inset shell rules.
+
 ## [0.3.0] - 2026-11-16
 
 ### Added
