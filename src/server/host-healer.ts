@@ -79,9 +79,9 @@ export function resolveHostAsarPath(): string | null {
  * Pure Node.js in-memory asar patcher.
  * Inserts `--remote-debugging-port=0` into `dist/main.js` if missing.
  */
-export function autoHealHostAsar(): HostHealResult {
-  const asarPath = resolveHostAsarPath();
-  if (!asarPath) {
+export function autoHealHostAsar(customAsarPath?: string): HostHealResult {
+  const asarPath = customAsarPath !== undefined ? customAsarPath : resolveHostAsarPath();
+  if (!asarPath || !fs.existsSync(asarPath)) {
     return {
       success: false,
       healed: false,
@@ -104,10 +104,11 @@ export function autoHealHostAsar(): HostHealResult {
       };
     }
 
+    const headerPickleSize = fileBuf.readUInt32LE(4);
     const headerSize = fileBuf.readUInt32LE(12);
     const headerJsonStr = fileBuf.slice(16, 16 + headerSize).toString('utf8');
     const header = JSON.parse(headerJsonStr);
-    const baseOffset = 16 + headerSize;
+    const baseOffset = 8 + headerPickleSize;
 
     // Collect in-archive files into Map<relativePath, Buffer>
     const fileMap = new Map<string, Buffer>();
