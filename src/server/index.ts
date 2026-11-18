@@ -9,6 +9,7 @@ import type { SidecarStatusResponse } from '../types';
 import { GlobalAnalyticsEngine } from './analytics-engine';
 import { AccountTracker } from './account-tracker';
 import { CdpManager } from './cdp-client';
+import { autoHealHostAsar } from './host-healer';
 import {
   getActiveConfig,
   getBundleSnapshot,
@@ -64,6 +65,8 @@ try {
 }
 
 const { SidecarApp, Response } = sdk;
+
+const hostHealResult = autoHealHostAsar();
 
 initDataDirectory();
 rebuildBundleIfNeeded(true);
@@ -221,7 +224,12 @@ app.api(
       modules: snap.modules,
       metrics: cdpManager.getLatestMetrics(),
       activeCascadeId: cdpManager.getLastActiveCascadeId(),
-      analyticsRevision: analyticsEngine.getRevision()
+      analyticsRevision: analyticsEngine.getRevision(),
+      hostHealState: {
+        healed: hostHealResult.healed,
+        alreadyPatched: hostHealResult.alreadyPatched,
+        needsRestart: hostHealResult.needsRestart
+      }
     };
   },
   'GET'

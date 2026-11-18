@@ -510,6 +510,11 @@ export interface SidecarStatusResponse {
   metrics: LiveMetricsPayload | null;
   activeCascadeId?: string;
   analyticsRevision?: number;
+  hostHealState?: {
+    healed: boolean;
+    alreadyPatched: boolean;
+    needsRestart: boolean;
+  };
 }
 
 export interface SidecarBridge {
