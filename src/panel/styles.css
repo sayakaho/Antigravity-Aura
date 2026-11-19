@@ -222,6 +222,35 @@ html, body {
   transition: color 0.15s ease;
 }
 
+.settings-sublabel-hint {
+  font-size: 11px;
+  color: #d97706;
+  margin-top: 3px;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+[data-theme='dark'] .settings-sublabel-hint,
+html.dark .settings-sublabel-hint {
+  color: #fbbf24;
+}
+
+.advanced-card-header-hint {
+  padding: 9px 18px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #d97706;
+  border-bottom: 1px solid var(--aura-border);
+  background: color-mix(in srgb, #f59e0b 5%, transparent);
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+[data-theme='dark'] .advanced-card-header-hint,
+html.dark .advanced-card-header-hint {
+  color: #fbbf24;
+  background: color-mix(in srgb, #f59e0b 8%, transparent);
+}
+
 .settings-control {
   flex-shrink: 0;
 }
@@ -2567,3 +2596,5 @@ html[data-theme="dark"] .chart-shared-hover-band {
   width: 100%;
   animation: aura-fade-in 0.15s ease-out;
 }
+
+

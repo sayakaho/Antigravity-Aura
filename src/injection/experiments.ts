@@ -59,7 +59,87 @@ function writeNativeStorage(key: string, value: string | null): void {
     } catch (err) {
       console.warn('[Aura] Failed to update nativeStorage:', err);
     }
+  } else if (!win.__ag_native_storage_hooked) {
+    win.__ag_native_storage_hooked = true;
+    let currentNative = win.nativeStorage;
+    Object.defineProperty(window, 'nativeStorage', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return currentNative;
+      },
+      set(val: unknown) {
+        currentNative = val as typeof win.nativeStorage;
+        if (currentNative && typeof currentNative.updateItems === 'function') {
+          try {
+            const flags = window.localStorage.getItem(FLAG_OVERRIDES_KEY);
+            const env = window.localStorage.getItem(ENV_OVERRIDE_KEY);
+            const items: Record<string, string | null> = {};
+            if (flags) items[FLAG_OVERRIDES_KEY] = flags;
+            if (env) items[ENV_OVERRIDE_KEY] = env;
+            if (Object.keys(items).length > 0) {
+              void currentNative.updateItems(items);
+            }
+          } catch {}
+        }
+      }
+    });
   }
+}
+
+function installStorageTamperGuard(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  const win = window as unknown as AuraGlobals;
+  if (win.__ag_storage_tamper_guard_installed) return;
+  win.__ag_storage_tamper_guard_installed = true;
+
+  const storageProto = (typeof Storage !== 'undefined' && Storage.prototype) || null;
+  const originalSetItem = storageProto
+    ? storageProto.setItem.bind(window.localStorage)
+    : window.localStorage.setItem.bind(window.localStorage);
+
+  const originalRemoveItem = storageProto
+    ? storageProto.removeItem.bind(window.localStorage)
+    : window.localStorage.removeItem.bind(window.localStorage);
+
+  const safeMergeAndWrite = (key: string, rawVal: string): boolean => {
+    if (key === FLAG_OVERRIDES_KEY && win.__ag_active_advanced_flags) {
+      try {
+        const parsed = parsePlainObject(rawVal);
+        const merged = { ...parsed, ...win.__ag_active_advanced_flags };
+        delete merged['labs-concierge-agent'];
+        delete merged['context-window-selector'];
+        originalSetItem(key, JSON.stringify(merged));
+        return true;
+      } catch {}
+    } else if (key === ENV_OVERRIDE_KEY && win.__ag_active_env_override) {
+      try {
+        const parsed = parsePlainObject(rawVal);
+        const merged = { ...parsed, ...win.__ag_active_env_override };
+        originalSetItem(key, JSON.stringify(merged));
+        return true;
+      } catch {}
+    }
+    return false;
+  };
+
+  window.localStorage.setItem = function (key: string, value: string): void {
+    if (!safeMergeAndWrite(key, String(value))) {
+      originalSetItem(key, String(value));
+    }
+  };
+
+  window.localStorage.removeItem = function (key: string): void {
+    if (key === FLAG_OVERRIDES_KEY && win.__ag_active_advanced_flags) {
+      originalSetItem(key, JSON.stringify(win.__ag_active_advanced_flags));
+      return;
+    }
+    if (key === ENV_OVERRIDE_KEY && win.__ag_active_env_override) {
+      originalSetItem(key, JSON.stringify(win.__ag_active_env_override));
+      return;
+    }
+    originalRemoveItem(key);
+  };
 }
 
 function writeStorageAndNotify(
@@ -74,16 +154,87 @@ function writeStorageAndNotify(
     else window.localStorage.setItem(key, nextValue);
     dispatchLocalStorageEvent(key, prevValue, nextValue);
   } else if (forceNotify) {
-    // 宿主采用动态随机端口，冷启动时 React 可能早于 CDP 首次注入完成挂载；
-    // 原生 localStorage 监听只在收到同窗口显式 StorageEvent 时更新 FeatureContext 状态。
     dispatchLocalStorageEvent(key, prevValue, nextValue);
   }
 
-  // Antigravity 2.32+ (Electron 桌面端) 优先采纳 window.nativeStorage (native-bridge)，
-  // 必须双写同步原生存储通道并驱动 onChanged/kod 缓存失效
   if (valueChanged || forceNotify) {
     writeNativeStorage(key, nextValue);
   }
+}
+
+function wrapConfigProxy(target: Record<string, unknown>, winGlobals: AuraGlobals): Record<string, unknown> {
+  if (typeof Proxy === 'undefined') return target;
+  if ((target as Record<string, unknown>).__is_ag_proxy) return target;
+
+  if (winGlobals.__ag_labs_dev_mode !== undefined) {
+    target.devMode = winGlobals.__ag_labs_dev_mode === true;
+  }
+  if (winGlobals.__ag_release_channel) {
+    target.releaseChannel = winGlobals.__ag_release_channel;
+  }
+  if (typeof winGlobals.__ag_is_byoa === 'boolean') {
+    target.isByoa = winGlobals.__ag_is_byoa;
+  }
+
+  return new Proxy(target, {
+    get(obj, prop, receiver) {
+      if (prop === '__is_ag_proxy') return true;
+      if (prop === 'devMode' && winGlobals.__ag_labs_dev_mode !== undefined) {
+        return winGlobals.__ag_labs_dev_mode === true;
+      }
+      if (prop === 'releaseChannel' && winGlobals.__ag_release_channel) {
+        return winGlobals.__ag_release_channel;
+      }
+      if (prop === 'isByoa' && typeof winGlobals.__ag_is_byoa === 'boolean') {
+        return winGlobals.__ag_is_byoa;
+      }
+      return Reflect.get(obj, prop, receiver);
+    },
+    set(obj, prop, val) {
+      if (prop === 'devMode' && winGlobals.__ag_labs_dev_mode !== undefined) {
+        obj.devMode = winGlobals.__ag_labs_dev_mode === true;
+        return true;
+      }
+      if (prop === 'releaseChannel' && winGlobals.__ag_release_channel) {
+        obj.releaseChannel = winGlobals.__ag_release_channel;
+        return true;
+      }
+      if (prop === 'isByoa' && typeof winGlobals.__ag_is_byoa === 'boolean') {
+        obj.isByoa = winGlobals.__ag_is_byoa;
+        return true;
+      }
+      obj[prop as string] = val;
+      return true;
+    },
+    has(obj, prop) {
+      if (prop === 'devMode' || prop === 'releaseChannel' || prop === 'isByoa') return true;
+      return Reflect.has(obj, prop);
+    },
+    ownKeys(obj) {
+      const keys = new Set(Reflect.ownKeys(obj));
+      keys.add('devMode');
+      keys.add('releaseChannel');
+      keys.add('isByoa');
+      return Array.from(keys);
+    },
+    getOwnPropertyDescriptor(obj, prop) {
+      const desc = Reflect.getOwnPropertyDescriptor(obj, prop);
+      if (prop === 'devMode' || prop === 'releaseChannel' || prop === 'isByoa') {
+        return {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          value:
+            prop === 'devMode'
+              ? winGlobals.__ag_labs_dev_mode === true
+              : prop === 'releaseChannel'
+              ? winGlobals.__ag_release_channel
+              : winGlobals.__ag_is_byoa
+        };
+      }
+      return desc;
+    }
+  });
 }
 
 export function patchAppConfig(advanced: Partial<AdvancedConfig>): void {
@@ -94,16 +245,23 @@ export function patchAppConfig(advanced: Partial<AdvancedConfig>): void {
     winGlobals.__ag_release_channel = advanced.releaseChannel;
     winGlobals.__ag_is_byoa = advanced.isByoa;
 
-    let currentConfig = (window as unknown as { __APP_CONFIG__?: Record<string, unknown> }).__APP_CONFIG__;
-    if (currentConfig && typeof currentConfig === 'object') {
-      currentConfig.devMode = advanced.labsDeveloperMode !== false;
+    let rawConfig = (window as unknown as { __APP_CONFIG__?: Record<string, unknown> }).__APP_CONFIG__;
+    if (!rawConfig || typeof rawConfig !== 'object') {
+      rawConfig = {
+        devMode: advanced.labsDeveloperMode !== false,
+        releaseChannel: advanced.releaseChannel || 'stable',
+        isByoa: advanced.isByoa ?? true
+      };
+    } else {
+      rawConfig.devMode = advanced.labsDeveloperMode !== false;
       if (advanced.releaseChannel) {
-        currentConfig.releaseChannel = advanced.releaseChannel;
+        rawConfig.releaseChannel = advanced.releaseChannel;
       }
       if (typeof advanced.isByoa === 'boolean') {
-        currentConfig.isByoa = advanced.isByoa;
+        rawConfig.isByoa = advanced.isByoa;
       }
     }
+    let currentConfig: Record<string, unknown> | undefined = wrapConfigProxy(rawConfig, winGlobals);
 
     if (!winGlobals.__ag_app_config_hooked) {
       winGlobals.__ag_app_config_hooked = true;
@@ -123,8 +281,10 @@ export function patchAppConfig(advanced: Partial<AdvancedConfig>): void {
             if (typeof winGlobals.__ag_is_byoa === 'boolean') {
               cfg.isByoa = winGlobals.__ag_is_byoa;
             }
+            currentConfig = wrapConfigProxy(cfg, winGlobals);
+          } else {
+            currentConfig = val as Record<string, unknown> | undefined;
           }
-          currentConfig = val as Record<string, unknown> | undefined;
         }
       });
     }
@@ -177,6 +337,19 @@ export function patchUrlArchitectureParams(advanced: Partial<AdvancedConfig>): v
             if (val !== null && val !== undefined) return true;
           }
           return originalHas.call(this, name);
+        };
+      }
+
+      const originalGetAll = TargetUrlSearchParams.prototype.getAll;
+      if (typeof originalGetAll === 'function') {
+        TargetUrlSearchParams.prototype.getAll = function (name: string): string[] {
+          const win = (typeof window !== 'undefined' ? window : globalThis) as unknown as AuraGlobals;
+          const overrides = win.__ag_adv_arch_params;
+          if (overrides && Object.prototype.hasOwnProperty.call(overrides, name)) {
+            const val = overrides[name];
+            if (val !== null && val !== undefined) return [val];
+          }
+          return originalGetAll.call(this, name);
         };
       }
     }
@@ -232,6 +405,10 @@ export function syncDeveloperSettings(advanced: Partial<AdvancedConfig>): void {
     const nextFlagsStr = Object.keys(flags).length > 0 ? JSON.stringify(flags) : null;
 
     const winGlobals = window as unknown as AuraGlobals;
+    winGlobals.__ag_active_advanced_flags = labsEnabled ? (flags as Record<string, boolean>) : undefined;
+    winGlobals.__ag_active_env_override = labsEnabled ? envOverride : null;
+    installStorageTamperGuard();
+
     const nextSig = `${labsEnabled ? '1' : '0'}|${nextEnvStr ?? ''}|${nextFlagsStr ?? ''}`;
     const forceInitialSync = winGlobals.__ag_experiments_sig !== nextSig;
 

@@ -40,6 +40,7 @@ export interface AuraGlobals {
   __ag_last_boot_preset?: string;
   __ag_orig_text_map?: WeakMap<Text, OrigTextRecord>;
   __ag_i18n_observer?: MutationObserver | null;
+  __ag_i18n_cleanup?: (() => void) | null;
   __ag_i18n_dict?: Record<string, string>;
   __ag_settings_click_fn?: ((e: Event) => void) | null;
   __ag_settings_guard_installed?: boolean;
@@ -75,6 +76,10 @@ export interface AuraGlobals {
   __ag_app_config_hooked?: boolean;
   __ag_adv_arch_params?: Record<string, string | null>;
   __ag_url_search_params_hooked?: boolean;
+  __ag_storage_tamper_guard_installed?: boolean;
+  __ag_native_storage_hooked?: boolean;
+  __ag_active_advanced_flags?: Record<string, boolean>;
+  __ag_active_env_override?: Record<string, unknown> | null;
   __APP_CONFIG__?: {
     productName?: string;
     csrfToken?: string;

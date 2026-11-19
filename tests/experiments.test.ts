@@ -274,4 +274,57 @@ describe('setupExperiments & StorageEvent synchronization', () => {
     expect(nativeStorageUpdates[0]?.['jetski.developer.featureEnvironmentOverride']).toBeNull();
     expect(nativeStorageUpdates[1]?.['jetski.developer.customFlagOverrides']).toBeNull();
   });
+
+  test('prevents host code from tampering __APP_CONFIG__ properties via direct assignment or Object.assign', async () => {
+    const { setupExperiments } = await import('../src/injection/experiments');
+    const win = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+    win.__APP_CONFIG__ = { productName: 'antigravity', devMode: false, isByoa: false };
+
+    setupExperiments({
+      labsDeveloperMode: true,
+      isByoa: true,
+      releaseChannel: 'canary',
+      experimentalFlags: { ...DEFAULT_EXPERIMENTAL_FLAGS }
+    });
+
+    const cfg = win.__APP_CONFIG__ as Record<string, unknown>;
+    expect(cfg.devMode).toBe(true);
+    expect(cfg.isByoa).toBe(true);
+    expect(cfg.releaseChannel).toBe('canary');
+
+    // Host attempts direct property overwrite
+    cfg.devMode = false;
+    cfg.isByoa = false;
+    expect(cfg.devMode).toBe(true);
+    expect(cfg.isByoa).toBe(true);
+
+    // Host attempts Object.assign overwrite
+    Object.assign(cfg, { devMode: false, isByoa: false, releaseChannel: 'stable' });
+    expect(cfg.devMode).toBe(true);
+    expect(cfg.isByoa).toBe(true);
+    expect(cfg.releaseChannel).toBe('canary');
+  });
+
+  test('storage tamper guard locks and merges active flags when host tries to overwrite customFlagOverrides', async () => {
+    const { setupExperiments } = await import('../src/injection/experiments');
+    const win = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+
+    setupExperiments({
+      labsDeveloperMode: true,
+      experimentalFlags: {
+        ...DEFAULT_EXPERIMENTAL_FLAGS,
+        'enable-developer-mode': true
+      }
+    });
+
+    const storage = win.localStorage as { setItem: (k: string, v: string) => void; getItem: (k: string) => string | null };
+    // Simulate host remote sync attempting to wipe custom flags
+    storage.setItem('jetski.developer.customFlagOverrides', JSON.stringify({ 'unrelated-flag': true }));
+
+    const activeRaw = storage.getItem('jetski.developer.customFlagOverrides');
+    expect(activeRaw).not.toBeNull();
+    const activeObj = JSON.parse(activeRaw!);
+    expect(activeObj['enable-developer-mode']).toBe(true);
+    expect(activeObj['unrelated-flag']).toBe(true);
+  });
 });
