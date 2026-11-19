@@ -9,7 +9,7 @@
 [![Version](https://img.shields.io/badge/version-0.3.3-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 English | [简体中文](README.zh-CN.md)
@@ -65,7 +65,10 @@ English | [简体中文](README.zh-CN.md)
 | **Google Antigravity** | Native Plugin + Sidecar support (CDP auto-healed on first launch if disabled) | Runtime |
 | **Node.js** | `>= 18.0.0` (native acceleration on Node 22+, automatic WASM fallback on older versions) or **Bun** | Runtime |
 | **Bun** | `>= 1.2` | Build & test |
-| **OS** | macOS, Windows, or Linux | Runtime & build |
+| **OS** | macOS (Apple Silicon & Intel) | Runtime & build |
+
+> [!NOTE]
+> **Platform Support**: Antigravity Aura is developed, optimized, and verified on macOS. Key features such as seamless Google Account switching and Credential Vault synchronization directly integrate with the native macOS Keychain (`security`). Windows and Linux are currently untested and not officially supported.
 
 ## Installation
 

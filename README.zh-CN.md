@@ -9,7 +9,7 @@
 [![Version](https://img.shields.io/badge/version-0.3.3-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [English](README.md) | 简体中文
@@ -65,7 +65,10 @@
 | **Google Antigravity** | 支持 Plugin + Sidecar（若未开启 CDP，首次启动将自动安全自愈） | 运行时 |
 | **Node.js** | `>= 18.0.0`（Node 22+ 原生加速，低版本自动 WASM 兜底）或 **Bun** | 运行时 |
 | **Bun** | `>= 1.2` | 源码构建与测试 |
-| **系统** | macOS / Windows / Linux | 运行与构建 |
+| **系统** | macOS（Apple Silicon / Intel） | 运行与构建 |
+
+> [!NOTE]
+> **系统兼容性说明**：本项目目前主要面向 macOS 环境开发并经过完整实测。Google 账号无感快速切换与凭证保险库深度依赖 macOS 系统钥匙串（Keychain / `security` 服务）；Windows 与 Linux 平台暂未进行充分测试，暂不提供官方支持与可用性保证。
 
 ## 安装
 
