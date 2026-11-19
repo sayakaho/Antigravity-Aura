@@ -2,6 +2,21 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.3.2] - 2026-11-19
+
+### Added
+- **Authentic Google Account Switcher & Vault Sync**: Integrated in-panel Google account switcher bar featuring authentic user avatar, real name, email, subscription plan badge, and automatic Keychain/storage credential vault synchronization.
+- **Client Toggle & Server Entitlement Guidance**: Added clear, multilingual warning notices (`* Client-side toggles only`) at the top of the Advanced Settings panel and under BYOA to clarify that client toggles depend on Google server-side service entitlements.
+- **Strict Base Key Contracts for Multilingual Engine**: Introduced `PANEL_BASE_KEYS` and `HOST_BASE_KEYS` contracts as single sources of truth, enforcing 1:1 parity and zero missing translations across English, `zh-CN`, `ja-JP`, and `ko-KR`.
+
+### Changed
+- **Hardened `__APP_CONFIG__` & Storage Architecture**: Implemented full Proxy traps (`get`, `set`, `has`, `ownKeys`, `getOwnPropertyDescriptor`) and pre-initialization on `window.__APP_CONFIG__` to prevent React component trees from permanently caching `isDevMode: false`.
+- **Async `nativeStorage` Bridge Hooks**: Added lifecycle hooks on `window.nativeStorage` to ensure experimental flag overrides synchronize immediately upon Electron storage readiness.
+
+### Fixed
+- **Settings Developer Mode Disappearance**: Resolved the root cause behind Antigravity settings hiding the `Developer` screen by ensuring `canApplyDeveloperOverrides` evaluates to `true` on initial React tree mount, preventing user flag overrides from being discarded.
+- **Remote Mendel Override Tamper Prevention**: Added a prototype-level Storage Tamper Guard to protect user-configured `customFlagOverrides` and environment overrides from being wiped by background Mendel remote experiments.
+
 ## [0.3.1] - 2026-11-18
 
 ### Added

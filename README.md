@@ -6,7 +6,7 @@
 
 **Theme presets, custom font stacks, and local SQLite performance analytics for Google Antigravity, built on the native Plugin + Sidecar API.**
 
-[![Version](https://img.shields.io/badge/version-0.3.1-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.3.2-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
@@ -51,11 +51,12 @@ English | [简体中文](README.zh-CN.md)
   - **Inline Telemetry Capsule**: Displays the latest response's speed (`tok/s`), TTFT, context usage, and output tokens on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
   - **Analytics Dashboard**: Filter by the active session or time range (`Today`, `Last 7 Days`, `Last 30 Days`, `Custom`) to track token efficiency, Gemini API equivalent costs, per-model speed and latency trends, and tool or workspace breakdowns.
   - **Account Quota & Capacity Heatmap**: Inspect per-account token consumption and plan tiers alongside a 1-year capacity activity heatmap and rolling 5h / 7d quota bucket estimates.
+  - **Google Account Switcher & Vault**: Switch between authenticated Google accounts directly within the sidebar or panel, showing authentic user avatars, emails, and plan tiers backed by safe credential vault storage.
 - **Claude-Inspired Themes & Typography**: Cohesive light and dark palettes paired with clean multilingual text rendering.
   - **Independent Light & Dark Presets**: Configure separate themes for light (`Claude Light`, `Pure Light`, `Native Default`) and dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances that follow your OS theme automatically.
   - **Dedicated Font Stacks**: Enumerates locally installed fonts with separate controls for Latin UI sans, CJK fallback, monospace code blocks, and chat reading size.
 - **Multilingual Localization, Composer Polish & Live Reload**: Switch both the host UI and the Aura panel cleanly across English, Simplified Chinese (`zh-CN`), Japanese (`ja-JP`), and Korean (`ko-KR`) with custom dictionary overrides, refine bottom composer toolbar alignment and optional wax-seal focus styling, and apply panel changes or `custom.css` / `custom.js` hooks live across open windows without restarting.
-- **Host Auto-Healing, Fixes & Experimental Flags**: Automatically ensures zero-config CDP injection on launch (with `.bak` backup), resolves stuck settings dialogs, restores broken window zoom shortcuts, and safely enables Antigravity's built-in Labs and Developer Mode flags across windows.
+- **Host Auto-Healing, Tamper Guard & Developer Flag Injection**: Automatically ensures zero-config CDP injection on launch (with `.bak` backup), resolves stuck settings dialogs, restores broken window zoom shortcuts, hardens `window.__APP_CONFIG__` and `nativeStorage` against remote experiment resets, and reliably unlocks Antigravity's native Developer Mode and Labs panels with clear client/server boundary guidance.
 
 ## Requirements
 
@@ -137,7 +138,7 @@ Antigravity Host
    └──► Host Window — Injected Runtime
            ├── Modular theme stylesheets, font stacks & composer layout
            ├── WeakMap multilingual localizer (zh-CN / ja-JP / ko-KR) & host fixes
-           └── Inline telemetry capsule & experimental flag sync
+           └── Inline telemetry capsule, Google account switcher & experimental flag sync
 ```
 
 <details>

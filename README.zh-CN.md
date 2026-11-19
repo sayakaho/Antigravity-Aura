@@ -6,7 +6,7 @@
 
 **Anthropic 风格的明暗主题、字体混排与本地性能监控插件，基于 Google Antigravity 原生 Plugin + Sidecar 机制实现。**
 
-[![Version](https://img.shields.io/badge/version-0.3.1-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.3.2-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)
@@ -51,11 +51,12 @@
   - **输入框指标胶囊**：在输入框底部常驻展示最近一次响应的生成速率（`tok/s`）、TTFT、上下文占用与输出量；悬停可查看思考链与正文拆解、缓存命中率及距上下文压缩的剩余空间，点击即可切换侧边栏。
   - **多维度性能看板**：支持按当前会话或指定时间范围（今日、近 7/30 天、自定义日期等）聚合统计，覆盖 Token 构成与缓存效率、Gemini 模型 API 等价成本、各模型实测速率与延迟分布，以及工具调用和工作区占比。
   - **账号配额与一年期活跃度热力图**：直观展示多账号消耗占比与当前 Plan 订阅状态，配合一年期容量活跃度热力矩阵与 5h / 7d 配额预算反推，随时掌握账号额度演变。
+  - **Google 原生账号切换与凭证保险库**：在侧边栏与控制面板内一键切换已认证的 Google 账号，显示真实头像、邮箱与订阅 Plan 标签，并自动同步 Keychain 与本地安全保险库凭据。
 - **Claude 风格主题与字体混排**：统一明暗视觉观感，解决原版界面中英混排的割裂问题。
   - **双模式独立预设**：为亮色（`Claude Light`、`Pure Light`、`Native Default`）与暗色（`Claude Dark`、`Vintage Deep`、`Native Default`）分别指定独立方案，随系统外观自动切换。
   - **三轨字体独立配置**：自动识别本机已安装字体，支持西文主字体、CJK 中文回退、等宽代码字体与对话阅读字号分别设置。
 - **多语言本地化、细节打磨与跨窗口热重载**：支持英文、简体中文（`zh-CN`）、日语（`ja-JP`）与韩语（`ko-KR`）在宿主界面与 Aura 侧边栏面板间无损切换，并支持自定义词典覆盖；提供输入框工具栏水平对齐与可选暗红蜡封聚焦边框，所有面板设置与 `custom.css` / `custom.js` 扩展均跨窗口即时生效、无需重启。
-- **零配置自愈、宿主兼容修复与实验开关**：启动时自动保障宿主 CDP 注入就绪（自动保留 `.bak` 备份），修复设置弹窗偶发无法打开的问题并恢复窗口缩放快捷键，同时支持跨窗口安全开启 Antigravity 内置 Labs 与开发者实验特性。
+- **零配置自愈、防篡改守卫与开发者特性注入**：启动时自动保障宿主 CDP 注入就绪（自动保留 `.bak` 备份），修复设置弹窗偶发无法打开的问题并恢复窗口缩放快捷键；通过深度代理与存储防篡改守卫确保 Antigravity 原生 Developer 开发者模式稳定解锁，并提供清晰的客户端功能与服务端依赖边界指引。
 
 ## 环境要求
 
@@ -137,7 +138,7 @@ Antigravity Host
    └──► Host Window — Injected Runtime
            ├── 模块化主题样式表、字体栈与输入框布局样式
            ├── WeakMap 多语言本地化（zh-CN / ja-JP / ko-KR）与宿主修复
-           └── 实时指标胶囊与实验特性同步
+           └── 实时指标胶囊、Google 原生账号切换与实验特性同步
 ```
 
 <details>
