@@ -303,6 +303,49 @@ export function extractToolInfo(payloadBuf: Uint8Array | Buffer | null | undefin
   }
 }
 
+function extractChatMetadataTag(chatBuf: Buffer | null, targetKey: string): string {
+  if (!chatBuf || chatBuf.length === 0) return '';
+  let pos = 0;
+  while (pos < chatBuf.length) {
+    const tagRes = readVarintBigInt(chatBuf, pos);
+    if (!tagRes) break;
+    pos = tagRes.nextPos;
+    const wireType = Number(tagRes.value & 7n);
+    const fieldNum = Number(tagRes.value >> 3n);
+    if (fieldNum <= 0 || fieldNum > 10000) break;
+
+    if (wireType === 0) {
+      const valRes = readVarintBigInt(chatBuf, pos);
+      if (!valRes) break;
+      pos = valRes.nextPos;
+    } else if (wireType === 2) {
+      const lenRes = readVarintBigInt(chatBuf, pos);
+      if (!lenRes) break;
+      pos = lenRes.nextPos;
+      const len = Number(lenRes.value);
+      if (!Number.isSafeInteger(len) || len < 0 || pos + len > chatBuf.length) break;
+      if (fieldNum === 20) {
+        const entry = parseProto(chatBuf.subarray(pos, pos + len));
+        const keyBuf = getProtoBytes(entry, 1);
+        if (keyBuf && keyBuf.toString('utf8') === targetKey) {
+          const valBuf = getProtoBytes(entry, 2);
+          return valBuf ? valBuf.toString('utf8').trim() : '';
+        }
+      }
+      pos += len;
+    } else if (wireType === 1) {
+      if (pos + 8 > chatBuf.length) break;
+      pos += 8;
+    } else if (wireType === 5) {
+      if (pos + 4 > chatBuf.length) break;
+      pos += 4;
+    } else {
+      break;
+    }
+  }
+  return '';
+}
+
 export interface ParsedGenMetadataStep {
   inTok: number;
   outTok: number;
@@ -310,10 +353,12 @@ export interface ParsedGenMetadataStep {
   thinkTok: number;
   respTok: number;
   ctx: number;
+  ctxLimit: number;
   ttftSec: number;
   streamSec: number;
   totDur: number;
   rawModelId: string;
+  modelEnum: string;
   modelName: string;
   stepIdx: number | null;
 }
@@ -325,6 +370,10 @@ export function extractGenMetadataStep(rowData: Buffer | Uint8Array): ParsedGenM
 
   const usageBuf = getProtoBytes(chat, 4);
   const usage = usageBuf ? parseProto(usageBuf) : new Map<number, ProtoValue>();
+  const ctxEnvelopeBuf = getProtoBytes(chat, 9);
+  const ctxEnvelope = ctxEnvelopeBuf ? parseProto(ctxEnvelopeBuf) : new Map<number, ProtoValue>();
+  const ctxBudgetBuf = getProtoBytes(ctxEnvelope, 10);
+  const ctxBudget = ctxBudgetBuf ? parseProto(ctxBudgetBuf) : new Map<number, ProtoValue>();
   const ttftBuf = getProtoBytes(chat, 11);
   const ttftMap = ttftBuf ? parseProto(ttftBuf) : new Map<number, ProtoValue>();
   const streamBuf = getProtoBytes(chat, 12);
@@ -334,12 +383,14 @@ export function extractGenMetadataStep(rowData: Buffer | Uint8Array): ParsedGenM
   const rawModelNameBuf = getProtoBytes(chat, 21);
   const rawModelId = rawModelIdBuf ? rawModelIdBuf.toString('utf8').trim() : 'unknown';
   const rawModelName = rawModelNameBuf ? rawModelNameBuf.toString('utf8').trim() : '';
+  const modelEnum = extractChatMetadataTag(chatBuf, 'model_enum');
 
   const inTok = getProtoNum(usage, 2);
   const outTok = getProtoNum(usage, 3);
   const cacheRead = getProtoNum(usage, 5);
   const thinkTok = getProtoNum(usage, 9);
   const respTok = getProtoNum(usage, 10);
+  const ctxLimit = getProtoNum(ctxBudget, 4);
 
   const ttftSec = getProtoNum(ttftMap, 1) + getProtoNum(ttftMap, 2) / 1e9;
   const streamSec = getProtoNum(streamMap, 1) + getProtoNum(streamMap, 2) / 1e9;
@@ -351,10 +402,12 @@ export function extractGenMetadataStep(rowData: Buffer | Uint8Array): ParsedGenM
     thinkTok,
     respTok,
     ctx: inTok + cacheRead,
+    ctxLimit,
     ttftSec,
     streamSec,
     totDur: ttftSec + streamSec,
     rawModelId,
+    modelEnum,
     modelName: canonicalModelName(rawModelId, rawModelName),
     stepIdx: extractStepIdx(top.get(2))
   };

@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { resolveContextLimitTokens } from '../shared/config-schema';
 import { formatCompactNumber, formatFullNumber } from '../shared/format';
+import { ModelPricingRegistry } from '../shared/pricing';
 import { computeStepTps } from '../shared/tps';
 import type { AuraConfig, LiveMetricsPayload } from '../types';
 import {
@@ -10,9 +10,21 @@ import {
   openDb
 } from './sqlite-proto';
 
+const FALLBACK_CONTEXT_LIMIT_TOKENS = 256000;
+
+export interface ParseConversationMetricsOptions {
+  activeModel?: string;
+  registry?: ModelPricingRegistry;
+}
+
 interface MetricsCacheEntry {
   sig: string;
   language: AuraConfig['language'];
+  activeModel: string;
+  modelName: string;
+  modelEnum: string;
+  rawModelId: string;
+  dbCtxLimit: number;
   contextLimitTokens: number;
   payload: LiveMetricsPayload;
 }
@@ -180,10 +192,30 @@ function setMetricsCache(dbPath: string, entry: MetricsCacheEntry): void {
   }
 }
 
+function resolveDynamicContextLimit(
+  registry: ModelPricingRegistry,
+  activeModel: string,
+  modelName: string,
+  modelEnum: string,
+  rawModelId: string,
+  dbCtxLimit: number
+): number {
+  const fromRegistry = registry.getModelContextLimit([
+    activeModel,
+    modelName,
+    modelEnum,
+    rawModelId
+  ]);
+  if (fromRegistry !== null) return fromRegistry;
+  if (dbCtxLimit > 0) return dbCtxLimit;
+  return FALLBACK_CONTEXT_LIMIT_TOKENS;
+}
+
 export function parseConversationMetrics(
   cascadeId: string,
   conversationsDir: string,
-  config: AuraConfig
+  config: AuraConfig,
+  options?: ParseConversationMetricsOptions
 ): LiveMetricsPayload | null {
   if (!hasSqlite()) return null;
   if (!cascadeId || !/^[0-9a-f-]{36}$/i.test(cascadeId)) return null;
@@ -196,16 +228,25 @@ export function parseConversationMetrics(
     config.language === 'zh-CN' || config.language === 'ja-JP' || config.language === 'ko-KR'
       ? config.language
       : 'default';
-  const contextLimitTokens = resolveContextLimitTokens(config);
+  const activeModel = (options?.activeModel || '').trim();
+  const registry = options?.registry ?? ModelPricingRegistry.getInstance();
 
   const cached = metricsCache.get(dbPath);
-  if (
-    cached &&
-    cached.sig === sig &&
-    cached.language === language &&
-    cached.contextLimitTokens === contextLimitTokens
-  ) {
-    return cached.payload;
+  if (cached && cached.sig === sig && cached.language === language) {
+    if (!cached.payload.hasData) {
+      return cached.payload;
+    }
+    const expectedLimit = resolveDynamicContextLimit(
+      registry,
+      activeModel,
+      cached.modelName,
+      cached.modelEnum,
+      cached.rawModelId,
+      cached.dbCtxLimit
+    );
+    if (cached.contextLimitTokens === expectedLimit) {
+      return cached.payload;
+    }
   }
 
   const db = openDb(dbPath);
@@ -217,7 +258,17 @@ export function parseConversationMetrics(
     const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
     if (!rows || rows.length === 0) {
       const emptyPayload: LiveMetricsPayload = { cascadeId, hasData: false, sig };
-      setMetricsCache(dbPath, { sig, language, contextLimitTokens, payload: emptyPayload });
+      setMetricsCache(dbPath, {
+        sig,
+        language,
+        activeModel,
+        modelName: '',
+        modelEnum: '',
+        rawModelId: '',
+        dbCtxLimit: 0,
+        contextLimitTokens: FALLBACK_CONTEXT_LIMIT_TOKENS,
+        payload: emptyPayload
+      });
       return emptyPayload;
     }
 
@@ -252,7 +303,17 @@ export function parseConversationMetrics(
 
     if (validSteps.length === 0) {
       const emptyPayload: LiveMetricsPayload = { cascadeId, hasData: false, sig };
-      setMetricsCache(dbPath, { sig, language, contextLimitTokens, payload: emptyPayload });
+      setMetricsCache(dbPath, {
+        sig,
+        language,
+        activeModel,
+        modelName: '',
+        modelEnum: '',
+        rawModelId: '',
+        dbCtxLimit: 0,
+        contextLimitTokens: FALLBACK_CONTEXT_LIMIT_TOKENS,
+        payload: emptyPayload
+      });
       return emptyPayload;
     }
 
@@ -270,6 +331,14 @@ export function parseConversationMetrics(
     }
 
     const last = validSteps[validSteps.length - 1];
+    const contextLimitTokens = resolveDynamicContextLimit(
+      registry,
+      activeModel,
+      last.modelName,
+      last.modelEnum,
+      last.rawModelId,
+      last.ctxLimit
+    );
     const tps = computeStepTps(last.outTok, last.ttftSec, last.streamSec, last.totDur);
     const ctxPct = Math.round((last.ctx / contextLimitTokens) * 100);
     const clampedCtxPct = Math.min(100, Math.max(0, ctxPct));
@@ -343,7 +412,17 @@ export function parseConversationMetrics(
       inlineHtml,
       tooltipHtml
     };
-    setMetricsCache(dbPath, { sig, language, contextLimitTokens, payload });
+    setMetricsCache(dbPath, {
+      sig,
+      language,
+      activeModel,
+      modelName: last.modelName,
+      modelEnum: last.modelEnum,
+      rawModelId: last.rawModelId,
+      dbCtxLimit: last.ctxLimit,
+      contextLimitTokens,
+      payload
+    });
     return payload;
   } catch {
     return cached?.payload ?? { cascadeId, hasData: false };

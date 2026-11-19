@@ -17,6 +17,27 @@ function extractCascadeId(): string {
   return '';
 }
 
+function extractActiveModelLabel(): string {
+  try {
+    const btn = document.querySelector('[data-testid="model-selector-trigger"]');
+    if (!btn) return '';
+    const origMap = agGlobal.__ag_orig_text_map;
+    if (origMap && typeof document.createTreeWalker === 'function' && typeof NodeFilter !== 'undefined') {
+      const walker = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT);
+      const parts: string[] = [];
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        const rec = origMap.get(node as Text);
+        parts.push(rec ? rec.origRaw : (node.nodeValue || ''));
+      }
+      return parts.join(' ').replace(/\s+/g, ' ').trim();
+    }
+    return ((btn as HTMLElement).innerText || btn.textContent || '').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
 function ensureMetricsTooltip(): HTMLElement | null {
   let tt = document.getElementById('ag-live-metrics-tooltip');
   if (!tt && document.body) {
@@ -461,8 +482,10 @@ export function initMetricsCapsule(
       }
 
       const cid = explicitCid || extractCascadeId();
+      const modelLabel = extractActiveModelLabel();
       if (!cid) {
         agGlobal.__ag_watched_cascade_id = '';
+        agGlobal.__ag_watched_model_label = '';
         const pill = document.getElementById('ag-live-metrics-pill');
         if (pill && pill.style.display !== 'none') pill.style.display = 'none';
         document.getElementById('ag-live-metrics-tooltip')?.removeAttribute('data-visible');
@@ -471,6 +494,7 @@ export function initMetricsCapsule(
 
       if (cid !== agGlobal.__ag_watched_cascade_id) {
         agGlobal.__ag_watched_cascade_id = cid;
+        agGlobal.__ag_watched_model_label = modelLabel;
         const pill = document.getElementById('ag-live-metrics-pill');
         if (pill && (!agGlobal.__ag_last_metrics || agGlobal.__ag_last_metrics.cascadeId !== cid)) {
           pill.style.display = 'none';
@@ -481,10 +505,18 @@ export function initMetricsCapsule(
         try {
           agGlobal.__ag_on_session_change?.(cid);
         } catch {}
-      } else if (agGlobal.__ag_last_metrics && agGlobal.__ag_last_metrics.cascadeId === cid) {
-        const pill = ensureMetricsPill(false);
-        if (pill && agGlobal.__ag_last_metrics.hasData && pill.style.display === 'none') {
-          agGlobal.__ag_render_metrics?.(agGlobal.__ag_last_metrics);
+      } else {
+        if (modelLabel && modelLabel !== agGlobal.__ag_watched_model_label) {
+          agGlobal.__ag_watched_model_label = modelLabel;
+          try {
+            agGlobal.__agRequestMetrics?.(cid);
+          } catch {}
+        }
+        if (agGlobal.__ag_last_metrics && agGlobal.__ag_last_metrics.cascadeId === cid) {
+          const pill = ensureMetricsPill(false);
+          if (pill && agGlobal.__ag_last_metrics.hasData && pill.style.display === 'none') {
+            agGlobal.__ag_render_metrics?.(agGlobal.__ag_last_metrics);
+          }
         }
       }
     } catch {

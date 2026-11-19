@@ -238,8 +238,6 @@ export function normalizeAuraConfig(rawInput: unknown): AuraConfig {
         ? 'zh-CN'
         : def.language;
 
-  const contextLimitNum = Number(raw.contextLimit);
-
   return {
     enabled: asBool(raw.enabled, def.enabled),
     channel,
@@ -291,8 +289,7 @@ export function normalizeAuraConfig(rawInput: unknown): AuraConfig {
     },
     allowedOrigins: Array.isArray(raw.allowedOrigins)
       ? raw.allowedOrigins.filter((x): x is string => typeof x === 'string' && x.length > 0)
-      : [...def.allowedOrigins],
-    ...(Number.isFinite(contextLimitNum) && contextLimitNum > 0 ? { contextLimit: contextLimitNum } : {})
+      : [...def.allowedOrigins]
   };
 }
 
@@ -485,11 +482,6 @@ export function applyConfigPatch(current: AuraConfig, rawPatch: unknown): AuraCo
     }
   }
 
-  let nextContextLimit = current.contextLimit;
-  if ('contextLimit' in root && root.contextLimit !== undefined) {
-    nextContextLimit = assertFiniteNumberField(root, 'contextLimit', 'config', 1000, 10_000_000);
-  }
-
   return {
     ...current,
     ...(enabled !== undefined ? { enabled } : {}),
@@ -502,8 +494,7 @@ export function applyConfigPatch(current: AuraConfig, rawPatch: unknown): AuraCo
     modules: nextModules,
     advanced: nextAdv,
     themeVars: nextThemeVars,
-    selectors: nextSelectors,
-    ...(nextContextLimit !== undefined ? { contextLimit: nextContextLimit } : {})
+    selectors: nextSelectors
   };
 }
 
@@ -519,15 +510,6 @@ export function resolveRuntimeModules(cfg: AuraConfig, hasSqlite = true): Resolv
     customCss: cfg.modules.customCss,
     customJs: cfg.modules.customJs
   };
-}
-
-export const DEFAULT_CONTEXT_LIMIT_TOKENS = 256000;
-
-export function resolveContextLimitTokens(cfg: AuraConfig): number {
-  if (typeof cfg.contextLimit === 'number' && cfg.contextLimit > 0) {
-    return cfg.contextLimit;
-  }
-  return DEFAULT_CONTEXT_LIMIT_TOKENS;
 }
 
 export function toPanelConfigDTO(cfg: AuraConfig): PanelConfigDTO {

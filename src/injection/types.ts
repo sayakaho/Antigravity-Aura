@@ -57,6 +57,7 @@ export interface AuraGlobals {
   __ag_metrics_route_watcher?: ReturnType<typeof setInterval> | null;
   __ag_history_hook_installed?: boolean;
   __ag_watched_cascade_id?: string;
+  __ag_watched_model_label?: string;
   __ag_last_metrics?: LiveMetricsPayload | null;
   __ag_render_metrics?: ((payload: LiveMetricsPayload | null) => void) | null;
   __ag_metrics_config?: {

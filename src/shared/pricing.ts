@@ -10,6 +10,37 @@ export interface ModelPricingMetadata {
   modelCount: number;
 }
 
+export interface ModelPricingRegistryOptions {
+  skipBackgroundFetch?: boolean;
+}
+
+/**
+ * Extracts the active context limit for a model entry from GetAvailableModels.
+ * Prefers CASCADE_USE_EXPERIMENT_CHECKPOINTER.max_token_limit (the host's compaction waterline),
+ * falling back to maxTokens when the experiment flag is absent.
+ */
+export function extractCheckpointerContextLimit(modelEntry: unknown): number | null {
+  if (!modelEntry || typeof modelEntry !== 'object') return null;
+  const entry = modelEntry as Record<string, any>;
+  const rawStr = entry?.modelExperiments?.experiments?.CASCADE_USE_EXPERIMENT_CHECKPOINTER?.stringValue;
+  if (typeof rawStr === 'string' && rawStr.trim()) {
+    try {
+      const parsed = JSON.parse(rawStr) as Record<string, unknown>;
+      const limit = Number(parsed?.max_token_limit);
+      if (Number.isFinite(limit) && limit > 0) {
+        return Math.round(limit);
+      }
+    } catch {
+      // Ignore malformed experiment JSON and fall back to maxTokens
+    }
+  }
+  const maxTokens = Number(entry?.maxTokens);
+  if (Number.isFinite(maxTokens) && maxTokens > 0) {
+    return Math.round(maxTokens);
+  }
+  return null;
+}
+
 export const OFFICIAL_AVAILABLE_MODEL_IDS = [
   'claude-opus-4-6-thinking',
   'claude-sonnet-4-6',
@@ -50,11 +81,16 @@ export class ModelPricingRegistry {
     modelCount: 0
   };
   private inFlightFetch: Promise<boolean> | null = null;
+  private inFlightModelsFetch: Promise<void> | null = null;
+  private modelsLoaded = false;
   private storagePath?: string;
   private availableModelIds: string[] = OFFICIAL_AVAILABLE_MODEL_IDS;
   private availableModelNames = new Map<string, string>();
+  private contextLimitCache = new Map<string, number>();
+  private contextLimitIds: Array<{ key: string; limit: number }> = [];
+  private displayNameLimits: Array<{ key: string; limit: number }> = [];
 
-  constructor(storageDir?: string) {
+  constructor(storageDir?: string, options?: ModelPricingRegistryOptions) {
     if (storageDir) {
       this.storagePath = `${storageDir}/model_pricing_cache.json`;
     } else if (typeof process !== 'undefined' && process.env?.HOME) {
@@ -62,12 +98,96 @@ export class ModelPricingRegistry {
     }
     this.initFallback();
     this.loadFromCache();
-    // Warm up in background asynchronously without blocking
-    void this.fetchAvailableModels();
-    void this.fetchOnlinePricing();
+    if (!options?.skipBackgroundFetch) {
+      // Warm up in background asynchronously without blocking
+      void this.fetchAvailableModels();
+      void this.fetchOnlinePricing();
+    }
+  }
+
+  public async ensureAvailableModelsLoaded(): Promise<void> {
+    if (this.modelsLoaded) return;
+    await this.fetchAvailableModels();
+  }
+
+  public ingestAvailableModelsResponse(data: unknown): boolean {
+    if (!data || typeof data !== 'object') return false;
+    const response = (data as any).response;
+    if (!response || typeof response !== 'object') return false;
+
+    const sorts = response.agentModelSorts || [];
+    const modelIds = sorts[0]?.groups?.[0]?.modelIds;
+    if (Array.isArray(modelIds) && modelIds.length > 0) {
+      this.availableModelIds = modelIds;
+    }
+
+    const models = response.models;
+    if (!models || typeof models !== 'object') return false;
+
+    let ingested = 0;
+    const nextIds: Array<{ key: string; limit: number }> = [];
+    const nextDisplayNames: Array<{ key: string; limit: number }> = [];
+
+    for (const [id, m] of Object.entries(models as Record<string, any>)) {
+      if (!m || typeof m !== 'object') continue;
+      if (typeof m.displayName === 'string' && m.displayName.trim()) {
+        this.availableModelNames.set(id, m.displayName);
+      }
+      const limit = extractCheckpointerContextLimit(m);
+      if (limit !== null) {
+        ingested++;
+        const idKey = id.trim().toLowerCase();
+        if (idKey) {
+          this.contextLimitCache.set(idKey, limit);
+          nextIds.push({ key: idKey, limit });
+        }
+        if (typeof m.displayName === 'string' && m.displayName.trim()) {
+          const dispKey = m.displayName.trim().toLowerCase();
+          this.contextLimitCache.set(dispKey, limit);
+          nextDisplayNames.push({ key: dispKey, limit });
+        }
+        if (typeof m.model === 'string' && m.model.trim()) {
+          this.contextLimitCache.set(m.model.trim().toLowerCase(), limit);
+        }
+      }
+    }
+
+    if (ingested > 0) {
+      this.contextLimitIds = nextIds;
+      this.displayNameLimits = nextDisplayNames.sort((a, b) => b.key.length - a.key.length);
+      this.modelsLoaded = true;
+    }
+    return ingested > 0;
+  }
+
+  public getModelContextLimit(identifiers: Array<string | undefined>): number | null {
+    for (const raw of identifiers) {
+      const key = (raw || '').trim().toLowerCase();
+      if (!key || key === 'unknown' || key === 'unknown model') continue;
+
+      const exact = this.contextLimitCache.get(key);
+      if (exact !== undefined) return exact;
+
+      for (const entry of this.displayNameLimits) {
+        if (key === entry.key || key.startsWith(`${entry.key} `)) {
+          return entry.limit;
+        }
+      }
+
+      for (const entry of this.contextLimitIds) {
+        if (entry.key.startsWith(`${key}-`)) {
+          return entry.limit;
+        }
+      }
+    }
+    return null;
   }
 
   public async fetchAvailableModels(): Promise<void> {
+    if (this.inFlightModelsFetch) {
+      return this.inFlightModelsFetch;
+    }
+
     const lsAddress =
       typeof process !== 'undefined'
         ? process.env.ANTIGRAVITY_LS_ADDRESS || 'localhost:5387'
@@ -75,38 +195,36 @@ export class ModelPricingRegistry {
     const csrfToken =
       typeof process !== 'undefined' ? process.env.ANTIGRAVITY_CSRF_TOKEN || '' : '';
 
-    try {
-      const url = `http://${lsAddress}/exa.language_server_pb.LanguageServerService/GetAvailableModels`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-codeium-csrf-token': csrfToken
-        },
-        body: '{}',
-        signal: controller.signal
-      });
-      clearTimeout(timer);
+    this.inFlightModelsFetch = (async () => {
+      try {
+        const url = `http://${lsAddress}/exa.language_server_pb.LanguageServerService/GetAvailableModels`;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-codeium-csrf-token': csrfToken
+          },
+          body: '{}',
+          signal: controller.signal
+        });
+        clearTimeout(timer);
 
-      if (res.ok) {
-        const data = (await res.json()) as any;
-        const sorts = data.response?.agentModelSorts || [];
-        const modelIds = sorts[0]?.groups[0]?.modelIds;
-        if (Array.isArray(modelIds) && modelIds.length > 0) {
-          this.availableModelIds = modelIds;
-        }
-        const models = data.response?.models || {};
-        for (const [id, m] of Object.entries(models)) {
-          if (m && typeof m === 'object' && (m as any).displayName) {
-            this.availableModelNames.set(id, (m as any).displayName);
+        if (res.ok) {
+          const data = await res.json();
+          if (this.ingestAvailableModelsResponse(data)) {
+            this.saveToCache();
           }
         }
+      } catch {
+        // Degrades gracefully when Language Server is unavailable
+      } finally {
+        this.inFlightModelsFetch = null;
       }
-    } catch {
-      // Degrades gracefully to OFFICIAL_AVAILABLE_MODEL_IDS fallback
-    }
+    })();
+
+    return this.inFlightModelsFetch;
   }
 
   public static getInstance(storageDir?: string): ModelPricingRegistry {
@@ -148,6 +266,28 @@ export class ModelPricingRegistry {
           this.metadata.lastUpdated = parsed.lastUpdated || Date.now();
           this.metadata.modelCount = this.pricingCache.size;
         }
+        if (parsed?.contextLimits && typeof parsed.contextLimits === 'object') {
+          for (const [k, v] of Object.entries(parsed.contextLimits)) {
+            const limit = Number(v);
+            if (Number.isFinite(limit) && limit > 0) {
+              this.contextLimitCache.set(k.toLowerCase(), Math.round(limit));
+            }
+          }
+          if (Array.isArray(parsed.displayNameLimits)) {
+            this.displayNameLimits = parsed.displayNameLimits
+              .filter(
+                (x: any): x is { key: string; limit: number } =>
+                  x && typeof x.key === 'string' && typeof x.limit === 'number' && x.limit > 0
+              )
+              .sort((a: { key: string }, b: { key: string }) => b.key.length - a.key.length);
+          }
+          if (Array.isArray(parsed.contextLimitIds)) {
+            this.contextLimitIds = parsed.contextLimitIds.filter(
+              (x: any): x is { key: string; limit: number } =>
+                x && typeof x.key === 'string' && typeof x.limit === 'number' && x.limit > 0
+            );
+          }
+        }
       }
     } catch {
       // Ignore cache load errors, fallback will remain active
@@ -168,13 +308,20 @@ export class ModelPricingRegistry {
       for (const [k, v] of this.pricingCache.entries()) {
         serializable[k] = v;
       }
+      const serializableLimits: Record<string, number> = {};
+      for (const [k, v] of this.contextLimitCache.entries()) {
+        serializableLimits[k] = v;
+      }
       fs.writeFileSync(
         this.storagePath,
         JSON.stringify(
           {
             source: this.metadata.source,
             lastUpdated: this.metadata.lastUpdated,
-            rates: serializable
+            rates: serializable,
+            contextLimits: serializableLimits,
+            contextLimitIds: this.contextLimitIds,
+            displayNameLimits: this.displayNameLimits
           },
           null,
           2

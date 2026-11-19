@@ -56,7 +56,6 @@ On first startup, the Sidecar seeds missing files from `<plugin_root>/sidecars/d
 - `advanced`: `{ labsDeveloperMode: boolean, experimentalFlags: Record<string, boolean> }` — crash-prone flags `labs-concierge-agent` and `context-window-selector` are stripped at both schema validation and browser storage sync layers.
 - `themeVars`: `Record<string, string>` CSS variable overrides (send `""` or `null` in a config patch to delete a key).
 - `selectors`: `{ inputBoxId, branchPillInBox, homeGreeting, excludeI18n }`.
-- `contextLimit` *(optional)*: Positive integer in `[1000, 10000000]` (default `256000`).
 
 ### `user/custom.js` Sandbox Context (`ctx` / `boot`)
 Passed into the top-level window script when `modules.customJs` is enabled:

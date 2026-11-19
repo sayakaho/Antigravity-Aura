@@ -2,6 +2,12 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.3.3] - 2026-11-19
+
+### Changed
+- **Dynamic Context Waterline via Host Checkpointer**: Deprecated redundant `contextLimit` user configuration. The telemetry capsule now dynamically reads the exact context compression watermark from the Language Server's `GetAvailableModels` (`CASCADE_USE_EXPERIMENT_CHECKPOINTER.max_token_limit`, falling back to `maxTokens`), with offline recovery from SQLite `gen_metadata` (`ctxLimit`).
+- **Active Model Switching Tracking**: Monitored the host's `[data-testid="model-selector-trigger"]` via CDP and injection observers to immediately refresh context limits and telemetry metrics upon switching models.
+
 ## [0.3.2] - 2026-11-19
 
 ### Added

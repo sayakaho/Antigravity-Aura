@@ -88,8 +88,6 @@ export interface AuraConfig {
   themeVars: Record<string, string>;
   selectors: SelectorsConfig;
   allowedOrigins: string[];
-  /** Optional explicit context token limit override (defaults to 256,000) */
-  contextLimit?: number;
 }
 
 export interface PanelConfigDTO {

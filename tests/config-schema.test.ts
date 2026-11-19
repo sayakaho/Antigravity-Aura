@@ -7,7 +7,6 @@ import {
   createDefaultConfig,
   DEFAULT_EXPERIMENTAL_FLAGS,
   normalizeAuraConfig,
-  resolveContextLimitTokens,
   resolveRuntimeModules
 } from '../src/shared/config-schema';
 
@@ -17,6 +16,7 @@ describe('AuraConfig schema normalization & patch validation', () => {
       enabled: true,
       language: undefined,
       preset: 'vintage-deep',
+      contextLimit: 512000,
       typography: { fontSize: 16 },
       modules: {
         i18n: true,
@@ -51,7 +51,7 @@ describe('AuraConfig schema normalization & patch validation', () => {
     expect(migrated.advanced.experimentalFlags['enable-split-view']).toBe(false);
     expect('contextWindowSelector' in (migrated.advanced as unknown as Record<string, unknown>)).toBe(false);
     expect('defaultContextWindow' in (migrated.advanced as unknown as Record<string, unknown>)).toBe(false);
-    expect(resolveContextLimitTokens(migrated)).toBe(256000);
+    expect('contextLimit' in (migrated as unknown as Record<string, unknown>)).toBe(false);
     expect('preset' in (migrated as unknown as Record<string, unknown>)).toBe(false);
   });
 

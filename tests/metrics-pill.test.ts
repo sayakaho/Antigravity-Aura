@@ -537,6 +537,10 @@ function buildGenMetadataBlob(opts: {
   respTok: number;
   ttftSec: number;
   streamSec: number;
+  ctxLimit?: number;
+  modelId?: string;
+  modelName?: string;
+  modelEnum?: string;
 }): Buffer {
   const usage = Buffer.concat([
     encodeFieldVarint(2, opts.inTok),
@@ -547,17 +551,37 @@ function buildGenMetadataBlob(opts: {
   ]);
   const ttft = encodeFieldVarint(1, opts.ttftSec);
   const stream = encodeFieldVarint(1, opts.streamSec);
-  const chat = Buffer.concat([
+  const chatParts: Buffer[] = [
     encodeFieldBytes(4, usage),
     encodeFieldBytes(11, ttft),
     encodeFieldBytes(12, stream)
-  ]);
+  ];
+  if (opts.ctxLimit && opts.ctxLimit > 0) {
+    const budget = encodeFieldVarint(4, opts.ctxLimit);
+    const envelope = encodeFieldBytes(10, budget);
+    chatParts.push(encodeFieldBytes(9, envelope));
+  }
+  if (opts.modelId) {
+    chatParts.push(encodeFieldBytes(19, opts.modelId));
+  }
+  if (opts.modelEnum) {
+    const tag = Buffer.concat([
+      encodeFieldBytes(1, 'model_enum'),
+      encodeFieldBytes(2, opts.modelEnum)
+    ]);
+    chatParts.push(encodeFieldBytes(20, tag));
+  }
+  if (opts.modelName) {
+    chatParts.push(encodeFieldBytes(21, opts.modelName));
+  }
+  const chat = Buffer.concat(chatParts);
   return encodeFieldBytes(1, chat);
 }
 
 describe('parseConversationMetrics localization & layout', () => {
-  test('renders KPI grid + progress bar in English and invalidates cache when language or contextLimit changes', async () => {
+  test('renders KPI grid + progress bar and resolves checkpointer context limits dynamically across model switches', async () => {
     const { normalizeAuraConfig } = await import('../src/shared/config-schema');
+    const { ModelPricingRegistry, extractCheckpointerContextLimit } = await import('../src/shared/pricing');
     const { parseConversationMetrics } = await import('../src/server/metrics-capsule');
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-capsule-test-'));
@@ -565,6 +589,55 @@ describe('parseConversationMetrics localization & layout', () => {
     const dbPath = path.join(tmpDir, `${cascadeId}.db`);
 
     try {
+      const registry = new ModelPricingRegistry(tmpDir, { skipBackgroundFetch: true });
+      registry.ingestAvailableModelsResponse({
+        response: {
+          models: {
+            'gemini-4-hydrogen-high': {
+              displayName: 'Gemini 4 Hydrogen (High)',
+              model: 'MODEL_PLACEHOLDER_M525',
+              maxTokens: 1048576,
+              modelExperiments: {
+                experiments: {
+                  CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
+                    stringValue: JSON.stringify({ max_token_limit: '512000' })
+                  }
+                }
+              }
+            },
+            'gemini-3.8-flash-high': {
+              displayName: 'Gemini 3.8 Flash (High)',
+              model: 'MODEL_PLACEHOLDER_M318',
+              maxTokens: 1048576,
+              modelExperiments: {
+                experiments: {
+                  CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
+                    stringValue: JSON.stringify({ max_token_limit: '150000' })
+                  }
+                }
+              }
+            },
+            'gemini-3.1-flash-image': {
+              displayName: 'Gemini 3.1 Flash Image',
+              model: 'MODEL_PLACEHOLDER_M21',
+              maxTokens: 65536
+            }
+          }
+        }
+      });
+
+      expect(
+        extractCheckpointerContextLimit({
+          maxTokens: 1048576,
+          modelExperiments: {
+            experiments: {
+              CASCADE_USE_EXPERIMENT_CHECKPOINTER: { stringValue: '{"max_token_limit":"512000"}' }
+            }
+          }
+        })
+      ).toBe(512000);
+      expect(extractCheckpointerContextLimit({ maxTokens: 65536 })).toBe(65536);
+
       const db = new DatabaseSync(dbPath);
       db.exec(`
         CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER);
@@ -582,7 +655,11 @@ describe('parseConversationMetrics localization & layout', () => {
           thinkTok: 200,
           respTok: 300,
           ttftSec: 1,
-          streamSec: 2
+          streamSec: 2,
+          ctxLimit: 512000,
+          modelId: 'gemini-4-hydrogen',
+          modelEnum: 'MODEL_PLACEHOLDER_M525',
+          modelName: 'Gemini 4 Hydrogen (High)'
         })
       );
       db.prepare('INSERT INTO gen_metadata (idx, data) VALUES (?, ?)').run(
@@ -594,14 +671,20 @@ describe('parseConversationMetrics localization & layout', () => {
           thinkTok: 700,
           respTok: 500,
           ttftSec: 2,
-          streamSec: 4
+          streamSec: 4,
+          ctxLimit: 512000,
+          modelId: 'gemini-4-hydrogen',
+          modelEnum: 'MODEL_PLACEHOLDER_M525',
+          modelName: 'Gemini 4 Hydrogen (High)'
         })
       );
       db.close();
 
       const enCfg = normalizeAuraConfig({ language: 'default' });
-      const enPayload = parseConversationMetrics(cascadeId, tmpDir, enCfg);
+      const enPayload = parseConversationMetrics(cascadeId, tmpDir, enCfg, { registry });
       expect(enPayload?.hasData).toBe(true);
+      expect(enPayload?.ctxPct).toBe(25);
+      expect(enPayload?.inlineHtml).toContain('/512k');
       expect(enPayload?.tooltipHtml).toContain('ag-tt-kpi-grid');
       expect(enPayload?.tooltipHtml).toContain('ag-tt-progress-fill');
       expect(enPayload?.tooltipHtml).toContain('Latest Call');
@@ -617,7 +700,7 @@ describe('parseConversationMetrics localization & layout', () => {
 
       // Same DB signature, switched to zh-CN: must bypass stale English cache
       const zhCfg = normalizeAuraConfig({ language: 'zh-CN' });
-      const zhPayload = parseConversationMetrics(cascadeId, tmpDir, zhCfg);
+      const zhPayload = parseConversationMetrics(cascadeId, tmpDir, zhCfg, { registry });
       expect(zhPayload?.tooltipHtml).toContain('本轮最新调用');
       expect(zhPayload?.tooltipHtml).toContain('Gen #2 · 2 步');
       expect(zhPayload?.tooltipHtml).toContain('1 轮提问 · 2 次调用');
@@ -628,12 +711,23 @@ describe('parseConversationMetrics localization & layout', () => {
       expect(zhPayload?.tooltipHtml).toContain('aria-label="正文"');
       expect(zhPayload?.tooltipHtml).toContain('点击胶囊切换 Aura Dashboard 侧边栏');
 
-      // Same DB signature, different contextLimit: must recalculate percentage and waterline class
-      const tightCfg = normalizeAuraConfig({ language: 'default', contextLimit: 150000 });
-      const tightPayload = parseConversationMetrics(cascadeId, tmpDir, tightCfg);
-      expect(tightPayload?.ctxPct).toBe(85);
-      expect(tightPayload?.tooltipHtml).toContain('ag-ctx-warn');
-      expect(tightPayload?.tooltipHtml).toContain('width: 85%');
+      // Same DB signature, user switches active model in UI (even with trailing New badge): must recalculate percentage and waterline class
+      const switchedPayload = parseConversationMetrics(cascadeId, tmpDir, enCfg, {
+        activeModel: 'Gemini 3.8 Flash (High) New',
+        registry
+      });
+      expect(switchedPayload?.ctxPct).toBe(85);
+      expect(switchedPayload?.inlineHtml).toContain('/150k');
+      expect(switchedPayload?.tooltipHtml).toContain('ag-ctx-warn');
+      expect(switchedPayload?.tooltipHtml).toContain('width: 85%');
+
+      // Offline fallback: empty registry must still read f1.9.10.4 (512000) from gen_metadata
+      const emptyRegistry = new ModelPricingRegistry(tmpDir, { skipBackgroundFetch: true });
+      const offlinePayload = parseConversationMetrics(cascadeId, tmpDir, enCfg, {
+        registry: emptyRegistry
+      });
+      expect(offlinePayload?.ctxPct).toBe(25);
+      expect(offlinePayload?.inlineHtml).toContain('/512k');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

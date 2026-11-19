@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { ModelPricingRegistry } from '../shared/pricing';
 import type { AuraConfig, LiveMetricsPayload } from '../types';
 import type { AccountVault } from './account-vault';
 import {
@@ -369,36 +370,70 @@ export class CdpManager {
           const snap = getBundleSnapshot();
           if (!hasSqlite() || !snap.modules.metrics || !snap.config.enabled) return;
 
-          if (!activeCascadeId || force) {
+          let activeModelLabel = '';
+          try {
             const evalRes = await send('Runtime.evaluate', {
               expression: `(function(){
-                const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
-                const selectedCid = el ? (el.getAttribute('data-cascade-id') || '') : '';
-                if (selectedCid && /^[0-9a-f-]{36}$/i.test(selectedCid)) return selectedCid;
-                if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
-                const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
-                if (m) return m[1];
-                return '';
+                var cid = '';
+                var el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+                var selectedCid = el ? (el.getAttribute('data-cascade-id') || '') : '';
+                if (selectedCid && /^[0-9a-f-]{36}$/i.test(selectedCid)) cid = selectedCid;
+                else if (window.__ag_watched_cascade_id) cid = window.__ag_watched_cascade_id;
+                else {
+                  var m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
+                  if (m) cid = m[1];
+                }
+                var btn = document.querySelector('[data-testid="model-selector-trigger"]');
+                var modelLabel = '';
+                if (btn) {
+                  var map = window.__ag_orig_text_map;
+                  if (map && typeof document.createTreeWalker === 'function') {
+                    var walker = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT);
+                    var parts = [];
+                    var n;
+                    while ((n = walker.nextNode())) {
+                      var rec = map.get(n);
+                      parts.push(rec ? rec.origRaw : (n.nodeValue || ''));
+                    }
+                    modelLabel = parts.join(' ').replace(/\\s+/g, ' ').trim();
+                  } else {
+                    modelLabel = (btn.innerText || btn.textContent || '').replace(/\\s+/g, ' ').trim();
+                  }
+                }
+                return { cid: cid, modelLabel: modelLabel };
               })()`,
               returnByValue: true
             });
-            const cid = String(evalRes?.result?.result?.value || evalRes?.result?.value || '').trim();
-            if (/^[0-9a-f-]{36}$/i.test(cid)) {
-              activeCascadeId = cid;
-              this.lastGlobalActiveCascadeId = cid;
+            const val = evalRes?.result?.result?.value ?? evalRes?.result?.value;
+            if (val && typeof val === 'object') {
+              const cid = String((val as any).cid || '').trim();
+              if ((!activeCascadeId || force) && /^[0-9a-f-]{36}$/i.test(cid)) {
+                activeCascadeId = cid;
+                this.lastGlobalActiveCascadeId = cid;
+              }
+              activeModelLabel = String((val as any).modelLabel || '').trim();
             }
-          }
+          } catch {}
 
           if (!activeCascadeId) return;
+
+          const registry = ModelPricingRegistry.getInstance();
+          await registry.ensureAvailableModelsLoaded();
 
           const dbSig = getDbSignature(path.join(CONVERSATIONS_DIR, `${activeCascadeId}.db`));
           if (dbSig) {
             this.onSessionDbChange?.(activeCascadeId, dbSig);
           }
-          const sessionKey = `${activeCascadeId}:${dbSig}`;
+          const resolvedUiLimit = activeModelLabel
+            ? (registry.getModelContextLimit([activeModelLabel]) ?? '')
+            : '';
+          const sessionKey = `${activeCascadeId}:${dbSig}:${activeModelLabel}:${resolvedUiLimit}`;
           if (!force && sessionKey === lastPushedHash) return;
 
-          const metrics = parseConversationMetrics(activeCascadeId, CONVERSATIONS_DIR, snap.config);
+          const metrics = parseConversationMetrics(activeCascadeId, CONVERSATIONS_DIR, snap.config, {
+            activeModel: activeModelLabel,
+            registry
+          });
           if (!metrics) return;
 
           this.latestMetrics = metrics;
