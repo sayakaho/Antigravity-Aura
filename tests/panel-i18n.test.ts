@@ -1,5 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { applyPanelTranslations, getPanelLanguage, PANEL_TRANSLATIONS, t } from '../src/panel/i18n';
+import {
+  applyPanelTranslations,
+  getPanelLanguage,
+  PANEL_BASE_KEYS,
+  type PanelTranslationKey,
+  PANEL_TRANSLATIONS,
+  PANEL_TRANSLATIONS_JA,
+  PANEL_TRANSLATIONS_KO,
+  PANEL_TRANSLATIONS_ZH,
+  t
+} from '../src/panel/i18n';
 
 describe('Panel i18n Engine', () => {
   test('t() translates dynamic keys in zh-CN and preserves English in default', () => {
@@ -46,5 +56,62 @@ describe('Panel i18n Engine', () => {
     applyPanelTranslations('default');
     expect(getPanelLanguage()).toBe('default');
     expect(t('Analytics')).toBe('Analytics');
+  });
+
+  test('Panel dictionaries strictly implement PANEL_BASE_KEYS 1:1 without missing keys or empty values', () => {
+    const baseKeys = Object.keys(PANEL_BASE_KEYS) as PanelTranslationKey[];
+    expect(baseKeys.length).toBeGreaterThan(200);
+
+    const zhKeys = Object.keys(PANEL_TRANSLATIONS_ZH);
+    const jaKeys = Object.keys(PANEL_TRANSLATIONS_JA);
+    const koKeys = Object.keys(PANEL_TRANSLATIONS_KO);
+
+    expect(zhKeys.length).toBe(baseKeys.length);
+    expect(jaKeys.length).toBe(baseKeys.length);
+    expect(koKeys.length).toBe(baseKeys.length);
+
+    for (const key of baseKeys) {
+      expect((PANEL_TRANSLATIONS_ZH as Record<string, string>)[key]).toBeDefined();
+      expect((PANEL_TRANSLATIONS_ZH as Record<string, string>)[key].trim()).not.toBe('');
+
+      expect((PANEL_TRANSLATIONS_JA as Record<string, string>)[key]).toBeDefined();
+      expect((PANEL_TRANSLATIONS_JA as Record<string, string>)[key].trim()).not.toBe('');
+
+      expect((PANEL_TRANSLATIONS_KO as Record<string, string>)[key]).toBeDefined();
+      expect((PANEL_TRANSLATIONS_KO as Record<string, string>)[key].trim()).not.toBe('');
+    }
+
+    // 防御校验：韩文字典中严禁出现汉字混杂（如“发生”）
+    const hanCharRegex = /[\u4e00-\u9fa5]/;
+    for (const [key, val] of Object.entries(PANEL_TRANSLATIONS_KO)) {
+      if (key === 'Japanese (日本語)') continue; // 语言自解释标签包含日语汉字
+      if (hanCharRegex.test(val)) {
+        throw new Error(`Forbidden Chinese character found in Korean panel translation for key "${key}": "${val}"`);
+      }
+    }
+  });
+
+  test('t() translations remain accurate and idempotent across rapid switching cycles', () => {
+    const cycles = ['zh-CN', 'ja-JP', 'ko-KR', 'default', 'ja-JP', 'zh-CN', 'default', 'ko-KR'] as const;
+    const testKey = 'Aura Dashboard';
+    const fontKey = 'Custom Monospace Font Family';
+
+    for (const lang of cycles) {
+      applyPanelTranslations(lang);
+      expect(getPanelLanguage()).toBe(lang);
+      if (lang === 'zh-CN') {
+        expect(t(testKey)).toBe('Aura 控制台');
+        expect(t(fontKey)).toBe('自定义等宽字体');
+      } else if (lang === 'ja-JP') {
+        expect(t(testKey)).toBe('Aura ダッシュボード');
+        expect(t(fontKey)).toBe('カスタム等幅フォント');
+      } else if (lang === 'ko-KR') {
+        expect(t(testKey)).toBe('Aura 대시보드');
+        expect(t(fontKey)).toBe('사용자 지정 고정폭 글꼴');
+      } else {
+        expect(t(testKey)).toBe('Aura Dashboard');
+        expect(t(fontKey)).toBe('Custom Monospace Font Family');
+      }
+    }
   });
 });

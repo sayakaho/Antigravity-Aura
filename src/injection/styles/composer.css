@@ -88,7 +88,7 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox .surface-compo
   left: 0 !important;
 }
 
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[aria-label="Add context"] {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[aria-label="Add context" i] {
   position: absolute !important;
   left: 4px !important;
   bottom: calc(100% + 16px) !important;
@@ -218,7 +218,7 @@ html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSid
 }
 
 /* 新建会话上方工具栏下移至卡片下方左对齐 */
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) {
   position: absolute !important;
   top: calc(100% + 6.5px) !important;
   left: 4px !important;
@@ -230,9 +230,9 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([dat
   margin: 0 !important;
 }
 
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div,
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div,
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) > div > div > div {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) > div,
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) > div > div,
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) > div > div > div {
   display: flex !important;
   align-items: center !important;
   height: 24px !important;
@@ -240,11 +240,11 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([dat
   margin: 0 !important;
 }
 
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) div[class*="gap-"] {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox > div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) div[class*="gap-"] {
   gap: 6px !important;
 }
 
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button {
   height: 24px !important;
   padding: 0 6px !important;
   border-radius: 6px !important;
@@ -257,11 +257,11 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
-html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:not(:hover) {
+html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button:not(:hover) {
   background-color: transparent !important;
 }
 
-html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button > svg:last-child:not(:first-child) {
+html[data-ag-collinear="on"]:not([data-ag-hide-arrows="off"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button > svg:last-child:not(:first-child) {
   display: none !important;
 }
 
@@ -282,27 +282,27 @@ html[data-ag-collinear="on"] #antigravity\.agentSidePanelInputBox button[data-te
   transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms ease !important;
 }
 
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg {
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) span,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) svg {
   color: #383431 !important;
   fill: #383431 !important;
 }
 
-html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
+html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button:hover,
 html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
   background-color: rgba(0, 0, 0, 0.06) !important;
   color: #1F1E1D !important;
 }
 
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) span,
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) svg {
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) span,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) svg {
   color: #C4BEB3 !important;
   fill: #C4BEB3 !important;
 }
 
-html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
+html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button:hover,
 html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
   color: #FFFFFF !important;
@@ -310,13 +310,13 @@ html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSid
 
 /* 覆盖 Tailwind v4 @layer utilities 内 hover:!bg-transparent */
 @layer utilities {
-  html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
+  html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button:hover,
   html[data-ag-collinear="on"]:not([data-ag-color-scheme="dark"]) #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
     background-color: rgba(0, 0, 0, 0.06) !important;
     color: #1F1E1D !important;
   }
 
-  html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project"], [aria-label*="选择项目"]) button:hover,
+  html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox div:has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label*="Select project" i]) button:hover,
   html[data-ag-collinear="on"][data-ag-color-scheme="dark"] #antigravity\.agentSidePanelInputBox button[data-testid="location-selector-trigger"]:hover {
     background-color: rgba(255, 255, 255, 0.08) !important;
     color: #FFFFFF !important;

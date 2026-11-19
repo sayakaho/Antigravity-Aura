@@ -213,6 +213,7 @@ export function rebuildBundleIfNeeded(force = false): boolean {
   const hash = crypto
     .createHash('sha256')
     .update(String(normalizedCfg.enabled))
+    .update(normalizedCfg.language)
     .update(runtimeTemplate)
     .update(baseCss)
     .update(customCss)

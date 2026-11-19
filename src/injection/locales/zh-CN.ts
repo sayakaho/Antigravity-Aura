@@ -109,6 +109,11 @@ export const zhCN: LocalePackage = {
         const pName = pNameRaw.trim();
         return "选择项目，当前：" + (pName === "No project" ? "未关联项目" : pName);
       }
+    },
+    {
+      id: "placeholder_message",
+      pattern: /^Message\s+(.+)\.\.\.$/i,
+      replace: "给 $1 发送消息..."
     }
   ],
   messages: {

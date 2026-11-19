@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { getLocalePackage, LOCALES } from "../src/injection/locales";
+import { initI18n } from "../src/injection/i18n";
+import { getLocalePackage, HOST_BASE_KEYS, LOCALES } from "../src/injection/locales";
 
 describe("Universal Locales Engine & ja-JP Package", () => {
   test("registers zh-CN, ja-JP, and ko-KR in LOCALES registry cleanly", () => {
@@ -109,5 +110,42 @@ describe("Universal Locales Engine & ja-JP Package", () => {
     expect(activity.subagents(2)).toBe("2 件の Subagent");
     expect(activity.filesRead(3)).toBe("3 件のファイルを閲覧");
     expect(activity.filesEdited(1)).toBe("1 件のファイルを編集");
+  });
+
+  test("all host locale packages implement HOST_BASE_KEYS 1:1 and include core attribute patterns", () => {
+    const baseKeys = Object.keys(HOST_BASE_KEYS);
+    expect(baseKeys.length).toBe(1748);
+
+    for (const locale of ["zh-CN", "ja-JP", "ko-KR"] as const) {
+      const pkg = LOCALES[locale];
+      expect(Object.keys(pkg.translations).length).toBe(baseKeys.length);
+
+      // 验证核心输入栏 attributePatterns
+      const attrRules = pkg.attributePatterns || [];
+      const branchRule = attrRules.find(r => r.id === "aria_branch");
+      const projRule = attrRules.find(r => r.id === "aria_project");
+      const msgRule = attrRules.find(r => r.id === "placeholder_message");
+
+      expect(branchRule).toBeDefined();
+      expect(projRule).toBeDefined();
+      expect(msgRule).toBeDefined();
+    }
+  });
+
+  test("getLocalePackage remains accurate and idempotent across rapid cross-lingual cycles", () => {
+    const sequence = ["zh-CN", "ja-JP", "ko-KR", "default", "ja-JP", "zh-CN", "default"] as const;
+
+    sequence.forEach((lang) => {
+      const pkg = getLocalePackage(lang);
+      if (lang === "default") {
+        expect(pkg).toBeNull();
+      } else {
+        expect(pkg).not.toBeNull();
+        expect(pkg!.code).toBe(lang);
+        if (lang === "zh-CN") expect(pkg!.translations["Settings"]).toBe("系统设置");
+        else if (lang === "ja-JP") expect(pkg!.translations["Settings"]).toBe("設定");
+        else if (lang === "ko-KR") expect(pkg!.translations["Settings"]).toBe("설정");
+      }
+    });
   });
 });

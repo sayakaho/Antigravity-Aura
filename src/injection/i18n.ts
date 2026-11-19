@@ -1,28 +1,73 @@
-import type { LocalePackage } from './locales';
+import { LOCALES, type LocalePackage } from './locales';
 import { agGlobal } from './types';
 
-const RE_HAS_CJK = /[\u4e00-\u9fa5]/;
+const RE_HAS_CJK = /[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/;
 const RE_PURE_ALPHA = /^\s*[a-zA-Z]+\s*$/;
 const RE_HAS_ALPHA = /[a-zA-Z]/;
 
-function getOrigTextMap() {
-  if (!agGlobal.__ag_orig_text_map) {
-    agGlobal.__ag_orig_text_map = new WeakMap();
+let hostReverseLookupMap: Map<string, string> | null = null;
+
+function getHostReverseLookupMap(): Map<string, string> {
+  if (hostReverseLookupMap) return hostReverseLookupMap;
+  hostReverseLookupMap = new Map();
+  for (const pkg of Object.values(LOCALES)) {
+    for (const [enKey, translation] of Object.entries(pkg.translations)) {
+      if (translation && typeof translation === 'string') {
+        const transTrim = translation.trim();
+        if (transTrim && !hostReverseLookupMap.has(transTrim)) {
+          hostReverseLookupMap.set(transTrim, enKey);
+        }
+      }
+    }
   }
-  return agGlobal.__ag_orig_text_map;
+  return hostReverseLookupMap;
+}
+
+interface TextNodeRecord {
+  origRaw: string;
+  lastVal: string;
+  ver: string;
+  lang?: string;
+}
+
+function getOrigTextMap(): WeakMap<Text, TextNodeRecord> {
+  if (!agGlobal.__ag_orig_text_map) {
+    agGlobal.__ag_orig_text_map = new WeakMap<Text, TextNodeRecord>();
+  }
+  return agGlobal.__ag_orig_text_map as WeakMap<Text, TextNodeRecord>;
+}
+
+function restoreAriaLabels(root: Element | null = document.body || document.documentElement): void {
+  if (!root) return;
+  try {
+    const attrEls = root.querySelectorAll('[data-ag-orig-aria-label]');
+    for (let i = 0; i < attrEls.length; i++) {
+      const el = attrEls[i];
+      const origAria = el.getAttribute('data-ag-orig-aria-label');
+      if (origAria !== null) {
+        el.setAttribute('aria-label', origAria);
+      }
+      el.removeAttribute('data-ag-orig-aria-label');
+      el.removeAttribute('data-ag-orig-aria-label-last');
+      el.removeAttribute('data-ag-role');
+    }
+  } catch {}
 }
 
 export function restoreAllTranslations(root: Element | null = document.body): void {
   if (!root) return;
+  restoreAriaLabels(root);
   const origTextMap = getOrigTextMap();
   try {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode as Text;
       const rec = origTextMap.get(node);
-      if (rec && node.nodeValue === rec.lastVal) {
-        node.nodeValue = rec.origRaw;
-        origTextMap.delete(node);
+      if (rec) {
+        if (node.nodeValue !== rec.origRaw) {
+          node.nodeValue = rec.origRaw;
+        }
+        rec.lastVal = rec.origRaw;
       }
     }
     const attrEls = root.querySelectorAll(
@@ -33,20 +78,17 @@ export function restoreAllTranslations(root: Element | null = document.body): vo
       const origTitle = el.getAttribute('data-ag-orig-title');
       if (origTitle !== null) {
         el.setAttribute('title', origTitle);
-        el.removeAttribute('data-ag-orig-title');
-        el.removeAttribute('data-ag-orig-title-last');
+        el.setAttribute('data-ag-orig-title-last', origTitle);
       }
       const origPlaceholder = el.getAttribute('data-ag-orig-placeholder');
       if (origPlaceholder !== null) {
         el.setAttribute('placeholder', origPlaceholder);
-        el.removeAttribute('data-ag-orig-placeholder');
-        el.removeAttribute('data-ag-orig-placeholder-last');
+        el.setAttribute('data-ag-orig-placeholder-last', origPlaceholder);
       }
       const origAria = el.getAttribute('data-ag-orig-aria-label');
       if (origAria !== null) {
         el.setAttribute('aria-label', origAria);
-        el.removeAttribute('data-ag-orig-aria-label');
-        el.removeAttribute('data-ag-orig-aria-label-last');
+        el.setAttribute('data-ag-orig-aria-label-last', origAria);
       }
     }
   } catch {
@@ -61,12 +103,21 @@ export function initI18n(
   excludeSelector: string,
   patchVersion: string
 ): Record<string, string> {
+  if (agGlobal.__ag_i18n_cleanup) {
+    try {
+      agGlobal.__ag_i18n_cleanup();
+    } catch {}
+    agGlobal.__ag_i18n_cleanup = null;
+  }
   if (agGlobal.__ag_i18n_observer) {
     try {
       agGlobal.__ag_i18n_observer.disconnect();
     } catch {}
     agGlobal.__ag_i18n_observer = null;
   }
+
+  // 架构级净化：彻底还原可能残留在宿主 DOM 中的 aria-label，严禁任何形式的无障碍定位属性篡改
+  restoreAriaLabels(document.body || document.documentElement);
 
   const baseDict = pkg ? pkg.translations : {};
   const dict = Object.assign(Object.create(null) as Record<string, string>, baseDict, userOverrideDict || {});
@@ -94,7 +145,11 @@ export function initI18n(
     if (typeof replacement !== 'string' && trimmed.endsWith('.')) {
       const withoutDot = dict[trimmed.slice(0, -1)];
       if (typeof withoutDot === 'string') {
-        replacement = withoutDot.endsWith('。') ? withoutDot : `${withoutDot}。`;
+        const period = pkg?.code === 'ko-KR' ? '.' : '。';
+        replacement =
+          withoutDot.endsWith(period) || withoutDot.endsWith('.') || withoutDot.endsWith('。')
+            ? withoutDot
+            : `${withoutDot}${period}`;
       }
     }
     if (typeof replacement === 'string') {
@@ -118,25 +173,51 @@ export function initI18n(
     return null;
   }
 
+  const currentLangCode = pkg?.code || 'default';
+
   function translateTextNode(node: Text): void {
     const currentVal = node.nodeValue;
     if (!currentVal) return;
 
     const rec = origTextMap.get(node);
-    if (rec && rec.lastVal === currentVal && rec.ver === patchVersion) {
+    if (
+      rec &&
+      rec.lastVal === currentVal &&
+      rec.ver === patchVersion &&
+      rec.lang === currentLangCode
+    ) {
       return;
     }
-    const origRaw = rec && rec.lastVal === currentVal ? rec.origRaw : currentVal;
+    // 根源防竞态：只要 rec 存在，origRaw 永久以记录的英文原文为准；首次捕获时支持反向溯源英文原文
+    let origRaw = currentVal;
+    if (rec) {
+      origRaw = rec.origRaw;
+    } else {
+      const trimmed = currentVal.trim();
+      const rev = getHostReverseLookupMap().get(trimmed);
+      if (rev) {
+        origRaw = currentVal.replace(trimmed, rev);
+      }
+    }
 
     const nextVal = computeTextTranslation(origRaw);
     if (nextVal !== null) {
-      origTextMap.set(node, { origRaw, lastVal: nextVal, ver: patchVersion });
+      origTextMap.set(node, {
+        origRaw,
+        lastVal: nextVal,
+        ver: patchVersion,
+        lang: currentLangCode
+      });
       if (node.nodeValue !== nextVal) {
         node.nodeValue = nextVal;
       }
-    } else if (rec && rec.lastVal === currentVal) {
-      node.nodeValue = origRaw;
-      origTextMap.delete(node);
+    } else if (rec) {
+      if (node.nodeValue !== origRaw) {
+        node.nodeValue = origRaw;
+      }
+      rec.lastVal = origRaw;
+      rec.ver = patchVersion;
+      rec.lang = currentLangCode;
     }
   }
 
@@ -149,8 +230,14 @@ export function initI18n(
     const cur = el.getAttribute(attrName);
     if (!cur) return;
     const savedOrig = el.getAttribute(origDataAttr);
-    const savedLast = el.getAttribute(`${origDataAttr}-last`);
-    const origVal = savedOrig && savedLast === cur ? savedOrig : cur;
+    let origVal = savedOrig !== null ? savedOrig : cur;
+    if (savedOrig === null) {
+      const trimmedCur = cur.trim();
+      const rev = getHostReverseLookupMap().get(trimmedCur);
+      if (rev) {
+        origVal = cur.replace(trimmedCur, rev);
+      }
+    }
     const trimmed = origVal.trim();
     const nextVal = customResolver
       ? customResolver(trimmed)
@@ -158,33 +245,24 @@ export function initI18n(
         ? dict[trimmed]
         : null;
     if (typeof nextVal === 'string') {
-      el.setAttribute(origDataAttr, origVal);
+      if (savedOrig === null) {
+        el.setAttribute(origDataAttr, origVal);
+      }
       el.setAttribute(`${origDataAttr}-last`, nextVal);
       if (cur !== nextVal) {
         el.setAttribute(attrName, nextVal);
       }
-    } else if (savedOrig && savedLast === cur) {
-      el.setAttribute(attrName, savedOrig);
-      el.removeAttribute(origDataAttr);
-      el.removeAttribute(`${origDataAttr}-last`);
+    } else if (savedOrig !== null) {
+      if (cur !== savedOrig) {
+        el.setAttribute(attrName, savedOrig);
+      }
+      el.setAttribute(`${origDataAttr}-last`, savedOrig);
     }
   }
 
   function translateElementAttrs(el: Element): void {
     translateSingleAttr(el, 'title', 'data-ag-orig-title', null);
     translateSingleAttr(el, 'placeholder', 'data-ag-orig-placeholder', null);
-    translateSingleAttr(el, 'aria-label', 'data-ag-orig-aria-label', (atrim) => {
-      if (typeof dict[atrim] === 'string') return dict[atrim];
-      if (pkg?.attributePatterns) {
-        for (let i = 0; i < pkg.attributePatterns.length; i++) {
-          const rule = pkg.attributePatterns[i];
-          if (rule.pattern.test(atrim)) {
-            return atrim.replace(rule.pattern, rule.replace as any);
-          }
-        }
-      }
-      return null;
-    });
   }
 
   const walkerFilter: NodeFilter = {
@@ -194,7 +272,7 @@ export function initI18n(
         if (el.matches(excludeSelector)) {
           return NodeFilter.FILTER_REJECT;
         }
-        if (el.hasAttribute('title') || el.hasAttribute('aria-label') || el.hasAttribute('placeholder')) {
+        if (el.hasAttribute('title') || el.hasAttribute('placeholder')) {
           translateElementAttrs(el);
         }
         return NodeFilter.FILTER_SKIP;
@@ -203,7 +281,7 @@ export function initI18n(
     }
   };
 
-  function scanAndTranslate(root: Node | null = document.body): void {
+  function scanAndTranslate(root: Node | null = document.body || document.documentElement): void {
     if (!root) return;
     if (root.nodeType === Node.TEXT_NODE) {
       const txt = root as Text;
@@ -216,9 +294,21 @@ export function initI18n(
     const rootEl = root as Element;
     if (isExcludedElement(rootEl)) return;
 
+    // 显式批量刷新所有已知被翻译过或含有待翻译属性的元素，确保无层级遗漏
+    try {
+      const attrEls = rootEl.querySelectorAll(
+        '[title], [placeholder], [data-ag-orig-title], [data-ag-orig-placeholder]'
+      );
+      for (let i = 0; i < attrEls.length; i++) {
+        const el = attrEls[i];
+        if (!isExcludedElement(el)) {
+          translateElementAttrs(el);
+        }
+      }
+    } catch {}
+
     if (
       rootEl.hasAttribute('title') ||
-      rootEl.hasAttribute('aria-label') ||
       rootEl.hasAttribute('placeholder')
     ) {
       translateElementAttrs(rootEl);
@@ -230,14 +320,17 @@ export function initI18n(
     }
   }
 
-  scanAndTranslate(document.body);
+  scanAndTranslate(document.body || document.documentElement);
 
   const dirtyRoots = new Set<Node>();
   let pending = false;
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
+  let rafId: number | null = null;
+
   function flushTranslations(): void {
     pending = false;
+    rafId = null;
     if (fallbackTimer) {
       clearTimeout(fallbackTimer);
       fallbackTimer = null;
@@ -276,9 +369,22 @@ export function initI18n(
   function scheduleFlush(): void {
     if (pending) return;
     pending = true;
-    requestAnimationFrame(flushTranslations);
+    rafId = requestAnimationFrame(flushTranslations);
     fallbackTimer = setTimeout(flushTranslations, 80);
   }
+
+  agGlobal.__ag_i18n_cleanup = () => {
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer);
+      fallbackTimer = null;
+    }
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    dirtyRoots.clear();
+    pending = false;
+  };
 
   agGlobal.__ag_i18n_observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
@@ -318,7 +424,7 @@ export function initI18n(
       subtree: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ['title', 'aria-label', 'placeholder']
+      attributeFilter: ['title', 'placeholder']
     });
   }
 

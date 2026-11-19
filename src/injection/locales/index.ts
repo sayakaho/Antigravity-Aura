@@ -8,6 +8,7 @@ import { zhCN } from './zh-CN';
 import type { LocaleCode, LocalePackage, SupportedLocale } from './types';
 
 export * from './types';
+export * from './base';
 
 export const LOCALES: Record<SupportedLocale, LocalePackage> = {
   'zh-CN': zhCN,

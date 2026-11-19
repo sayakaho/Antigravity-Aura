@@ -7,7 +7,8 @@ import {
   getBundleSnapshot,
   rebuildBundleIfNeeded,
   resolveThemeAttrs,
-  resolveTypographyVars
+  resolveTypographyVars,
+  saveConfigPatch
 } from '../src/server/config-bundle';
 import { EMBEDDED_ASSETS, readCssWithImportsSafe } from '../src/server/paths';
 
@@ -66,5 +67,29 @@ describe('Config bundle assembly & disk fallback', () => {
     expect(css).not.toMatch(
       /\[role="(?:menu|dialog)"\][^}]*font-family:\s*var\(--font-sans\)\s*!important/
     );
+  });
+
+  test('patchVersion changes uniquely across language transitions to prevent injection short-circuiting', () => {
+    saveConfigPatch({ language: 'zh-CN' });
+    const snapZh = getBundleSnapshot();
+    const verZh = snapZh.patchVersion;
+
+    saveConfigPatch({ language: 'ja-JP' });
+    const snapJa = getBundleSnapshot();
+    const verJa = snapJa.patchVersion;
+
+    saveConfigPatch({ language: 'ko-KR' });
+    const snapKo = getBundleSnapshot();
+    const verKo = snapKo.patchVersion;
+
+    saveConfigPatch({ language: 'default' });
+    const snapEn = getBundleSnapshot();
+    const verEn = snapEn.patchVersion;
+
+    // 关键回归防线：不同语言的 patchVersion 必须互不相同，杜绝宿主端因相同版本号短路 return
+    expect(verZh).not.toBe(verJa);
+    expect(verJa).not.toBe(verKo);
+    expect(verKo).not.toBe(verEn);
+    expect(verZh).not.toBe(verEn);
   });
 });

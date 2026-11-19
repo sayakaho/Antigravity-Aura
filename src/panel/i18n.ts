@@ -1,774 +1,873 @@
 /**
- * Aura Dashboard · Panel Localization Engine & Dictionary
+ * Aura Dashboard · Panel Localization Engine & Dictionaries
+ *
+ * All dictionaries (ZH, JA, KO) strictly implement the PanelTranslations contract
+ * based on the single source of truth in PANEL_BASE_KEYS (i18n-base.ts).
  */
 
 import type { AuraConfig } from '../types';
+import {
+  PANEL_BASE_KEYS,
+  type PanelTranslationKey,
+  type PanelTranslations
+} from './i18n-base';
+
+export { PANEL_BASE_KEYS, type PanelTranslationKey, type PanelTranslations };
 
 let currentLang: AuraConfig['language'] = 'default';
-try {
-  const cached = typeof window !== 'undefined' && window.localStorage?.getItem('aura.panel.language');
+if (typeof window !== 'undefined') {
+  const cached = window.localStorage?.getItem('aura.panel.language');
   if (cached === 'zh-CN' || cached === 'ja-JP' || cached === 'ko-KR' || cached === 'default') {
     currentLang = cached;
   }
-} catch {}
+}
 
 const origTextMap = new WeakMap<Node, string>();
 const origAttrMap = new WeakMap<Element, Record<string, string>>();
 
-export const PANEL_TRANSLATIONS_ZH: Record<string, string> = {
-  // Navigation & Page Header
-  'Aura Dashboard': 'Aura 控制台',
-  'Analytics': '数据分析',
-  'Preferences': '偏好设置',
-  'Overview': '概览',
-  'Active Session': '当前会话',
-  'Custom Range': '自定义范围',
-  'Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.':
-    'Antigravity 深度性能遥测概览、会话智能分析与界面个性化定制。',
-
-  // Time Range Selector
-  'Session': '当前会话',
-  'Today': '今日',
-  'Yesterday': '昨日',
-  'This Week': '本周',
-  'This Month': '本月',
-  'Last 7 Days': '近 7 天',
-  'Last 30 Days': '近 30 天',
-  'Custom': '自定义',
-  'to': '至',
-  'Apply': '应用',
-
-  // Toolbar & Status
-  'Global Conversation Intelligence': '全局会话智能洞察',
-  'Live': '实时',
-  'Refresh': '刷新',
-  'Auto-updates when telemetry changes': '遥测数据变动时自动更新',
-  'Loading telemetry data...': '正在加载遥测数据...',
-
-  // Analytics Section Titles & Loading
-  'Rendering timeline...': '正在渲染时间线...',
-  'Model Token Consumption': '模型 Token 用量分布',
-  'Token consumption, prompt caching, and request volume distributed by AI model.':
-    '按 AI 模型统计的 Token 消耗、Prompt 缓存与请求调用量。',
-  'Loading model metrics...': '正在加载模型指标...',
-  'Rendering model speed trends...': '正在渲染模型速率走势...',
-  'Rendering latency distribution...': '正在渲染延迟与 TTFT 分布...',
-  'Subagent Execution': 'Subagent 执行分析',
-  'Token consumption, run volume, and prompt caching delegated to autonomous subagents.':
-    '委派给自主 Subagent 的 Token 消耗、执行轮次与 Prompt 缓存。',
-  'Tool Ecosystem Usage': '工具生态使用分布',
-  'Autonomous tool execution distribution, command invocations, and file operations.':
-    '自主工具执行分布、终端命令调用与文件读写操作。',
-  'Loading tool metrics...': '正在加载工具指标...',
-  'Workspace & Project Distribution': '工作区与项目分布',
-  'Token consumption and session volume across workspaces and conversations.':
-    '各工作区与会话之间的 Token 消耗及会话量统计。',
-  'Follow Range': '跟随时间范围',
-  'All Time': '全量历史',
-  'Loading workspaces...': '正在加载工作区数据...',
-  'Account Token Consumption': '账号 Token 用量分布',
-  'Token consumption, session volume, and timeline distribution tracked across logged-in accounts.':
-    '已登录账号之间的 Token 消耗、会话量及时间线分布。',
-  'Loading account metrics...': '正在加载账号指标...',
-
-  // Analytics Metric Cards & Tooltips
-  'Session Turns': '会话轮次',
-  'Session Turns:': '会话轮次：',
-  'User Conversation Turns:': '用户对话轮次：',
-  'Avg Tokens / Turn:': '单轮平均 Token：',
-  'Cache Hit Rate': '缓存命中率',
-  'Total Tokens': '总 Token 用量',
-  'Input Tokens': '输入 Token',
-  'Output Tokens': '输出 Token',
-  'Cached Tokens': '缓存读取 Token',
-  'Estimated API Cost': '预估商业 API 价值',
-  'Baseline Speed': '基准生成速率',
-  'Peak Speed': '峰值生成速率',
-  'TTFT Latency': '首字响应延迟 (TTFT)',
-
-  // Settings Section: Appearance & Themes
-  'Appearance & Themes': '外观与主题',
-  'Customize color presets and composer micro-relief borders for Light and Dark modes.':
-    '为浅色与深色模式自定义色彩预设及输入框微浮雕边框。',
-  'Light Mode Preset': '浅色模式预设',
-  'Active color scheme when the system is in light appearance.':
-    '系统处于浅色外观时生效的色彩方案。',
-  'Claude Light': 'Claude 浅色',
-  'Pure Light': '纯白极简',
-  'Native Default': '官方默认',
-  'Dark Mode Preset': '深色模式预设',
-  'Active color scheme when the system is in dark appearance.':
-    '系统处于深色外观时生效的色彩方案。',
-  'Claude Dark': 'Claude 深色',
-  'Pure Dark': '纯黑极简',
-  'Wax Seal Border': '输入框微浮雕边框',
-  'Subtle micro-relief bottom border on composer input panel.':
-    '在输入框底缘呈现微妙雅致的微浮雕边框。',
-  'Collinear Compose Bar': '紧凑同行输入栏',
-  'Align prompt action pills, context chips and attachments into a seamless collinear layout.':
-    '将 Prompt 快捷操作、上下文标签及附件在输入框内无缝紧凑同行排列。',
-  'Hide Composer Pill Arrows': '隐藏输入栏气泡箭头',
-  'Hide disclosure and trigger chevron arrows inside prompt composer pills.':
-    '隐藏输入栏气泡胶囊内的折叠与触发下拉小箭头。',
-  'UI Localization': '界面多语言汉化',
-  'Language & Localization': '语言与本地化',
-  'UI Language': '界面语言',
-  'Choose official English or community Chinese localization.':
-    '选择官方英文原版、社区中文汉化或日语界面。',
-  'English (Default)': 'English (原生英文)',
-  'Chinese (Simplified)': '简体中文',
-  'Japanese (日本語)': '日本語 (Japanese)',
-
-  // Settings Section: Typography System
-  'Typography System': '字体排印系统',
-  'Enumerate system fonts directly with primary Latin font and CJK fallback separation.':
-    '原生枚举本地系统字体，支持西文主字体与中日韩 (CJK) 回退字体独立链式配置。',
-  'Primary Sans Font': '西文无衬线主字体',
-  'Latin text, numbers, and primary UI headings.':
-    '西文字符、数字符号以及界面主要标题字族。',
-  'System Default': '系统默认',
-  'Custom Font Family': '自定义字族',
-  'Custom Primary Font': '自定义西文字体名',
-  'CSS font-family string (e.g. "Geist", "Inter", "SF Pro Display").':
-    'CSS font-family 字符串（例如 "Geist", "Inter", "SF Pro Display"）。',
-  'CJK Fallback Font': '中日韩 (CJK) 回退字体',
-  'Chinese, Japanese, and Korean character rendering priority.':
-    '中文、日文及韩文字符的独立优先回退字族。',
-  'System CJK Default': '系统默认 CJK 字族',
-  'Custom CJK Font': '自定义 CJK 字体名',
-  'CSS font-family string (e.g. "PingFang SC", "Hiragino Sans", "Microsoft YaHei").':
-    'CSS font-family 字符串（例如 "PingFang SC", "Hiragino Sans", "Microsoft YaHei"）。',
-  'Monospace Font': '等宽代码字体',
-  'Code blocks, telemetry metrics, and terminal display.':
-    '代码块、遥测速率指标以及终端面板字族。',
-  'Custom Monospace Font': '自定义等宽字体名',
-  'CSS font-family string (e.g. "JetBrains Mono", "SF Mono", "Fira Code").':
-    'CSS font-family 字符串（例如 "JetBrains Mono", "SF Mono", "Fira Code"）。',
-  'Conversation Font Size': '对话字体字号',
-  'Adjust message typography size with proportionate line-height scaling.':
-    '等比调整消息文本字号及对应行高间距。',
-  'Default (13px)': '默认 (13px)',
-  'Medium (14px)': '适中 (14px)',
-  'Large (15px)': '偏大 (15px)',
-  'Extra Large (16px)': '超大 (16px)',
-
-  // Settings Section: Telemetry & Analytics
-  'Telemetry & Analytics': '遥测与数据分析',
-  'Manage background performance trackers, live telemetry capsules, and local metric persistence.':
-    '管理后台性能采集器、输入栏实时胶囊及本地指标持久化。',
-  'Real-time Metrics Capsule': '实时性能胶囊',
-  'Display live TPS, TTFT, and context tokens badge directly inside the composer footer bar.':
-    '在输入栏底栏内嵌展示实时生成速率 (TPS)、首字延迟 (TTFT) 及上下文 Token 用量胶囊。',
-  'Folded Action Summaries': '折叠操作卡片行为摘要',
-  'Compact redundant tool and terminal command cards in conversations with elegant folded counters.':
-    '将对话中冗长繁琐的工具与终端命令卡片紧凑聚合为极简计数摘要。',
-  'Token Usage Analytics': 'Token 用量智能分析',
-  'Persist detailed token usage and conversation analytics to local database for the Analytics tab.':
-    '将详细的 Token 用量与会话指标持久化到本地 SQLite 数据库，驱动数据分析看板。',
-
-  // Settings Section: Host Resilience
-  'Host Resilience': '宿主稳定性增强',
-  'Autonomous patch stability, input deadlock prevention, and keyboard shortcut repair.':
-    '补丁自主韧性维持、输入死锁防御及快捷键全局修复。',
-  'Input Deadlock Healer': '输入框死锁修复器',
-  'Auto-restore focus when the main input box gets stuck in non-editable or blocked state.':
-    '当主输入框陷入无法编辑、丢失聚焦或被不可见图层阻挡时自动解除死锁。',
-  'macOS Shortcut Repair': 'macOS 快捷键全局修复',
-  'Ensure Command+Comma reliably opens system preferences under all window focus states.':
-    '确保在任何聚焦状态下 Command+逗号 均能精准调起系统全局设置。',
-  'Self-Healing CDP Connection': 'CDP 自愈式热重连',
-  'Automatically reconnect and re-inject telemetry hooks when the Antigravity host restarts.':
-    '当 Antigravity 宿主重启或崩溃恢复后，自动重建 CDP 管道并重新装载注入钩子。',
-
-  // Settings Actions & Dialogs
-  'Saving configuration...': '正在保存配置...',
-  'Configuration saved': '配置已保存',
-  'Failed to save configuration': '保存配置失败',
-  'Reset All to Defaults': '恢复全量默认预设',
-  'Reset all Aura preferences to initial settings? Custom CSS and JS will be kept.':
-    '确定要将所有 Aura 偏好设置恢复为初始默认值吗？用户的 custom.css 和 custom.js 将被完好保留。',
-  'Reset Preferences': '恢复默认设置',
-  'Resetting preferences...': '正在恢复默认设置...',
-  'Preferences reset to defaults': '已恢复默认设置',
-  'CDP Connected': 'CDP 已连接',
-  'CDP Disconnected': 'CDP 未连接',
-
-  // Settings Section: Real-time Telemetry Capsule
-  'Real-time Telemetry Capsule': '实时性能遥测胶囊',
-  'Monitor model speed (tok/s), TTFT, and context usage directly on composer.':
-    '在输入栏下方直观监控模型生成速率 (tok/s)、TTFT 延迟与上下文占用。',
-  'Session Live Metrics Capsule': '会话实时指标胶囊',
-  'Displays token rate pill on composer with hover detailed popup.':
-    '在输入框显示速度指标胶囊，悬浮可查看完整详细弹窗。',
-  'Telemetry Sampling Rate': '遥测采样频率',
-  'SQLite conversation database polling interval.':
-    '底层 SQLite 会话数据库的轮询采样间隔。',
-
-  // Settings Section: Engine Status & Actions
-  'CDP Engine Status': 'CDP 引擎状态',
-  'Host Connection Status': '宿主连接状态',
-  'Connected to Antigravity host': '已连接至 Antigravity 宿主',
-  'Connected to host': '已连接至宿主',
-  'Connected': '已连接',
-  'window(s)': '个窗口',
-  'port': '端口',
-  'Searching window...': '正在寻找宿主窗口...',
-  'Detecting Antigravity CDP port...': '正在检测 Antigravity CDP 调试端口...',
-  'Style Hot Reload': '样式热重载',
-  'Recompile active configuration and push latest styles to all windows.':
-    '重新编译当前配置并向所有已连接窗口热推送最新样式。',
-  'Reapply Now': '立即重新应用',
-  'Host Window Reload': '宿主窗口重载',
-  'Hard-reload active Antigravity window to refresh frozen architecture singletons.':
-    '硬重载当前 Antigravity 窗口以刷新冻结的底层架构单例状态。',
-  'Reload Window': '重载窗口',
-
-  // Settings Section: Advanced Settings
-  'Advanced Settings': '高级实验性设置',
-  'Architecture changes require a host window reload to take full effect.':
-    '架构级改动需要重载宿主窗口方可完全生效。',
-  'Reload Window Now': '立即重载窗口',
-  'Enable Labs & Developer Mode': '启用 Labs 实验室与开发者模式',
-  'Unlock native Labs experimental features panel and internal developer settings.':
-    '解锁官方原生 Labs 实验特性面板与内部开发者调试开关。',
-  'Release Channel Track': '版本发布更新通道 (Track)',
-  'Select native application update track & internal API capabilities.':
-    '选择客户端原生更新轨道与内部 API 功能特性等级。',
-  'Bring Your Own Account (BYOA)': '自带外部账号模式 (BYOA)',
-  'Enable independent API key and custom account routing mode.':
-    '启用独立 API 密钥与第三方自定义账号路由模式。',
-  'Bypass Enterprise Restrictions': '绕过企业策略限制',
-  'Disable enterprise policy blocks on custom plugins, MCP tools, and external models.':
-    '禁用企业组织针对第三方插件、MCP 工具及外部模型的策略拦截。',
-  'Cloud Workstation (CDE) Mode': '云开发环境 (CDE) 模式',
-  'Activate Cloud Development Environment container and terminal integration.':
-    '激活云端工作站容器化开发环境与终端集成。',
-  'Host Presentation Variant': '宿主呈现形态变体',
-  'Switch presentation architecture between standalone app and IDE-embedded frame.':
-    '在独立桌面客户端与 IDE 内嵌窗口呈现架构之间切换。',
-  'Direct Microphone Access': '直连麦克风访问权限',
-  'Directly grant audio input and voice pipeline streaming privileges.':
-    '直接授予本地音频输入与语音管道流式传输原生权限。',
-  'Standalone Desktop (Default)': '独立桌面客户端 (Default)',
-  'Antigravity IDE (Embedded)': 'Antigravity IDE 内嵌框架',
-
-  // Toast Notifications
-  'Configuration applied in real-time': '配置已实时生效',
-  'Save failed': '保存配置失败',
-  'Network error': '网络请求异常',
-  'Styles recompiled and re-applied': '样式已重新编译并生效',
-  'Reload failed': '重载失败',
-  'Host window reloaded': '宿主窗口已重载',
-  'Window reload failed': '窗口重载失败',
-  'Request error': '请求发生错误'
+export const PANEL_TRANSLATIONS_ZH: PanelTranslations = {
+  "* Client-side toggles only. Feature availability depends on Google server-side support.": "* 仅为客户端功能开关，具体特性是否可用取决于 Google 服务端支持。",
+  "0 saved": "已存 0 个",
+  "14px": "14px",
+  "15px": "15px",
+  "16px": "16px",
+  "17px": "17px",
+  "18px": "18px",
+  "5h Quota Bucket": "5 小时配额桶",
+  "5h Quota Budget": "5 小时配额预算",
+  "7d Quota Bucket": "7 天配额桶",
+  "7d Quota Budget": "7 天配额预算",
+  "Absolute Collinear": "绝对同行紧凑",
+  "Account credentials saved to vault": "当前账号凭据已安全保存至保险库",
+  "Account telemetry will appear here as conversations and tokens are processed.": "随着会话与 Token 的处理，账号遥测数据将在此处显示。",
+  "Account Token Consumption": "账号 Token 用量分布",
+  "Activate Cloud Development Environment container and terminal integration.": "激活云端工作站容器化开发环境与终端集成。",
+  "Active color scheme when the system is in dark appearance.": "系统处于深色外观时生效的色彩方案。",
+  "Active color scheme when the system is in light appearance.": "系统处于浅色外观时生效的色彩方案。",
+  "Active Session": "当前会话",
+  "Adjust message typography size with proportionate line-height scaling.": "等比调整消息文本字号及对应行高间距。",
+  "Advanced Settings": "高级实验性设置",
+  "Align prompt action pills, context chips and attachments into a seamless collinear layout.": "将 Prompt 快捷操作、上下文标签及附件在输入框内无缝紧凑同行排列。",
+  "All Time": "全量历史",
+  "Analytics": "数据分析",
+  "Antigravity IDE (Embedded)": "Antigravity IDE 内嵌框架",
+  "Appearance & Themes": "外观与主题",
+  "Apply": "应用",
+  "Architecture changes require a host window reload to take full effect.": "架构级改动需要重载宿主窗口方可完全生效。",
+  "Aura Dashboard": "Aura 控制台",
+  "Auto-restore focus when the main input box gets stuck in non-editable or blocked state.": "当主输入框陷入无法编辑、丢失聚焦或被不可见图层阻挡时自动解除死锁。",
+  "Auto-updates when telemetry changes": "遥测数据变动时自动更新",
+  "Automatically reconnect and re-inject telemetry hooks when the Antigravity host restarts.": "当 Antigravity 宿主重启或崩溃恢复后，自动重建 CDP 管道并重新装载注入钩子。",
+  "Autonomous patch stability, input deadlock prevention, and keyboard shortcut repair.": "补丁自主韧性维持、输入死锁防御及快捷键全局修复。",
+  "Autonomous tool execution distribution, command invocations, and file operations.": "自主工具执行分布、终端命令调用与文件读写操作。",
+  "Avg Time to First Token": "首字平均响应时间 (TTFT)",
+  "Avg Tokens / Turn:": "单轮平均 Token：",
+  "Avg Turn Latency:": "单轮平均耗时：",
+  "Base reading font size for conversational text and Markdown.": "对话文本与 Markdown 的基础阅读字号。",
+  "Baseline Speed": "基准生成速率",
+  "Bottom Toolbar Layout": "底部工具栏布局",
+  "Bring Your Own Account (BYOA)": "自带外部账号模式 (BYOA)",
+  "Bypass Enterprise Restrictions": "绕过企业策略限制",
+  "Cache Cost Efficiency": "Prompt 缓存节省率",
+  "Cache Hit Rate": "缓存命中率",
+  "Cache Read:": "缓存读取：",
+  "Cached Tokens": "缓存读取 Token",
+  "Canary": "金丝雀渠道 (Canary)",
+  "Capacity Activity (1 Year)": "配额消耗活跃度 (近 1 年)",
+  "CDP Connected": "CDP 已连接",
+  "CDP Disconnected": "CDP 未连接",
+  "CDP Engine Status": "CDP 引擎状态",
+  "Chat Message Font Size": "聊天消息字号",
+  "Chinese (Simplified)": "简体中文",
+  "Chinese, Japanese, and Korean character rendering priority.": "中文、日文及韩文字符的独立优先回退字族。",
+  "Choose official English or community Chinese localization.": "选择官方英文原版、社区中文汉化或日语界面。",
+  "CJK Fallback Font": "中日韩 (CJK) 回退字体",
+  "Claude Dark": "Claude 深色",
+  "Claude Light": "Claude 浅色",
+  "Click below to save current active credentials.": "点击下方按钮将当前账号凭据保存至保险库。",
+  "Cloud Workstation (CDE) Mode": "云开发环境 (CDE) 模式",
+  "Code & Monospace Font (Mono)": "代码与等宽字体 (Mono)",
+  "Code blocks, telemetry metrics, and terminal display.": "代码块、遥测速率指标以及终端面板字族。",
+  "Collinear Compose Bar": "紧凑同行输入栏",
+  "Compact redundant tool and terminal command cards in conversations with elegant folded counters.": "将对话中冗长繁琐的工具与终端命令卡片紧凑聚合为极简计数摘要。",
+  "Component Layout & Alignment": "组件布局与对齐",
+  "Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.": "Antigravity 深度性能遥测概览、会话智能分析与界面个性化定制。",
+  "Configuration applied in real-time": "配置已实时生效",
+  "Configuration saved": "配置已保存",
+  "Connected": "已连接",
+  "Connected to Antigravity host": "已连接至 Antigravity 宿主",
+  "Connected to host": "已连接至宿主",
+  "Conversation Font Size": "对话字体字号",
+  "CSS font-family string (e.g. \"Geist\", \"Inter\", \"SF Pro Display\").": "CSS font-family 字符串（例如 \"Geist\", \"Inter\", \"SF Pro Display\"）。",
+  "CSS font-family string (e.g. \"JetBrains Mono\", \"SF Mono\", \"Fira Code\").": "CSS font-family 字符串（例如 \"JetBrains Mono\", \"SF Mono\", \"Fira Code\"）。",
+  "CSS font-family string (e.g. \"PingFang SC\", \"Hiragino Sans\", \"Microsoft YaHei\").": "CSS font-family 字符串（例如 \"PingFang SC\", \"Hiragino Sans\", \"Microsoft YaHei\"）。",
+  "Custom": "自定义",
+  "Custom CJK Font": "自定义 CJK 字体名",
+  "Custom Fallback Font Family": "自定义回退中日韩字体",
+  "Custom Font Family": "自定义字族",
+  "Custom font name...": "自定义字体名称...",
+  "Custom Monospace Font": "自定义等宽字体名",
+  "Custom Monospace Font Family": "自定义等宽字体",
+  "Custom Primary Font": "自定义西文字体名",
+  "Custom Primary Font Family": "自定义主要西文字体",
+  "Custom Range": "自定义范围",
+  "Customize color presets and composer micro-relief borders for Light and Dark modes.": "为浅色与深色模式自定义色彩预设及输入框微浮雕边框。",
+  "Dark Mode Preset": "深色模式预设",
+  "Default": "系统默认",
+  "Default (13px)": "默认 (13px)",
+  "Delete failed": "删除失败",
+  "Detecting account...": "正在获取账号信息...",
+  "Detecting Antigravity CDP port...": "正在检测 Antigravity CDP 调试端口...",
+  "Dev": "开发版 (Dev)",
+  "Direct Microphone Access": "直连麦克风访问权限",
+  "Directly grant audio input and voice pipeline streaming privileges.": "直接授予本地音频输入与语音管道流式传输原生权限。",
+  "Disable enterprise policy blocks on custom plugins, MCP tools, and external models.": "禁用企业组织针对第三方插件、MCP 工具及外部模型的策略拦截。",
+  "Display live TPS, TTFT, and context tokens badge directly inside the composer footer bar.": "在输入栏底栏内嵌展示实时生成速率 (TPS)、首字延迟 (TTFT) 及上下文 Token 用量胶囊。",
+  "Displays token rate pill on composer with hover detailed popup.": "在输入框显示速度指标胶囊，悬浮可查看完整详细弹窗。",
+  "Dogfood": "内测版 (Dogfood)",
+  "e.g. Inter, Helvetica": "例：Inter, Helvetica",
+  "e.g. LXGW WenKai, PingFang SC": "例：霞鹜文楷, 苹方-简",
+  "e.g. Menlo, JetBrains Mono": "例：Menlo, JetBrains Mono",
+  "Efficiency": "效率",
+  "Enable independent API key and custom account routing mode.": "启用独立 API 密钥与第三方自定义账号路由模式。",
+  "Enable Labs & Developer Mode": "启用 Labs 实验室与开发者模式",
+  "English (Default)": "English (原生英文)",
+  "Ensure Command+Comma reliably opens system preferences under all window focus states.": "确保在任何聚焦状态下 Command+逗号 均能精准调起系统全局设置。",
+  "Enter an installed CJK sans-serif font family.": "输入本机已安装的中日韩无衬线字体名称。",
+  "Enter an installed Latin sans-serif font family.": "输入本机已安装的西文无衬线字体名称。",
+  "Enter an installed monospace font family.": "输入本机已安装的等宽字体名称。",
+  "Enumerate system fonts directly with primary Latin font and CJK fallback separation.": "原生枚举本地系统字体，支持西文主字体与中日韩 (CJK) 回退字体独立链式配置。",
+  "Est. Commercial Cost": "商业 API 估算价值",
+  "Estimated API Cost": "预估商业 API 价值",
+  "Extra Large (16px)": "超大 (16px)",
+  "Failed to save configuration": "保存配置失败",
+  "Fallback for CJK characters (PingFang SC, Sarasa UI SC, LXGW WenKai).": "中日韩字符回退字体 (苹方、更纱黑体、霞鹜文楷等)。",
+  "Fallback Sans Font (Chinese / CJK)": "回退无衬线字体 (中日韩 CJK)",
+  "Folded Action Summaries": "折叠操作卡片行为摘要",
+  "Follow Range": "跟随时间范围",
+  "Global Conversation Intelligence": "全局会话智能洞察",
+  "Hard-reload active Antigravity window to refresh frozen architecture singletons.": "硬重载当前 Antigravity 窗口以刷新冻结的底层架构单例状态。",
+  "Hide Composer Pill Arrows": "隐藏输入栏气泡箭头",
+  "Hide disclosure and trigger chevron arrows inside prompt composer pills.": "隐藏输入栏气泡胶囊内的折叠与触发下拉小箭头。",
+  "Hide Dropdown Arrows": "隐藏下拉三角箭头",
+  "Host Connection Status": "宿主连接状态",
+  "Host Presentation Variant": "宿主呈现形态变体",
+  "Host Resilience": "宿主稳定性增强",
+  "Host Window Reload": "宿主窗口重载",
+  "Host window reloaded": "宿主窗口已重载",
+  "Input Deadlock Healer": "输入框死锁修复器",
+  "Input Tokens": "输入 Token",
+  "Input:": "输入：",
+  "Internal": "内部版 (Internal)",
+  "Japanese (日本語)": "日本語 (Japanese)",
+  "Korean (한국어)": "한국어 (Korean)",
+  "Language & Localization": "语言与本地化",
+  "Large (15px)": "偏大 (15px)",
+  "Last 30 Days": "近 30 天",
+  "Last 7 Days": "近 7 天",
+  "Latency / TTFT Distribution": "耗时延迟与 TTFT 分布",
+  "Latin text, numbers, and primary UI headings.": "西文字符、数字符号以及界面主要标题字族。",
+  "Less": "少",
+  "Light Mode Preset": "浅色模式预设",
+  "Live": "实时",
+  "Loading account metrics...": "正在加载账号指标...",
+  "Loading model metrics...": "正在加载模型指标...",
+  "Loading telemetry data...": "正在加载遥测数据...",
+  "Loading tool metrics...": "正在加载工具指标...",
+  "Loading workspaces...": "正在加载工作区数据...",
+  "macOS Shortcut Repair": "macOS 快捷键全局修复",
+  "Manage background performance trackers, live telemetry capsules, and local metric persistence.": "管理后台性能采集器、输入栏实时胶囊及本地指标持久化。",
+  "Median Speed (P50):": "中位数速率 (P50)：",
+  "Medium (14px)": "适中 (14px)",
+  "Model Token Consumption": "模型 Token 用量分布",
+  "Monitor model speed (tok/s), TTFT, and context usage directly on composer.": "在输入栏下方直观监控模型生成速率 (tok/s)、TTFT 延迟与上下文占用。",
+  "Monospace Font": "等宽代码字体",
+  "More": "多",
+  "Move project bar left, align telemetry/model/mode horizontally.": "项目标签靠左，性能遥测、模型与模式在右侧水平对齐。",
+  "Native Default": "官方默认",
+  "Network error": "网络请求异常",
+  "Network error while removing account": "删除账号时发生网络错误",
+  "Network error while saving account": "保存账号时发生网络错误",
+  "Network error while switching account": "切换账号时发生网络错误",
+  "New conversation recommended": "建议开启新会话以使用新账号",
+  "No Account Activity": "暂无账号遥测数据",
+  "No accounts saved yet.": "暂无保存的账号。",
+  "No Models Recorded": "暂无模型用量记录",
+  "No Projects Recorded": "暂无项目用量记录",
+  "No Subagents Recorded": "暂无 Subagent 执行记录",
+  "No Tool Usage Recorded": "暂无工具使用记录",
+  "Official Native": "官方原生布局",
+  "Output Tokens": "输出 Token",
+  "Output:": "输出：",
+  "Overview": "概览",
+  "Peak Speed": "峰值生成速率",
+  "Persist detailed token usage and conversation analytics to local database for the Analytics tab.": "将详细的 Token 用量与会话指标持久化到本地 SQLite 数据库，驱动数据分析看板。",
+  "port": "端口",
+  "Pre-tracking": "早期未跟踪",
+  "Preferences": "偏好设置",
+  "Preferences reset to defaults": "已恢复默认设置",
+  "Primary Sans Font": "西文无衬线主字体",
+  "Primary Sans Font (Latin / Western)": "主要西文无衬线字体 (拉丁字母/英文)",
+  "Project telemetry will appear here as conversations are processed.": "随着会话的处理，工作区与项目遥测数据将在此处显示。",
+  "Pure Dark": "纯黑极简",
+  "Pure Light": "纯白极简",
+  "Real-time Metrics Capsule": "实时性能胶囊",
+  "Real-time Telemetry Capsule": "实时性能遥测胶囊",
+  "Reapply Now": "立即重新应用",
+  "Rearrange composer outer metadata and new session toolbars.": "重排输入框外围元数据及新会话工具栏的元素分布。",
+  "Recompile active configuration and push latest styles to all windows.": "重新编译当前配置并向所有已连接窗口热推送最新样式。",
+  "Refresh": "刷新",
+  "Release Channel Track": "版本发布更新通道 (Track)",
+  "Reload failed": "重载失败",
+  "Reload Window": "重载窗口",
+  "Reload Window Now": "立即重载窗口",
+  "Reloading App...": "正在强制重载应用...",
+  "Remove from vault": "从保险库移除",
+  "Remove small arrows from toolbar buttons for a cleaner aesthetic.": "移除工具栏按钮中的下拉小箭头，保持视觉清爽。",
+  "Removed": "已移除",
+  "Rendering latency distribution...": "正在渲染延迟与 TTFT 分布...",
+  "Rendering model metrics...": "正在渲染模型指标...",
+  "Rendering model speed trends...": "正在渲染模型速率走势...",
+  "Rendering timeline...": "正在渲染时间线...",
+  "Request error": "请求发生错误",
+  "Requests & Turns": "调用与交互轮次",
+  "Reset all Aura preferences to initial settings? Custom CSS and JS will be kept.": "确定要将所有 Aura 偏好设置恢复为初始默认值吗？用户的 custom.css 和 custom.js 将被完好保留。",
+  "Reset All to Defaults": "恢复全量默认预设",
+  "Reset Preferences": "恢复默认设置",
+  "Resetting preferences...": "正在恢复默认设置...",
+  "Save Current Account": "保存当前账号凭据",
+  "Save failed": "保存配置失败",
+  "saved": "个已保存",
+  "Saved Accounts": "已保存账号",
+  "Saving configuration...": "正在保存配置...",
+  "Searching window...": "正在寻找宿主窗口...",
+  "Select native application update track & internal API capabilities.": "选择客户端原生更新轨道与内部 API 功能特性等级。",
+  "Self-Healing CDP Connection": "CDP 自愈式热重连",
+  "Session": "当前会话",
+  "Session Live Metrics Capsule": "会话实时指标胶囊",
+  "Session Turns": "会话轮次",
+  "Session Turns:": "会话轮次：",
+  "SQLite conversation database polling interval.": "底层 SQLite 会话数据库的轮询采样间隔。",
+  "Stable (Default)": "稳定版 (默认)",
+  "Standalone Desktop (Default)": "独立桌面客户端 (Default)",
+  "Style Hot Reload": "样式热重载",
+  "Styles recompiled and re-applied": "样式已重新编译并生效",
+  "Subagent activity will appear here once subagents are invoked.": "调用 Subagent 后，其执行分析数据将在此处显示。",
+  "Subagent Execution": "Subagent 执行分析",
+  "Subtle micro-relief bottom border on composer input panel.": "在输入框底缘呈现微妙雅致的微浮雕边框。",
+  "Subtle outer glow border on home, glowing vintage dark red on focus.": "首页呈现柔和的外发光边框，聚焦时呈现典雅深红微光。",
+  "Switch Account": "切换账号",
+  "Switch display language for Antigravity host interface.": "切换 Antigravity 宿主界面与控制台的显示语言。",
+  "Switch failed": "切换账号失败",
+  "Switch or manage Antigravity accounts": "切换或管理 Antigravity 账号",
+  "Switch presentation architecture between standalone app and IDE-embedded frame.": "在独立桌面客户端与 IDE 内嵌窗口呈现架构之间切换。",
+  "Switched to": "已切换至",
+  "Switching...": "正在切换...",
+  "System CJK Default": "系统默认 CJK 字族",
+  "System Default": "系统默认",
+  "Telemetry & Analytics": "遥测与数据分析",
+  "Telemetry Sampling Rate": "遥测采样频率",
+  "Thinking:": "思考过程：",
+  "This Month": "本月",
+  "This Week": "本周",
+  "Throughput & Latency": "生成吞吐率与响应延迟",
+  "Timeline": "时间线",
+  "to": "至",
+  "Today": "今日",
+  "tok/s": "tok/s",
+  "Token consumption and session volume across workspaces and conversations.": "各工作区与会话之间的 Token 消耗及会话量统计。",
+  "Token consumption, prompt caching, and request volume distributed by AI model.": "按 AI 模型统计的 Token 消耗、Prompt 缓存与请求调用量。",
+  "Token consumption, run volume, and prompt caching delegated to autonomous subagents.": "委派给自主 Subagent 的 Token 消耗、执行轮次与 Prompt 缓存。",
+  "Token consumption, session volume, and timeline distribution tracked across logged-in accounts.": "已登录账号之间的 Token 消耗、会话量及时间线分布。",
+  "Token Usage Analytics": "Token 用量智能分析",
+  "Tokens / Sec (TPS)": "生成速率 (Tokens/秒)",
+  "Tool Ecosystem Usage": "工具生态使用分布",
+  "Tool invocation breakdown will appear here once tools are executed.": "执行工具后，各工具的调用分布将在此处显示。",
+  "Total Tokens": "总 Token 用量",
+  "Total Tokens Processed": "已处理总 Token 用量",
+  "TTFT Latency": "首字响应延迟 (TTFT)",
+  "Typography System": "字体排印系统",
+  "UI Language": "界面语言",
+  "UI Localization": "界面多语言汉化",
+  "Unlock native Labs experimental features panel and internal developer settings.": "解锁官方原生 Labs 实验特性面板与内部开发者调试开关。",
+  "Update Current Account Snapshot": "更新当前账号凭据快照",
+  "Used for codeblocks, terminal output, and monospace alignment.": "用于代码块、终端输出与等宽文本对齐。",
+  "Used for Latin characters, numbers, and primary UI elements.": "用于英文字母、数字和主要界面文字元素。",
+  "User Conversation Turns:": "用户对话轮次：",
+  "Vintage Deep": "复古深邃 (Vintage Deep)",
+  "Vintage Wax Seal Composer": "复古火漆微浮雕输入框",
+  "Wax Seal Border": "输入框微浮雕边框",
+  "Window reload failed": "窗口重载失败",
+  "window(s)": "个窗口",
+  "Workspace & Project Distribution": "工作区与项目分布",
+  "Yesterday": "昨日",
 };
 
-export const PANEL_TRANSLATIONS_JA: Record<string, string> = {
-  // Navigation & Page Header
-  'Aura Dashboard': 'Aura ダッシュボード',
-  'Analytics': 'アナリティクス',
-  'Preferences': '環境設定',
-  'Overview': '概要',
-  'Active Session': '現在のアクティブセッション',
-  'Custom Range': 'カスタム期間',
-  'Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.':
-    'Antigravity の包括的なテレメトリ概要、セッション分析、インターフェースのカスタマイズ。',
-
-  // Time Range Selector
-  'Session': 'セッション',
-  'Today': '今日',
-  'Yesterday': '昨日',
-  'This Week': '今週',
-  'This Month': '今月',
-  'Last 7 Days': '過去 7 日間',
-  'Last 30 Days': '過去 30 日間',
-  'Custom': 'カスタム',
-  'to': '〜',
-  'Apply': '適用',
-
-  // Toolbar & Status
-  'Global Conversation Intelligence': 'グローバル会話インサイト',
-  'Live': 'ライブ',
-  'Refresh': '更新',
-  'Auto-updates when telemetry changes': 'テレメトリ変更時に自動更新',
-  'Loading telemetry data...': 'テレメトリデータを読み込み中...',
-
-  // Analytics Section Titles & Loading
-  'Rendering timeline...': 'タイムラインを描画中...',
-  'Model Token Consumption': 'モデル別トークン消費量',
-  'Token consumption, prompt caching, and request volume distributed by AI model.':
-    'AI モデル別のトークン消費量、Prompt キャッシュ、リクエスト数。',
-  'Loading model metrics...': 'モデルメトリクスを読み込み中...',
-  'Rendering model speed trends...': 'モデル速度の推移を描画中...',
-  'Rendering latency distribution...': 'レイテンシと TTFT 分布を描画中...',
-  'Subagent Execution': 'Subagent 実行分析',
-  'Token consumption, run volume, and prompt caching delegated to autonomous subagents.':
-    '自律型 Subagent に委任されたトークン消費量、実行回数、Prompt キャッシュ。',
-  'Tool Ecosystem Usage': 'ツールエコシステムの使用状況',
-  'Autonomous tool execution distribution, command invocations, and file operations.':
-    'ツールの実行分布、ターミナルコマンドの呼び出し、ファイル操作。',
-  'Loading tool metrics...': 'ツールメトリクスを読み込み中...',
-  'Workspace & Project Distribution': 'ワークスペースおよびプロジェクトの分布',
-  'Token consumption and session volume across workspaces and conversations.':
-    'ワークスペースや会話ごとのトークン消費量とセッション数。',
-  'Follow Range': '期間に連動',
-  'All Time': '全期間',
-  'Loading workspaces...': 'ワークスペースを読み込み中...',
-  'Account Token Consumption': 'アカウント別トークン消費量',
-  'Token consumption, session volume, and timeline distribution tracked across logged-in accounts.':
-    'ログイン中のアカウントごとのトークン消費量、セッション数、タイムライン分布。',
-  'Loading account metrics...': 'アカウントメトリクスを読み込み中...',
-
-  // Analytics Metric Cards & Tooltips
-  'Session Turns': 'セッションターン数',
-  'Session Turns:': 'セッションターン数：',
-  'User Conversation Turns:': 'ユーザー会話ターン数：',
-  'Avg Tokens / Turn:': 'ターン平均トークン：',
-  'Cache Hit Rate': 'キャッシュヒット率',
-  'Total Tokens': '合計トークン',
-  'Input Tokens': '入力トークン',
-  'Output Tokens': '出力トークン',
-  'Cached Tokens': 'キャッシュ読み取りトークン',
-  'Estimated API Cost': '推定 API コスト',
-  'Baseline Speed': '基準生成速度',
-  'Peak Speed': 'ピーク生成速度',
-  'TTFT Latency': '初回応答レイテンシ (TTFT)',
-
-  // Settings Section: Appearance & Themes
-  'Appearance & Themes': '外観とテーマ',
-  'Customize color presets and composer micro-relief borders for Light and Dark modes.':
-    'ライトモードとダークモードのカラープリセットおよびコンポーザーの境界線をカスタマイズします。',
-  'Light Mode Preset': 'ライトモードプリセット',
-  'Active color scheme when the system is in light appearance.':
-    'システムがライト外観のときに適用されるカラースキーム。',
-  'Claude Light': 'Claude ライト',
-  'Pure Light': 'ピュアライト',
-  'Native Default': '公式デフォルト',
-  'Dark Mode Preset': 'ダークモードプリセット',
-  'Active color scheme when the system is in dark appearance.':
-    'システムがダーク外観のときに適用されるカラースキーム。',
-  'Claude Dark': 'Claude ダーク',
-  'Pure Dark': 'ピュアダーク',
-  'Wax Seal Border': 'マイクロレリーフ境界線',
-  'Subtle micro-relief bottom border on composer input panel.':
-    'コンポーザー入力パネルに繊細なマイクロレリーフ下部境界線を表示します。',
-  'Collinear Compose Bar': 'フラットコンポーザーバー',
-  'Align prompt action pills, context chips and attachments into a seamless collinear layout.':
-    'Prompt アクションピル、コンテキストチップ、添付ファイルを一列に揃えたシームレスなレイアウトにします。',
-  'Hide Composer Pill Arrows': 'ピル矢印アイコンを非表示',
-  'Hide disclosure and trigger chevron arrows inside prompt composer pills.':
-    'Prompt コンポーザー内のピルにある展開・トリガー用矢印アイコンを非表示にします。',
-  'UI Localization': 'UI ローカライズ',
-  'Language & Localization': '言語とローカライズ',
-  'UI Language': 'UI 言語',
-  'Choose official English or community Chinese localization.':
-    '公式英語または多言語ローカライズを選択します。',
-  'English (Default)': 'English (公式英語)',
-  'Chinese (Simplified)': '中国語 (簡体字)',
-  'Japanese (日本語)': '日本語 (Japanese)',
-
-  // Settings Section: Typography System
-  'Typography System': 'タイポグラフィ',
-  'Enumerate system fonts directly with primary Latin font and CJK fallback separation.':
-    '欧文プライマリフォントと CJK フォールバックを個別に指定してシステムフォントを設定します。',
-  'Primary Sans Font': '欧文プライマリフォント',
-  'Latin text, numbers, and primary UI headings.':
-    '欧文テキスト、数字、および主要な UI 見出しに適用されます。',
-  'System Default': 'システムデフォルト',
-  'Custom Font Family': 'カスタムフォントファミリ',
-  'Custom Primary Font': 'カスタムプライマリフォント',
-  'CSS font-family string (e.g. "Geist", "Inter", "SF Pro Display").':
-    'CSS font-family 文字列（例: "Geist", "Inter", "SF Pro Display"）。',
-  'CJK Fallback Font': 'CJK フォールバックフォント',
-  'Chinese, Japanese, and Korean character rendering priority.':
-    '中国語、日本語、韓国語の文字レンダリング優先順位。',
-  'System CJK Default': 'システム CJK デフォルト',
-  'Custom CJK Font': 'カスタム CJK フォント',
-  'CSS font-family string (e.g. "PingFang SC", "Hiragino Sans", "Microsoft YaHei").':
-    'CSS font-family 文字列（例: "Hiragino Sans", "PingFang SC", "Noto Sans JP"）。',
-  'Monospace Font': '等幅フォント',
-  'Code blocks, telemetry metrics, and terminal display.':
-    'コードブロック、テレメトリメトリクス、ターミナル表示に適用されます。',
-  'Custom Monospace Font': 'カスタム等幅フォント',
-  'CSS font-family string (e.g. "JetBrains Mono", "SF Mono", "Fira Code").':
-    'CSS font-family 文字列（例: "JetBrains Mono", "SF Mono", "Fira Code"）。',
-  'Conversation Font Size': '会話フォントサイズ',
-  'Adjust message typography size with proportionate line-height scaling.':
-    '行の高さと比例した適切なスケーリングでメッセージのフォントサイズを調整します。',
-  'Default (13px)': 'デフォルト (13px)',
-  'Medium (14px)': '中 (14px)',
-  'Large (15px)': '大 (15px)',
-  'Extra Large (16px)': '特大 (16px)',
-
-  // Settings Section: Telemetry & Analytics
-  'Telemetry & Analytics': 'テレメトリと分析',
-  'Manage background performance trackers, live telemetry capsules, and local metric persistence.':
-    'バックグラウンドのパフォーマンストラッカー、ライブテレメトリカプセル、ローカルメトリクスの永続化を管理します。',
-  'Real-time Metrics Capsule': 'リアルタイムメトリクスカプセル',
-  'Display live TPS, TTFT, and context tokens badge directly inside the composer footer bar.':
-    'コンポーザーのフッターバー内にリアルタイム TPS、TTFT、コンテキストトークンバッジを表示します。',
-  'Folded Action Summaries': '折りたたみアクションサマリー',
-  'Compact redundant tool and terminal command cards in conversations with elegant folded counters.':
-    '会話内の冗長なツールやターミナルコマンドカードをエレガントな折りたたみカウンターにまとめます。',
-  'Token Usage Analytics': 'トークン使用量分析',
-  'Persist detailed token usage and conversation analytics to local database for the Analytics tab.':
-    '「アナリティクス」タブ用に、詳細なトークン消費量と会話分析をローカルデータベースに永続化します。',
-
-  // Settings Section: Host Resilience
-  'Host Resilience': 'ホスト安定性向上',
-  'Autonomous patch stability, input deadlock prevention, and keyboard shortcut repair.':
-    'パッチの自己修復、入力デッドロック防止、キーボードショートカット修復。',
-  'Input Deadlock Healer': '入力デッドロック修復',
-  'Auto-restore focus when the main input box gets stuck in non-editable or blocked state.':
-    'メイン入力ボックスが編集不可またはブロック状態になった場合にフォーカスを自動復元します。',
-  'macOS Shortcut Repair': 'macOS ショートカット修復',
-  'Ensure Command+Comma reliably opens system preferences under all window focus states.':
-    'すべてのウィンドウフォーカス状態において、Command+カンマで確実にシステム設定が開くようにします。',
-  'Self-Healing CDP Connection': 'CDP 自動修復接続',
-  'Automatically reconnect and re-inject telemetry hooks when the Antigravity host restarts.':
-    'Antigravity ホストが再起動した際に、テレメトリフックの再接続と再注入を自動実行します。',
-
-  // Settings Actions & Dialogs
-  'Saving configuration...': '設定を保存中...',
-  'Configuration saved': '設定を保存しました',
-  'Failed to save configuration': '設定の保存に失敗しました',
-  'Reset All to Defaults': 'すべての設定をデフォルトに戻す',
-  'Reset all Aura preferences to initial settings? Custom CSS and JS will be kept.':
-    'すべての Aura 設定を初期状態にリセットしますか？カスタム CSS と JS は保持されます。',
-  'Reset Preferences': '設定をリセット',
-  'Resetting preferences...': '設定をリセット中...',
-  'Preferences reset to defaults': '設定をデフォルトにリセットしました',
-  'CDP Connected': 'CDP 接続済み',
-  'CDP Disconnected': 'CDP 未接続',
-
-  // Settings Section: Real-time Telemetry Capsule
-  'Real-time Telemetry Capsule': 'リアルタイム性能テレメトリカプセル',
-  'Monitor model speed (tok/s), TTFT, and context usage directly on composer.':
-    '入力欄の下でモデル生成速度 (tok/s)、TTFT、コンテキスト使用量を直感的に監視します。',
-  'Session Live Metrics Capsule': 'セッションリアルタイムメトリクスカプセル',
-  'Displays token rate pill on composer with hover detailed popup.':
-    '入力ボックスに速度メトリクスバッジを表示し、ホバーで詳細ポップアップを確認できます。',
-  'Telemetry Sampling Rate': 'テレメトリサンプリング間隔',
-  'SQLite conversation database polling interval.':
-    '基底の SQLite 会話データベースのポーリング間隔。',
-
-  // Settings Section: Engine Status & Actions
-  'CDP Engine Status': 'CDP エンジンステータス',
-  'Host Connection Status': 'ホスト接続ステータス',
-  'Connected to Antigravity host': 'Antigravity ホストに接続済み',
-  'Connected to host': 'ホストに接続済み',
-  'Connected': '接続済み',
-  'window(s)': '個のウィンドウ',
-  'port': 'ポート',
-  'Searching window...': 'ホストウィンドウを検索中...',
-  'Detecting Antigravity CDP port...': 'Antigravity CDP デバッグポートを検出中...',
-  'Style Hot Reload': 'スタイルホットリロード',
-  'Recompile active configuration and push latest styles to all windows.':
-    '現在の設定を再コンパイルし、接続中の全ウィンドウに最新スタイルをホット反映します。',
-  'Reapply Now': '今すぐ再適用',
-  'Host Window Reload': 'ホストウィンドウの再読み込み',
-  'Hard-reload active Antigravity window to refresh frozen architecture singletons.':
-    '現在の Antigravity ウィンドウを強制リロードし、停止した内部シングルトンを再初期化します。',
-  'Reload Window': 'ウィンドウを再読み込み',
-
-  // Settings Section: Advanced Settings
-  'Advanced Settings': '高度な実験的設定',
-  'Architecture changes require a host window reload to take full effect.':
-    'アーキテクチャの変更を完全に反映するにはホストウィンドウの再読み込みが必要です。',
-  'Reload Window Now': '今すぐウィンドウを再読み込み',
-  'Enable Labs & Developer Mode': 'Labs および開発者モードを有効化',
-  'Unlock native Labs experimental features panel and internal developer settings.':
-    '公式の Labs 実験的機能パネルと内部開発者向け設定のロックを解除します。',
-  'Release Channel Track': 'リリース更新トラック (Track)',
-  'Select native application update track & internal API capabilities.':
-    'クライアントの更新トラックと内部 API 機能のレベルを選択します。',
-  'Bring Your Own Account (BYOA)': 'BYOA モード (自前アカウント)',
-  'Enable independent API key and custom account routing mode.':
-    '独立した API キーとカスタムアカウントルーティングモードを有効にします。',
-  'Bypass Enterprise Restrictions': '企業ポリシー制限をバイパス',
-  'Disable enterprise policy blocks on custom plugins, MCP tools, and external models.':
-    'カスタムプラグイン、MCP ツール、外部モデルに対する企業ポリシーのブロックを無効化します。',
-  'Cloud Workstation (CDE) Mode': 'クラウドワークステーション (CDE) モード',
-  'Activate Cloud Development Environment container and terminal integration.':
-    'クラウド開発環境のコンテナおよびターミナル統合を有効化します。',
-  'Host Presentation Variant': 'ホスト表示バリアント',
-  'Switch presentation architecture between standalone app and IDE-embedded frame.':
-    'スタンドアロンデスクトップアプリと IDE 組み込みフレームの間で表示アーキテクチャを切り替えます。',
-  'Direct Microphone Access': 'マイク直接アクセス権限',
-  'Directly grant audio input and voice pipeline streaming privileges.':
-    'ローカル音声入力とストリーミングパイプラインの権限を直接付与します。',
-  'Standalone Desktop (Default)': 'スタンドアロンデスクトップ (デフォルト)',
-  'Antigravity IDE (Embedded)': 'Antigravity IDE (組み込み)',
-
-  // Toast Notifications
-  'Configuration applied in real-time': '設定がリアルタイムに適用されました',
-  'Save failed': '設定の保存に失敗しました',
-  'Network error': 'ネットワークリクエストエラー',
-  'Styles recompiled and re-applied': 'スタイルが再コンパイルされ再適用されました',
-  'Reload failed': '再読み込みに失敗しました',
-  'Host window reloaded': 'ホストウィンドウが再読み込みされました',
-  'Window reload failed': 'ウィンドウの再読み込みに失敗しました',
-  'Request error': 'リクエストエラーが発生しました'
+export const PANEL_TRANSLATIONS_JA: PanelTranslations = {
+  "* Client-side toggles only. Feature availability depends on Google server-side support.": "* クライアント側のスイッチのみです。実際の機能の可否は Google サーバー側のサポートに依存します。",
+  "0 saved": "保存数 0",
+  "14px": "14px",
+  "15px": "15px",
+  "16px": "16px",
+  "17px": "17px",
+  "18px": "18px",
+  "5h Quota Bucket": "5 時間クォータバケット",
+  "5h Quota Budget": "5 時間クォータ予算",
+  "7d Quota Bucket": "7 日間クォータバケット",
+  "7d Quota Budget": "7 日間クォータ予算",
+  "Absolute Collinear": "完全一行インライン",
+  "Account credentials saved to vault": "アカウント情報が保管庫に保存されました",
+  "Account telemetry will appear here as conversations and tokens are processed.": "会話とトークンが処理されると、アカウントテレメトリがここに表示されます。",
+  "Account Token Consumption": "アカウント別トークン消費量",
+  "Activate Cloud Development Environment container and terminal integration.": "クラウド開発環境のコンテナおよびターミナル統合を有効化します。",
+  "Active color scheme when the system is in dark appearance.": "システムがダーク外観のときに適用されるカラースキーム。",
+  "Active color scheme when the system is in light appearance.": "システムがライト外観のときに適用されるカラースキーム。",
+  "Active Session": "現在のアクティブセッション",
+  "Adjust message typography size with proportionate line-height scaling.": "行の高さと比例した適切なスケーリングでメッセージのフォントサイズを調整します。",
+  "Advanced Settings": "高度な実験的設定",
+  "Align prompt action pills, context chips and attachments into a seamless collinear layout.": "Prompt アクションピル、コンテキストチップ、添付ファイルを一列に揃えたシームレスなレイアウトにします。",
+  "All Time": "全期間",
+  "Analytics": "アナリティクス",
+  "Antigravity IDE (Embedded)": "Antigravity IDE (組み込み)",
+  "Appearance & Themes": "外観とテーマ",
+  "Apply": "適用",
+  "Architecture changes require a host window reload to take full effect.": "アーキテクチャの変更を完全に反映するにはホストウィンドウの再読み込みが必要です。",
+  "Aura Dashboard": "Aura ダッシュボード",
+  "Auto-restore focus when the main input box gets stuck in non-editable or blocked state.": "メイン入力ボックスが編集不可またはブロック状態になった場合にフォーカスを自動復元します。",
+  "Auto-updates when telemetry changes": "テレメトリ変更時に自動更新",
+  "Automatically reconnect and re-inject telemetry hooks when the Antigravity host restarts.": "Antigravity ホストが再起動した際に、テレメトリフックの再接続と再注入を自動実行します。",
+  "Autonomous patch stability, input deadlock prevention, and keyboard shortcut repair.": "パッチの自己修復、入力デッドロック防止、キーボードショートカット修復。",
+  "Autonomous tool execution distribution, command invocations, and file operations.": "ツールの実行分布、ターミナルコマンドの呼び出し、ファイル操作。",
+  "Avg Time to First Token": "平均初回トークン生成時間 (TTFT)",
+  "Avg Tokens / Turn:": "ターン平均トークン：",
+  "Avg Turn Latency:": "ターン平均所要時間:",
+  "Base reading font size for conversational text and Markdown.": "会話テキストと Markdown の基本読み取りフォントサイズ。",
+  "Baseline Speed": "基準生成速度",
+  "Bottom Toolbar Layout": "下部ツールバーの配置",
+  "Bring Your Own Account (BYOA)": "BYOA モード (自前アカウント)",
+  "Bypass Enterprise Restrictions": "企業ポリシー制限をバイパス",
+  "Cache Cost Efficiency": "Prompt キャッシュ節約率",
+  "Cache Hit Rate": "キャッシュヒット率",
+  "Cache Read:": "キャッシュ読み取り:",
+  "Cached Tokens": "キャッシュ読み取りトークン",
+  "Canary": "Canary (カナリア版)",
+  "Capacity Activity (1 Year)": "クォータ消費アクティビティ (過去 1 年)",
+  "CDP Connected": "CDP 接続済み",
+  "CDP Disconnected": "CDP 未接続",
+  "CDP Engine Status": "CDP エンジンステータス",
+  "Chat Message Font Size": "チャットメッセージのフォントサイズ",
+  "Chinese (Simplified)": "中国語 (簡体字)",
+  "Chinese, Japanese, and Korean character rendering priority.": "中国語、日本語、韓国語の文字レンダリング優先順位。",
+  "Choose official English or community Chinese localization.": "公式英語または多言語ローカライズを選択します。",
+  "CJK Fallback Font": "CJK フォールバックフォント",
+  "Claude Dark": "Claude ダーク",
+  "Claude Light": "Claude ライト",
+  "Click below to save current active credentials.": "下部のボタンをクリックして現在の資格情報を保存してください。",
+  "Cloud Workstation (CDE) Mode": "クラウドワークステーション (CDE) モード",
+  "Code & Monospace Font (Mono)": "コード＆等幅フォント (Mono)",
+  "Code blocks, telemetry metrics, and terminal display.": "コードブロック、テレメトリメトリクス、ターミナル表示に適用されます。",
+  "Collinear Compose Bar": "フラットコンポーザーバー",
+  "Compact redundant tool and terminal command cards in conversations with elegant folded counters.": "会話内の冗長なツールやターミナルコマンドカードをエレガントな折りたたみカウンターにまとめます。",
+  "Component Layout & Alignment": "コンポーネント配置＆アライメント",
+  "Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.": "Antigravity の包括的なテレメトリ概要、セッション分析、インターフェースのカスタマイズ。",
+  "Configuration applied in real-time": "設定がリアルタイムに適用されました",
+  "Configuration saved": "設定を保存しました",
+  "Connected": "接続済み",
+  "Connected to Antigravity host": "Antigravity ホストに接続済み",
+  "Connected to host": "ホストに接続済み",
+  "Conversation Font Size": "会話フォントサイズ",
+  "CSS font-family string (e.g. \"Geist\", \"Inter\", \"SF Pro Display\").": "CSS font-family 文字列（例: \"Geist\", \"Inter\", \"SF Pro Display\"）。",
+  "CSS font-family string (e.g. \"JetBrains Mono\", \"SF Mono\", \"Fira Code\").": "CSS font-family 文字列（例: \"JetBrains Mono\", \"SF Mono\", \"Fira Code\"）。",
+  "CSS font-family string (e.g. \"PingFang SC\", \"Hiragino Sans\", \"Microsoft YaHei\").": "CSS font-family 文字列（例: \"Hiragino Sans\", \"PingFang SC\", \"Noto Sans JP\"）。",
+  "Custom": "カスタム",
+  "Custom CJK Font": "カスタム CJK フォント",
+  "Custom Fallback Font Family": "カスタム CJK フォールバックフォント",
+  "Custom Font Family": "カスタムフォントファミリ",
+  "Custom font name...": "カスタムフォント名...",
+  "Custom Monospace Font": "カスタム等幅フォント",
+  "Custom Monospace Font Family": "カスタム等幅フォント",
+  "Custom Primary Font": "カスタムプライマリフォント",
+  "Custom Primary Font Family": "カスタムメイン英数字フォント",
+  "Custom Range": "カスタム期間",
+  "Customize color presets and composer micro-relief borders for Light and Dark modes.": "ライトモードとダークモードのカラープリセットおよびコンポーザーの境界線をカスタマイズします。",
+  "Dark Mode Preset": "ダークモードプリセット",
+  "Default": "システム既定",
+  "Default (13px)": "デフォルト (13px)",
+  "Delete failed": "削除に失敗しました",
+  "Detecting account...": "アカウント情報を取得中...",
+  "Detecting Antigravity CDP port...": "Antigravity CDP デバッグポートを検出中...",
+  "Dev": "Dev (開発版)",
+  "Direct Microphone Access": "マイク直接アクセス権限",
+  "Directly grant audio input and voice pipeline streaming privileges.": "ローカル音声入力とストリーミングパイプラインの権限を直接付与します。",
+  "Disable enterprise policy blocks on custom plugins, MCP tools, and external models.": "カスタムプラグイン、MCP ツール、外部モデルに対する企業ポリシーのブロックを無効化します。",
+  "Display live TPS, TTFT, and context tokens badge directly inside the composer footer bar.": "コンポーザーのフッターバー内にリアルタイム TPS、TTFT、コンテキストトークンバッジを表示します。",
+  "Displays token rate pill on composer with hover detailed popup.": "入力ボックスに速度メトリクスバッジを表示し、ホバーで詳細ポップアップを確認できます。",
+  "Dogfood": "Dogfood (内部テスト版)",
+  "e.g. Inter, Helvetica": "例: Inter, Helvetica",
+  "e.g. LXGW WenKai, PingFang SC": "例: 霞鹜文楷, PingFang SC",
+  "e.g. Menlo, JetBrains Mono": "例: Menlo, JetBrains Mono",
+  "Efficiency": "効率",
+  "Enable independent API key and custom account routing mode.": "独立した API キーとカスタムアカウントルーティングモードを有効にします。",
+  "Enable Labs & Developer Mode": "Labs および開発者モードを有効化",
+  "English (Default)": "English (公式英語)",
+  "Ensure Command+Comma reliably opens system preferences under all window focus states.": "すべてのウィンドウフォーカス状態において、Command+カンマで確実にシステム設定が開くようにします。",
+  "Enter an installed CJK sans-serif font family.": "インストール済みの CJK サンセリフフォント名を入力してください。",
+  "Enter an installed Latin sans-serif font family.": "インストール済みの欧文サンセリフフォント名を入力してください。",
+  "Enter an installed monospace font family.": "インストール済みの等幅フォント名を入力してください。",
+  "Enumerate system fonts directly with primary Latin font and CJK fallback separation.": "欧文プライマリフォントと CJK フォールバックを個別に指定してシステムフォントを設定します。",
+  "Est. Commercial Cost": "商業 API 推定価値",
+  "Estimated API Cost": "推定 API コスト",
+  "Extra Large (16px)": "特大 (16px)",
+  "Failed to save configuration": "設定の保存に失敗しました",
+  "Fallback for CJK characters (PingFang SC, Sarasa UI SC, LXGW WenKai).": "CJK 文字用フォールバック (PingFang SC、更紗ゴシック、霞鹜文楷など)。",
+  "Fallback Sans Font (Chinese / CJK)": "フォールバックサンセリフフォント (CJK / 日本語)",
+  "Folded Action Summaries": "折りたたみアクションサマリー",
+  "Follow Range": "期間に連動",
+  "Global Conversation Intelligence": "グローバル会話インサイト",
+  "Hard-reload active Antigravity window to refresh frozen architecture singletons.": "現在の Antigravity ウィンドウを強制リロードし、停止した内部シングルトンを再初期化します。",
+  "Hide Composer Pill Arrows": "ピル矢印アイコンを非表示",
+  "Hide disclosure and trigger chevron arrows inside prompt composer pills.": "Prompt コンポーザー内のピルにある展開・トリガー用矢印アイコンを非表示にします。",
+  "Hide Dropdown Arrows": "ドロップダウン矢印を非表示",
+  "Host Connection Status": "ホスト接続ステータス",
+  "Host Presentation Variant": "ホスト表示バリアント",
+  "Host Resilience": "ホスト安定性向上",
+  "Host Window Reload": "ホストウィンドウの再読み込み",
+  "Host window reloaded": "ホストウィンドウが再読み込みされました",
+  "Input Deadlock Healer": "入力デッドロック修復",
+  "Input Tokens": "入力トークン",
+  "Input:": "入力:",
+  "Internal": "Internal (社内限定)",
+  "Japanese (日本語)": "日本語 (Japanese)",
+  "Korean (한국어)": "한국어 (Korean)",
+  "Language & Localization": "言語とローカライズ",
+  "Large (15px)": "大 (15px)",
+  "Last 30 Days": "過去 30 日間",
+  "Last 7 Days": "過去 7 日間",
+  "Latency / TTFT Distribution": "遅延・TTFT 分布",
+  "Latin text, numbers, and primary UI headings.": "欧文テキスト、数字、および主要な UI 見出しに適用されます。",
+  "Less": "少",
+  "Light Mode Preset": "ライトモードプリセット",
+  "Live": "ライブ",
+  "Loading account metrics...": "アカウントメトリクスを読み込み中...",
+  "Loading model metrics...": "モデルメトリクスを読み込み中...",
+  "Loading telemetry data...": "テレメトリデータを読み込み中...",
+  "Loading tool metrics...": "ツールメトリクスを読み込み中...",
+  "Loading workspaces...": "ワークスペースを読み込み中...",
+  "macOS Shortcut Repair": "macOS ショートカット修復",
+  "Manage background performance trackers, live telemetry capsules, and local metric persistence.": "バックグラウンドのパフォーマンストラッカー、ライブテレメトリカプセル、ローカルメトリクスの永続化を管理します。",
+  "Median Speed (P50):": "中央値生成速度 (P50):",
+  "Medium (14px)": "中 (14px)",
+  "Model Token Consumption": "モデル別トークン消費量",
+  "Monitor model speed (tok/s), TTFT, and context usage directly on composer.": "入力欄の下でモデル生成速度 (tok/s)、TTFT、コンテキスト使用量を直感的に監視します。",
+  "Monospace Font": "等幅フォント",
+  "More": "多",
+  "Move project bar left, align telemetry/model/mode horizontally.": "プロジェクトバーを左に配置し、テレメトリ/モデル/モードを水平に整列します。",
+  "Native Default": "公式デフォルト",
+  "Network error": "ネットワークリクエストエラー",
+  "Network error while removing account": "アカウント削除中にネットワークエラーが発生しました",
+  "Network error while saving account": "アカウント保存中にネットワークエラーが発生しました",
+  "Network error while switching account": "アカウント切り替え中にネットワークエラーが発生しました",
+  "New conversation recommended": "新しいチャットセッションの開始をお勧めします",
+  "No Account Activity": "アカウントアクティビティがありません",
+  "No accounts saved yet.": "保存されたアカウントはありません。",
+  "No Models Recorded": "モデル利用記録がありません",
+  "No Projects Recorded": "プロジェクト利用記録がありません",
+  "No Subagents Recorded": "Subagent 実行記録がありません",
+  "No Tool Usage Recorded": "ツール使用記録がありません",
+  "Official Native": "公式ネイティブ",
+  "Output Tokens": "出力トークン",
+  "Output:": "出力:",
+  "Overview": "概要",
+  "Peak Speed": "ピーク生成速度",
+  "Persist detailed token usage and conversation analytics to local database for the Analytics tab.": "「アナリティクス」タブ用に、詳細なトークン消費量と会話分析をローカルデータベースに永続化します。",
+  "port": "ポート",
+  "Pre-tracking": "追跡開始前",
+  "Preferences": "環境設定",
+  "Preferences reset to defaults": "設定をデフォルトにリセットしました",
+  "Primary Sans Font": "欧文プライマリフォント",
+  "Primary Sans Font (Latin / Western)": "メイン欧文サンセリフフォント (英数字)",
+  "Project telemetry will appear here as conversations are processed.": "会話が処理されると、ワークスペースとプロジェクトのテレメトリがここに表示されます。",
+  "Pure Dark": "ピュアダーク",
+  "Pure Light": "ピュアライト",
+  "Real-time Metrics Capsule": "リアルタイムメトリクスカプセル",
+  "Real-time Telemetry Capsule": "リアルタイム性能テレメトリカプセル",
+  "Reapply Now": "今すぐ再適用",
+  "Rearrange composer outer metadata and new session toolbars.": "プロンプト入力欄の外周メタデータと新規セッションツールバーの配置を再編成します。",
+  "Recompile active configuration and push latest styles to all windows.": "現在の設定を再コンパイルし、接続中の全ウィンドウに最新スタイルをホット反映します。",
+  "Refresh": "更新",
+  "Release Channel Track": "リリース更新トラック (Track)",
+  "Reload failed": "再読み込みに失敗しました",
+  "Reload Window": "ウィンドウを再読み込み",
+  "Reload Window Now": "今すぐウィンドウを再読み込み",
+  "Reloading App...": "アプリを強制再読み込み中...",
+  "Remove from vault": "保管庫から削除",
+  "Remove small arrows from toolbar buttons for a cleaner aesthetic.": "ツールバーボタンから小さな矢印を取り除き、より洗練された美しさを実現します。",
+  "Removed": "削除しました:",
+  "Rendering latency distribution...": "レイテンシと TTFT 分布を描画中...",
+  "Rendering model metrics...": "モデル指標をレンダリング中...",
+  "Rendering model speed trends...": "モデル速度の推移を描画中...",
+  "Rendering timeline...": "タイムラインを描画中...",
+  "Request error": "リクエストエラーが発生しました",
+  "Requests & Turns": "リクエスト＆ターン数",
+  "Reset all Aura preferences to initial settings? Custom CSS and JS will be kept.": "すべての Aura 設定を初期状態にリセットしますか？カスタム CSS と JS は保持されます。",
+  "Reset All to Defaults": "すべての設定をデフォルトに戻す",
+  "Reset Preferences": "設定をリセット",
+  "Resetting preferences...": "設定をリセット中...",
+  "Save Current Account": "現在のアカウント情報を保存",
+  "Save failed": "設定の保存に失敗しました",
+  "saved": "件保存済み",
+  "Saved Accounts": "保存済みアカウント",
+  "Saving configuration...": "設定を保存中...",
+  "Searching window...": "ホストウィンドウを検索中...",
+  "Select native application update track & internal API capabilities.": "クライアントの更新トラックと内部 API 機能のレベルを選択します。",
+  "Self-Healing CDP Connection": "CDP 自動修復接続",
+  "Session": "セッション",
+  "Session Live Metrics Capsule": "セッションリアルタイムメトリクスカプセル",
+  "Session Turns": "セッションターン数",
+  "Session Turns:": "セッションターン数：",
+  "SQLite conversation database polling interval.": "基底の SQLite 会話データベースのポーリング間隔。",
+  "Stable (Default)": "Stable (既定)",
+  "Standalone Desktop (Default)": "スタンドアロンデスクトップ (デフォルト)",
+  "Style Hot Reload": "スタイルホットリロード",
+  "Styles recompiled and re-applied": "スタイルが再コンパイルされ再適用されました",
+  "Subagent activity will appear here once subagents are invoked.": "Subagent が呼び出されると、その実行アクティビティがここに表示されます。",
+  "Subagent Execution": "Subagent 実行分析",
+  "Subtle micro-relief bottom border on composer input panel.": "コンポーザー入力パネルに繊細なマイクロレリーフ下部境界線を表示します。",
+  "Subtle outer glow border on home, glowing vintage dark red on focus.": "ホーム画面では繊細な外光ボーダー、フォーカス時には優雅な深紅の光を放ちます。",
+  "Switch Account": "アカウント切替",
+  "Switch display language for Antigravity host interface.": "Antigravity ホストインターフェースおよびダッシュボードの表示言語を切り替えます。",
+  "Switch failed": "アカウントの切り替えに失敗しました",
+  "Switch or manage Antigravity accounts": "Antigravity アカウントの切り替えと管理",
+  "Switch presentation architecture between standalone app and IDE-embedded frame.": "スタンドアロンデスクトップアプリと IDE 組み込みフレームの間で表示アーキテクチャを切り替えます。",
+  "Switched to": "アカウントを切り替えました:",
+  "Switching...": "切り替え中...",
+  "System CJK Default": "システム CJK デフォルト",
+  "System Default": "システムデフォルト",
+  "Telemetry & Analytics": "テレメトリと分析",
+  "Telemetry Sampling Rate": "テレメトリサンプリング間隔",
+  "Thinking:": "思考プロセス:",
+  "This Month": "今月",
+  "This Week": "今週",
+  "Throughput & Latency": "スループット＆レイテンシ",
+  "Timeline": "タイムライン",
+  "to": "〜",
+  "Today": "今日",
+  "tok/s": "tok/s",
+  "Token consumption and session volume across workspaces and conversations.": "ワークスペースや会話ごとのトークン消費量とセッション数。",
+  "Token consumption, prompt caching, and request volume distributed by AI model.": "AI モデル別のトークン消費量、Prompt キャッシュ、リクエスト数。",
+  "Token consumption, run volume, and prompt caching delegated to autonomous subagents.": "自律型 Subagent に委任されたトークン消費量、実行回数、Prompt キャッシュ。",
+  "Token consumption, session volume, and timeline distribution tracked across logged-in accounts.": "ログイン中のアカウントごとのトークン消費量、セッション数、タイムライン分布。",
+  "Token Usage Analytics": "トークン使用量分析",
+  "Tokens / Sec (TPS)": "生成速度 (Tokens/秒)",
+  "Tool Ecosystem Usage": "ツールエコシステムの使用状況",
+  "Tool invocation breakdown will appear here once tools are executed.": "ツールが実行されると、呼び出しの詳細がここに表示されます。",
+  "Total Tokens": "合計トークン",
+  "Total Tokens Processed": "処理済み総トークン数",
+  "TTFT Latency": "初回応答レイテンシ (TTFT)",
+  "Typography System": "タイポグラフィ",
+  "UI Language": "UI 言語",
+  "UI Localization": "UI ローカライズ",
+  "Unlock native Labs experimental features panel and internal developer settings.": "公式の Labs 実験的機能パネルと内部開発者向け設定のロックを解除します。",
+  "Update Current Account Snapshot": "現在のアカウント情報を更新",
+  "Used for codeblocks, terminal output, and monospace alignment.": "コードブロック、ターミナル出力、等幅テキストの配置に使用されます。",
+  "Used for Latin characters, numbers, and primary UI elements.": "英数字や主要な UI 要素に使用されます。",
+  "User Conversation Turns:": "ユーザー会話ターン数：",
+  "Vintage Deep": "ヴィンテージディープ (Vintage Deep)",
+  "Vintage Wax Seal Composer": "ヴィンテージシーリングスタンプ入力欄",
+  "Wax Seal Border": "マイクロレリーフ境界線",
+  "Window reload failed": "ウィンドウの再読み込みに失敗しました",
+  "window(s)": "個のウィンドウ",
+  "Workspace & Project Distribution": "ワークスペースおよびプロジェクトの分布",
+  "Yesterday": "昨日",
 };
 
-export const PANEL_TRANSLATIONS_KO: Record<string, string> = {
-  // Navigation & Page Header
-  'Aura Dashboard': 'Aura 대시보드',
-  'Analytics': '애널리틱스',
-  'Preferences': '환경설정',
-  'Overview': '개요',
-  'Active Session': '현재 활성 세션',
-  'Custom Range': '사용자 지정 기간',
-  'Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.':
-    'Antigravity의 포괄적인 텔레메트리 개요, 세션 인텔리전스 및 인터페이스 맞춤 설정.',
-
-  // Time Range Selector
-  'Session': '세션',
-  'Today': '오늘',
-  'Yesterday': '어제',
-  'This Week': '이번 주',
-  'This Month': '이번 달',
-  'Last 7 Days': '최근 7일',
-  'Last 30 Days': '최근 30일',
-  'Custom': '사용자 지정',
-  'to': '~',
-  'Apply': '적용',
-
-  // Toolbar & Status
-  'Global Conversation Intelligence': '글로벌 대화 인사이트',
-  'Live': '실시간',
-  'Refresh': '새로고침',
-  'Auto-updates when telemetry changes': '텔레메트리 변경 시 자동 업데이트',
-  'Loading telemetry data...': '텔레메트리 데이터 불러오는 중...',
-
-  // Analytics Section Titles & Loading
-  'Rendering timeline...': '타임라인 렌더링 중...',
-  'Model Token Consumption': '모델별 토큰 소비량',
-  'Token consumption, prompt caching, and request volume distributed by AI model.':
-    'AI 모델별 토큰 소비량, Prompt 캐싱 및 요청 호출 수.',
-  'Loading model metrics...': '모델 지표 불러오는 중...',
-  'Rendering model speed trends...': '모델 속도 추이 렌더링 중...',
-  'Rendering latency distribution...': '지연시간 및 TTFT 분포 렌더링 중...',
-  'Subagent Execution': 'Subagent 실행 분석',
-  'Token consumption, run volume, and prompt caching delegated to autonomous subagents.':
-    '자율 Subagent에 위임된 토큰 소비량, 실행 횟수 및 Prompt 캐싱.',
-  'Tool Ecosystem Usage': '도구 생태계 사용 분포',
-  'Autonomous tool execution distribution, command invocations, and file operations.':
-    '자율 도구 실행 분포, 터미널 명령 호출 및 파일 작업.',
-  'Loading tool metrics...': '도구 지표 불러오는 중...',
-  'Workspace & Project Distribution': '워크스페이스 및 프로젝트 분포',
-  'Token consumption and session volume across workspaces and conversations.':
-    '워크스페이스 및 대화 간 토큰 소비량과 세션 수.',
-  'Follow Range': '기간 연동',
-  'All Time': '전체 기간',
-  'Loading workspaces...': '워크스페이스 불러오는 중...',
-  'Account Token Consumption': '계정별 토큰 소비량',
-  'Token consumption, session volume, and timeline distribution tracked across logged-in accounts.':
-    '로그인된 계정 간 토큰 소비량, 세션 수 및 타임라인 분포.',
-  'Loading account metrics...': '계정 지표 불러오는 중...',
-
-  // Analytics Metric Cards & Tooltips
-  'Session Turns': '세션 턴 수',
-  'Session Turns:': '세션 턴 수:',
-  'User Conversation Turns:': '사용자 대화 턴 수:',
-  'Avg Tokens / Turn:': '턴당 평균 토큰:',
-  'Cache Hit Rate': '캐시 적중률',
-  'Total Tokens': '총 토큰',
-  'Input Tokens': '입력 토큰',
-  'Output Tokens': '출력 토큰',
-  'Cached Tokens': '캐시 읽기 토큰',
-  'Estimated API Cost': '예상 API 비용',
-  'Baseline Speed': '기준 생성 속도',
-  'Peak Speed': '최고 생성 속도',
-  'TTFT Latency': '첫 글자 응답 지연 (TTFT)',
-
-  // Settings Section: Appearance & Themes
-  'Appearance & Themes': '모양 및 테마',
-  'Customize color presets and composer micro-relief borders for Light and Dark modes.':
-    '라이트 및 다크 모드의 색상 프리셋과 입력창 마이크로 릴리프 테두리를 맞춤 설정합니다.',
-  'Light Mode Preset': '라이트 모드 프리셋',
-  'Active color scheme when the system is in light appearance.':
-    '시스템이 라이트 모드일 때 적용되는 색상 구성표.',
-  'Claude Light': 'Claude 라이트',
-  'Pure Light': '퓨어 라이트',
-  'Native Default': '공식 기본값',
-  'Dark Mode Preset': '다크 모드 프리셋',
-  'Active color scheme when the system is in dark appearance.':
-    '시스템이 다크 모드일 때 적용되는 색상 구성표.',
-  'Claude Dark': 'Claude 다크',
-  'Pure Dark': '퓨어 다크',
-  'Wax Seal Border': '마이크로 릴리프 테두리',
-  'Subtle micro-relief bottom border on composer input panel.':
-    '입력창 패널 하단에 은은한 마이크로 릴리프 테두리를 표시합니다.',
-  'Collinear Compose Bar': '단일 행 컴포저 바',
-  'Align prompt action pills, context chips and attachments into a seamless collinear layout.':
-    'Prompt 작업 캡슐, 컨텍스트 칩, 첨부파일을 깔끔한 단일 행으로 정렬합니다.',
-  'Hide Composer Pill Arrows': '컴포저 캡슐 화살표 숨기기',
-  'Hide disclosure and trigger chevron arrows inside prompt composer pills.':
-    'Prompt 컴포저 내부 캡슐의 펼치기 및 트리거 화살표 아이콘을 숨깁니다.',
-  'UI Localization': 'UI 로컬라이제이션',
-  'Language & Localization': '언어 및 로컬라이제이션',
-  'UI Language': 'UI 언어',
-  'Choose official English or community Chinese localization.':
-    '공식 영어 또는 다국어 로컬라이제이션을 선택합니다.',
-  'English (Default)': 'English (기본값)',
-  'Chinese (Simplified)': '중국어 (간체)',
-  'Japanese (日本語)': '일본어 (日本語)',
-  'Korean (한국어)': '한국어 (Korean)',
-
-  // Settings Section: Typography System
-  'Typography System': '타이포그래피 시스템',
-  'Enumerate system fonts directly with primary Latin font and CJK fallback separation.':
-    '영문 기본 폰트와 CJK 대체 폰트를 개별 지정하여 시스템 폰트를 설정합니다.',
-  'Primary Sans Font': '기본 산세리프 폰트',
-  'Latin text, numbers, and primary UI headings.':
-    '영문 텍스트, 숫자 및 기본 UI 제목에 적용됩니다.',
-  'System Default': '시스템 기본값',
-  'Custom Font Family': '사용자 지정 폰트 패밀리',
-  'Custom Primary Font': '사용자 지정 기본 폰트',
-  'CSS font-family string (e.g. "Geist", "Inter", "SF Pro Display").':
-    'CSS font-family 문자열 (예: "Geist", "Inter", "SF Pro Display").',
-  'CJK Fallback Font': 'CJK 대체 폰트',
-  'Chinese, Japanese, and Korean character rendering priority.':
-    '한글, 한자, 일본어 문자 렌더링 우선순위.',
-  'System CJK Default': '시스템 CJK 기본값',
-  'Custom CJK Font': '사용자 지정 CJK 폰트',
-  'CSS font-family string (e.g. "PingFang SC", "Hiragino Sans", "Microsoft YaHei").':
-    'CSS font-family 문자열 (예: "Pretendard", "Noto Sans KR", "Malgun Gothic").',
-  'Monospace Font': '고정폭 폰트',
-  'Code blocks, telemetry metrics, and terminal display.':
-    '코드 블록, 텔레메트리 지표 및 터미널 표시에 적용됩니다.',
-  'Custom Monospace Font': '사용자 지정 고정폭 폰트',
-  'CSS font-family string (e.g. "JetBrains Mono", "SF Mono", "Fira Code").':
-    'CSS font-family 문자열 (예: "JetBrains Mono", "SF Mono", "D2Coding").',
-  'Conversation Font Size': '대화 폰트 크기',
-  'Adjust message typography size with proportionate line-height scaling.':
-    '메시지 폰트 크기와 줄 간격을 비례 조정합니다.',
-  'Default (13px)': '기본 (13px)',
-  'Medium (14px)': '보통 (14px)',
-  'Large (15px)': '크게 (15px)',
-  'Extra Large (16px)': '매우 크게 (16px)',
-
-  // Settings Section: Telemetry & Analytics
-  'Telemetry & Analytics': '텔레메트리 및 분석',
-  'Manage background performance trackers, live telemetry capsules, and local metric persistence.':
-    '백그라운드 성능 추적기, 실시간 텔레메트리 캡슐 및 로컬 지표 저장을 관리합니다.',
-  'Real-time Metrics Capsule': '실시간 성능 캡슐',
-  'Display live TPS, TTFT, and context tokens badge directly inside the composer footer bar.':
-    '입력창 하단 표시줄에 실시간 TPS, TTFT 및 컨텍스트 토큰 배지를 직접 표시합니다.',
-  'Folded Action Summaries': '접힌 작업 요약',
-  'Compact redundant tool and terminal command cards in conversations with elegant folded counters.':
-    '대화창의 반복적인 도구 및 터미널 명령 카드를 깔끔한 접힘 카운터로 요약합니다.',
-  'Token Usage Analytics': '토큰 사용량 분석',
-  'Persist detailed token usage and conversation analytics to local database for the Analytics tab.':
-    '애널리틱스 탭을 위해 상세 토큰 소비량 및 대화 분석을 로컬 SQLite 데이터베이스에 저장합니다.',
-
-  // Settings Section: Host Resilience
-  'Host Resilience': '호스트 안정성 향상',
-  'Autonomous patch stability, input deadlock prevention, and keyboard shortcut repair.':
-    '패치 자체 복구, 입력 교착 상태 방지 및 키보드 단축키 복구.',
-  'Input Deadlock Healer': '입력 교착 상태 복구',
-  'Auto-restore focus when the main input box gets stuck in non-editable or blocked state.':
-    '메인 입력창이 편집 불가 또는 차단 상태에 빠졌을 때 포커스를 자동 복구합니다.',
-  'macOS Shortcut Repair': 'macOS 단축키 복구',
-  'Ensure Command+Comma reliably opens system preferences under all window focus states.':
-    '모든 창 포커스 상태에서 Command+쉼표로 시스템 환경설정이 안정적으로 열리도록 보장합니다.',
-  'Self-Healing CDP Connection': 'CDP 자동 복구 연결',
-  'Automatically reconnect and re-inject telemetry hooks when the Antigravity host restarts.':
-    'Antigravity 호스트 재시작 시 텔레메트리 훅을 자동으로 다시 연결하고 주입합니다.',
-
-  // Settings Actions & Dialogs
-  'Saving configuration...': '설정 저장 중...',
-  'Configuration saved': '설정이 저장되었습니다',
-  'Failed to save configuration': '설정 저장 실패',
-  'Reset All to Defaults': '모두 기본값으로 복원',
-  'Reset all Aura preferences to initial settings? Custom CSS and JS will be kept.':
-    '모든 Aura 환경설정을 초기 설정으로 재설정하시겠습니까? 사용자 지정 CSS와 JS는 유지됩니다.',
-  'Reset Preferences': '설정 재설정',
-  'Resetting preferences...': '설정 재설정 중...',
-  'Preferences reset to defaults': '환경설정이 기본값으로 복원되었습니다',
-  'CDP Connected': 'CDP 연결됨',
-  'CDP Disconnected': 'CDP 연결 끊김',
-
-  // Settings Section: Real-time Telemetry Capsule
-  'Real-time Telemetry Capsule': '실시간 성능 텔레메트리 캡슐',
-  'Monitor model speed (tok/s), TTFT, and context usage directly on composer.':
-    '입력창 아래에서 모델 생성 속도(tok/s), TTFT 및 컨텍스트 사용량을 직관적으로 모니터링합니다.',
-  'Session Live Metrics Capsule': '세션 실시간 지표 캡슐',
-  'Displays token rate pill on composer with hover detailed popup.':
-    '입력창에 속도 지표 캡슐을 표시하고 호버 시 세부 팝업을 확인할 수 있습니다.',
-  'Telemetry Sampling Rate': '텔레메트리 샘플링 간격',
-  'SQLite conversation database polling interval.':
-    '기저 SQLite 대화 데이터베이스의 폴링 간격.',
-
-  // Settings Section: Engine Status & Actions
-  'CDP Engine Status': 'CDP 엔진 상태',
-  'Host Connection Status': '호스트 연결 상태',
-  'Connected to Antigravity host': 'Antigravity 호스트에 연결됨',
-  'Connected to host': '호스트에 연결됨',
-  'Connected': '연결됨',
-  'window(s)': '개 창',
-  'port': '포트',
-  'Searching window...': '호스트 창 검색 중...',
-  'Detecting Antigravity CDP port...': 'Antigravity CDP 디버깅 포트 감지 중...',
-  'Style Hot Reload': '스타일 핫 리로드',
-  'Recompile active configuration and push latest styles to all windows.':
-    '현재 설정을 다시 컴파일하고 연결된 모든 창에 최신 스타일을 즉시 반영합니다.',
-  'Reapply Now': '지금 다시 적용',
-  'Host Window Reload': '호스트 창 새로고침',
-  'Hard-reload active Antigravity window to refresh frozen architecture singletons.':
-    '현재 Antigravity 창을 강제 새로고침하여 정지된 내부 싱글톤을 초기화합니다.',
-  'Reload Window': '창 새로고침',
-
-  // Settings Section: Advanced Settings
-  'Advanced Settings': '고급 실험 설정',
-  'Architecture changes require a host window reload to take full effect.':
-    '아키텍처 변경 사항을 완전히 적용하려면 호스트 창을 새로고침해야 합니다.',
-  'Reload Window Now': '지금 창 새로고침',
-  'Enable Labs & Developer Mode': 'Labs 및 개발자 모드 활성화',
-  'Unlock native Labs experimental features panel and internal developer settings.':
-    '공식 Labs 실험 기능 패널 및 내부 개발자 디버깅 설정을 잠금 해제합니다.',
-  'Release Channel Track': '릴리스 업데이트 트랙 (Track)',
-  'Select native application update track & internal API capabilities.':
-    '클라이언트 업데이트 트랙 및 내부 API 기능 수준을 선택합니다.',
-  'Bring Your Own Account (BYOA)': 'BYOA 모드 (자체 계정 사용)',
-  'Enable independent API key and custom account routing mode.':
-    '독립 API 키 및 사용자 지정 계정 라우팅 모드를 활성화합니다.',
-  'Bypass Enterprise Restrictions': '엔터프라이즈 정책 제한 우회',
-  'Disable enterprise policy blocks on custom plugins, MCP tools, and external models.':
-    '사용자 지정 플러그인, MCP 도구 및 외부 모델에 대한 기업 정책 차단을 비활성화합니다.',
-  'Cloud Workstation (CDE) Mode': '클라우드 워크스테이션 (CDE) 모드',
-  'Activate Cloud Development Environment container and terminal integration.':
-    '클라우드 개발 환경 컨테이너 및 터미널 통합을 활성화합니다.',
-  'Host Presentation Variant': '호스트 표시 형태',
-  'Switch presentation architecture between standalone app and IDE-embedded frame.':
-    '독립 데스크톱 앱과 IDE 임베디드 프레임 간의 표시 아키텍처를 전환합니다.',
-  'Direct Microphone Access': '마이크 직접 접근 권한',
-  'Directly grant audio input and voice pipeline streaming privileges.':
-    '로컬 오디오 입력 및 음성 스트리밍 파이프라인 권한을 직접 부여합니다.',
-  'Standalone Desktop (Default)': '독립 데스크톱 (기본값)',
-  'Antigravity IDE (Embedded)': 'Antigravity IDE (임베디드)',
-
-  // Toast Notifications
-  'Configuration applied in real-time': '설정이 실시간으로 적용되었습니다',
-  'Save failed': '저장 실패',
-  'Network error': '네트워크 오류',
-  'Styles recompiled and re-applied': '스타일이 다시 컴파일되고 적용되었습니다',
-  'Reload failed': '새로고침 실패',
-  'Host window reloaded': '호스트 창이 새로고침되었습니다',
-  'Window reload failed': '창 새로고침 실패',
-  'Request error': '요청 오류가 발생했습니다'
+export const PANEL_TRANSLATIONS_KO: PanelTranslations = {
+  "* Client-side toggles only. Feature availability depends on Google server-side support.": "* 클라이언트 전용 스위치입니다. 실제 기능 사용 가능 여부는 Google 서버 측 지원에 따라 결정됩니다.",
+  "0 saved": "0개 저장됨",
+  "14px": "14px",
+  "15px": "15px",
+  "16px": "16px",
+  "17px": "17px",
+  "18px": "18px",
+  "5h Quota Bucket": "5시간 할당량 버킷",
+  "5h Quota Budget": "5시간 할당량 예산",
+  "7d Quota Bucket": "7일 할당량 버킷",
+  "7d Quota Budget": "7일 할당량 예산",
+  "Absolute Collinear": "절대적 한 줄 정렬",
+  "Account credentials saved to vault": "계정 자격 증명이 보관소에 안전하게 저장되었습니다",
+  "Account telemetry will appear here as conversations and tokens are processed.": "대화와 토큰이 처리되면 계정 텔레메트리가 여기에 표시됩니다.",
+  "Account Token Consumption": "계정별 토큰 소비량",
+  "Activate Cloud Development Environment container and terminal integration.": "클라우드 개발 환경 컨테이너 및 터미널 통합을 활성화합니다.",
+  "Active color scheme when the system is in dark appearance.": "시스템이 다크 모드일 때 적용되는 색상 구성표.",
+  "Active color scheme when the system is in light appearance.": "시스템이 라이트 모드일 때 적용되는 색상 구성표.",
+  "Active Session": "현재 활성 세션",
+  "Adjust message typography size with proportionate line-height scaling.": "메시지 폰트 크기와 줄 간격을 비례 조정합니다.",
+  "Advanced Settings": "고급 실험 설정",
+  "Align prompt action pills, context chips and attachments into a seamless collinear layout.": "Prompt 작업 캡슐, 컨텍스트 칩, 첨부파일을 깔끔한 단일 행으로 정렬합니다.",
+  "All Time": "전체 기간",
+  "Analytics": "애널리틱스",
+  "Antigravity IDE (Embedded)": "Antigravity IDE (임베디드)",
+  "Appearance & Themes": "모양 및 테마",
+  "Apply": "적용",
+  "Architecture changes require a host window reload to take full effect.": "아키텍처 변경 사항을 완전히 적용하려면 호스트 창을 새로고침해야 합니다.",
+  "Aura Dashboard": "Aura 대시보드",
+  "Auto-restore focus when the main input box gets stuck in non-editable or blocked state.": "메인 입력창이 편집 불가 또는 차단 상태에 빠졌을 때 포커스를 자동 복구합니다.",
+  "Auto-updates when telemetry changes": "텔레메트리 변경 시 자동 업데이트",
+  "Automatically reconnect and re-inject telemetry hooks when the Antigravity host restarts.": "Antigravity 호스트 재시작 시 텔레메트리 훅을 자동으로 다시 연결하고 주입합니다.",
+  "Autonomous patch stability, input deadlock prevention, and keyboard shortcut repair.": "패치 자체 복구, 입력 교착 상태 방지 및 키보드 단축키 복구.",
+  "Autonomous tool execution distribution, command invocations, and file operations.": "자율 도구 실행 분포, 터미널 명령 호출 및 파일 작업.",
+  "Avg Time to First Token": "첫 토큰 생성 평균 시간 (TTFT)",
+  "Avg Tokens / Turn:": "턴당 평균 토큰:",
+  "Avg Turn Latency:": "턴당 평균 소요 시간:",
+  "Base reading font size for conversational text and Markdown.": "대화 텍스트 및 Markdown의 기본 읽기 글꼴 크기입니다.",
+  "Baseline Speed": "기준 생성 속도",
+  "Bottom Toolbar Layout": "하단 도구 모음 레이아웃",
+  "Bring Your Own Account (BYOA)": "BYOA 모드 (자체 계정 사용)",
+  "Bypass Enterprise Restrictions": "엔터프라이즈 정책 제한 우회",
+  "Cache Cost Efficiency": "Prompt 캐시 비용 절감률",
+  "Cache Hit Rate": "캐시 적중률",
+  "Cache Read:": "캐시 읽기:",
+  "Cached Tokens": "캐시 읽기 토큰",
+  "Canary": "Canary (카나리아)",
+  "Capacity Activity (1 Year)": "할당량 소비 활성도 (최근 1년)",
+  "CDP Connected": "CDP 연결됨",
+  "CDP Disconnected": "CDP 연결 끊김",
+  "CDP Engine Status": "CDP 엔진 상태",
+  "Chat Message Font Size": "채팅 메시지 글꼴 크기",
+  "Chinese (Simplified)": "중국어 (간체)",
+  "Chinese, Japanese, and Korean character rendering priority.": "한글, 한자, 일본어 문자 렌더링 우선순위.",
+  "Choose official English or community Chinese localization.": "공식 영어 또는 다국어 로컬라이제이션을 선택합니다.",
+  "CJK Fallback Font": "CJK 대체 폰트",
+  "Claude Dark": "Claude 다크",
+  "Claude Light": "Claude 라이트",
+  "Click below to save current active credentials.": "현재 자격 증명을 저장하려면 아래를 클릭하세요.",
+  "Cloud Workstation (CDE) Mode": "클라우드 워크스테이션 (CDE) 모드",
+  "Code & Monospace Font (Mono)": "코드 및 고정폭 글꼴 (Mono)",
+  "Code blocks, telemetry metrics, and terminal display.": "코드 블록, 텔레메트리 지표 및 터미널 표시에 적용됩니다.",
+  "Collinear Compose Bar": "단일 행 컴포저 바",
+  "Compact redundant tool and terminal command cards in conversations with elegant folded counters.": "대화창의 반복적인 도구 및 터미널 명령 카드를 깔끔한 접힘 카운터로 요약합니다.",
+  "Component Layout & Alignment": "컴포넌트 레이아웃 및 정렬",
+  "Comprehensive telemetry overview, session intelligence, and interface customization for Antigravity.": "Antigravity의 포괄적인 텔레메트리 개요, 세션 인텔리전스 및 인터페이스 맞춤 설정.",
+  "Configuration applied in real-time": "설정이 실시간으로 적용되었습니다",
+  "Configuration saved": "설정이 저장되었습니다",
+  "Connected": "연결됨",
+  "Connected to Antigravity host": "Antigravity 호스트에 연결됨",
+  "Connected to host": "호스트에 연결됨",
+  "Conversation Font Size": "대화 폰트 크기",
+  "CSS font-family string (e.g. \"Geist\", \"Inter\", \"SF Pro Display\").": "CSS font-family 문자열 (예: \"Geist\", \"Inter\", \"SF Pro Display\").",
+  "CSS font-family string (e.g. \"JetBrains Mono\", \"SF Mono\", \"Fira Code\").": "CSS font-family 문자열 (예: \"JetBrains Mono\", \"SF Mono\", \"D2Coding\").",
+  "CSS font-family string (e.g. \"PingFang SC\", \"Hiragino Sans\", \"Microsoft YaHei\").": "CSS font-family 문자열 (예: \"Pretendard\", \"Noto Sans KR\", \"Malgun Gothic\").",
+  "Custom": "사용자 지정",
+  "Custom CJK Font": "사용자 지정 CJK 폰트",
+  "Custom Fallback Font Family": "사용자 지정 CJK 대체 글꼴",
+  "Custom Font Family": "사용자 지정 폰트 패밀리",
+  "Custom font name...": "사용자 지정 글꼴 이름...",
+  "Custom Monospace Font": "사용자 지정 고정폭 폰트",
+  "Custom Monospace Font Family": "사용자 지정 고정폭 글꼴",
+  "Custom Primary Font": "사용자 지정 기본 폰트",
+  "Custom Primary Font Family": "사용자 지정 기본 글꼴",
+  "Custom Range": "사용자 지정 기간",
+  "Customize color presets and composer micro-relief borders for Light and Dark modes.": "라이트 및 다크 모드의 색상 프리셋과 입력창 마이크로 릴리프 테두리를 맞춤 설정합니다.",
+  "Dark Mode Preset": "다크 모드 프리셋",
+  "Default": "시스템 기본값",
+  "Default (13px)": "기본 (13px)",
+  "Delete failed": "삭제 실패",
+  "Detecting account...": "계정 감지 중...",
+  "Detecting Antigravity CDP port...": "Antigravity CDP 디버깅 포트 감지 중...",
+  "Dev": "Dev (개발자용)",
+  "Direct Microphone Access": "마이크 직접 접근 권한",
+  "Directly grant audio input and voice pipeline streaming privileges.": "로컬 오디오 입력 및 음성 스트리밍 파이프라인 권한을 직접 부여합니다.",
+  "Disable enterprise policy blocks on custom plugins, MCP tools, and external models.": "사용자 지정 플러그인, MCP 도구 및 외부 모델에 대한 기업 정책 차단을 비활성화합니다.",
+  "Display live TPS, TTFT, and context tokens badge directly inside the composer footer bar.": "입력창 하단 표시줄에 실시간 TPS, TTFT 및 컨텍스트 토큰 배지를 직접 표시합니다.",
+  "Displays token rate pill on composer with hover detailed popup.": "입력창에 속도 지표 캡슐을 표시하고 호버 시 세부 팝업을 확인할 수 있습니다.",
+  "Dogfood": "Dogfood (내부 테스트용)",
+  "e.g. Inter, Helvetica": "예: Inter, Helvetica",
+  "e.g. LXGW WenKai, PingFang SC": "예: LXGW WenKai, PingFang SC",
+  "e.g. Menlo, JetBrains Mono": "예: Menlo, JetBrains Mono",
+  "Efficiency": "효율",
+  "Enable independent API key and custom account routing mode.": "독립 API 키 및 사용자 지정 계정 라우팅 모드를 활성화합니다.",
+  "Enable Labs & Developer Mode": "Labs 및 개발자 모드 활성화",
+  "English (Default)": "English (기본값)",
+  "Ensure Command+Comma reliably opens system preferences under all window focus states.": "모든 창 포커스 상태에서 Command+쉼표로 시스템 환경설정이 안정적으로 열리도록 보장합니다.",
+  "Enter an installed CJK sans-serif font family.": "설치된 CJK 산세리프 글꼴 이름을 입력하세요.",
+  "Enter an installed Latin sans-serif font family.": "설치된 라틴 산세리프 글꼴 이름을 입력하세요.",
+  "Enter an installed monospace font family.": "설치된 고정폭 글꼴 이름을 입력하세요.",
+  "Enumerate system fonts directly with primary Latin font and CJK fallback separation.": "영문 기본 폰트와 CJK 대체 폰트를 개별 지정하여 시스템 폰트를 설정합니다.",
+  "Est. Commercial Cost": "상용 API 추정 가치",
+  "Estimated API Cost": "예상 API 비용",
+  "Extra Large (16px)": "매우 크게 (16px)",
+  "Failed to save configuration": "설정 저장 실패",
+  "Fallback for CJK characters (PingFang SC, Sarasa UI SC, LXGW WenKai).": "CJK 문자를 위한 대체 글꼴 (PingFang SC, Sarasa UI SC, LXGW WenKai 등).",
+  "Fallback Sans Font (Chinese / CJK)": "대체 산세리프 글꼴 (한국어 / CJK)",
+  "Folded Action Summaries": "접힌 작업 요약",
+  "Follow Range": "기간 연동",
+  "Global Conversation Intelligence": "글로벌 대화 인사이트",
+  "Hard-reload active Antigravity window to refresh frozen architecture singletons.": "현재 Antigravity 창을 강제 새로고침하여 정지된 내부 싱글톤을 초기화합니다.",
+  "Hide Composer Pill Arrows": "컴포저 캡슐 화살표 숨기기",
+  "Hide disclosure and trigger chevron arrows inside prompt composer pills.": "Prompt 컴포저 내부 캡슐의 펼치기 및 트리거 화살표 아이콘을 숨깁니다.",
+  "Hide Dropdown Arrows": "드롭다운 화살표 숨기기",
+  "Host Connection Status": "호스트 연결 상태",
+  "Host Presentation Variant": "호스트 표시 형태",
+  "Host Resilience": "호스트 안정성 향상",
+  "Host Window Reload": "호스트 창 새로고침",
+  "Host window reloaded": "호스트 창이 새로고침되었습니다",
+  "Input Deadlock Healer": "입력 교착 상태 복구",
+  "Input Tokens": "입력 토큰",
+  "Input:": "입력:",
+  "Internal": "Internal (사내 전용)",
+  "Japanese (日本語)": "일본어 (Japanese)",
+  "Korean (한국어)": "한국어 (Korean)",
+  "Language & Localization": "언어 및 로컬라이제이션",
+  "Large (15px)": "크게 (15px)",
+  "Last 30 Days": "최근 30일",
+  "Last 7 Days": "최근 7일",
+  "Latency / TTFT Distribution": "지연 시간 및 TTFT 분포",
+  "Latin text, numbers, and primary UI headings.": "영문 텍스트, 숫자 및 기본 UI 제목에 적용됩니다.",
+  "Less": "적음",
+  "Light Mode Preset": "라이트 모드 프리셋",
+  "Live": "실시간",
+  "Loading account metrics...": "계정 지표 불러오는 중...",
+  "Loading model metrics...": "모델 지표 불러오는 중...",
+  "Loading telemetry data...": "텔레메트리 데이터 불러오는 중...",
+  "Loading tool metrics...": "도구 지표 불러오는 중...",
+  "Loading workspaces...": "워크스페이스 불러오는 중...",
+  "macOS Shortcut Repair": "macOS 단축키 복구",
+  "Manage background performance trackers, live telemetry capsules, and local metric persistence.": "백그라운드 성능 추적기, 실시간 텔레메트리 캡슐 및 로컬 지표 저장을 관리합니다.",
+  "Median Speed (P50):": "중앙값 속도 (P50):",
+  "Medium (14px)": "보통 (14px)",
+  "Model Token Consumption": "모델별 토큰 소비량",
+  "Monitor model speed (tok/s), TTFT, and context usage directly on composer.": "입력창 아래에서 모델 생성 속도(tok/s), TTFT 및 컨텍스트 사용량을 직관적으로 모니터링합니다.",
+  "Monospace Font": "고정폭 폰트",
+  "More": "많음",
+  "Move project bar left, align telemetry/model/mode horizontally.": "프로젝트 표시줄을 왼쪽으로 이동하고 텔레메트리/모델/모드를 가로로 정렬합니다.",
+  "Native Default": "공식 기본값",
+  "Network error": "네트워크 오류",
+  "Network error while removing account": "계정 전환 중 네트워크 오류 발생",
+  "Network error while saving account": "계정 저장 중 네트워크 오류 발생",
+  "Network error while switching account": "계정 전환 중 네트워크 오류 발생",
+  "New conversation recommended": "새 대화를 시작하는 것이 좋습니다",
+  "No Account Activity": "계정 활동 내역 없음",
+  "No accounts saved yet.": "저장된 계정이 없습니다.",
+  "No Models Recorded": "기록된 모델 없음",
+  "No Projects Recorded": "기록된 프로젝트 없음",
+  "No Subagents Recorded": "기록된 Subagent 없음",
+  "No Tool Usage Recorded": "기록된 도구 사용 없음",
+  "Official Native": "공식 기본 레이아웃",
+  "Output Tokens": "출력 토큰",
+  "Output:": "출력:",
+  "Overview": "개요",
+  "Peak Speed": "최고 생성 속도",
+  "Persist detailed token usage and conversation analytics to local database for the Analytics tab.": "애널리틱스 탭을 위해 상세 토큰 소비량 및 대화 분석을 로컬 SQLite 데이터베이스에 저장합니다.",
+  "port": "포트",
+  "Pre-tracking": "추적 시작 전",
+  "Preferences": "환경설정",
+  "Preferences reset to defaults": "환경설정이 기본값으로 복원되었습니다",
+  "Primary Sans Font": "기본 산세리프 폰트",
+  "Primary Sans Font (Latin / Western)": "기본 라틴 산세리프 글꼴 (영문/숫자)",
+  "Project telemetry will appear here as conversations are processed.": "대화가 처리되면 워크스페이스 및 프로젝트 텔레메트리가 여기에 표시됩니다.",
+  "Pure Dark": "퓨어 다크",
+  "Pure Light": "퓨어 라이트",
+  "Real-time Metrics Capsule": "실시간 성능 캡슐",
+  "Real-time Telemetry Capsule": "실시간 성능 텔레메트리 캡슐",
+  "Reapply Now": "지금 다시 적용",
+  "Rearrange composer outer metadata and new session toolbars.": "입력창 외부 메타데이터 및 새 세션 도구 모음의 배치를 재구성합니다.",
+  "Recompile active configuration and push latest styles to all windows.": "현재 설정을 다시 컴파일하고 연결된 모든 창에 최신 스타일을 즉시 반영합니다.",
+  "Refresh": "새로고침",
+  "Release Channel Track": "릴리스 업데이트 트랙 (Track)",
+  "Reload failed": "새로고침 실패",
+  "Reload Window": "창 새로고침",
+  "Reload Window Now": "지금 창 새로고침",
+  "Reloading App...": "앱을 강제로 다시 로드하는 중...",
+  "Remove from vault": "보관소에서 제거",
+  "Remove small arrows from toolbar buttons for a cleaner aesthetic.": "도구 모음 버튼에서 작은 화살표를 제거하여 더 깔끔한 시각적 효과를 제공합니다.",
+  "Removed": "제거됨:",
+  "Rendering latency distribution...": "지연시간 및 TTFT 분포 렌더링 중...",
+  "Rendering model metrics...": "모델 지표 렌더링 중...",
+  "Rendering model speed trends...": "모델 속도 추이 렌더링 중...",
+  "Rendering timeline...": "타임라인 렌더링 중...",
+  "Request error": "요청 오류가 발생했습니다",
+  "Requests & Turns": "요청 및 대화 턴 수",
+  "Reset all Aura preferences to initial settings? Custom CSS and JS will be kept.": "모든 Aura 환경설정을 초기 설정으로 재설정하시겠습니까? 사용자 지정 CSS와 JS는 유지됩니다.",
+  "Reset All to Defaults": "모두 기본값으로 복원",
+  "Reset Preferences": "설정 재설정",
+  "Resetting preferences...": "설정 재설정 중...",
+  "Save Current Account": "현재 계정 저장",
+  "Save failed": "저장 실패",
+  "saved": "개 저장됨",
+  "Saved Accounts": "저장된 계정",
+  "Saving configuration...": "설정 저장 중...",
+  "Searching window...": "호스트 창 검색 중...",
+  "Select native application update track & internal API capabilities.": "클라이언트 업데이트 트랙 및 내부 API 기능 수준을 선택합니다.",
+  "Self-Healing CDP Connection": "CDP 자동 복구 연결",
+  "Session": "세션",
+  "Session Live Metrics Capsule": "세션 실시간 지표 캡슐",
+  "Session Turns": "세션 턴 수",
+  "Session Turns:": "세션 턴 수:",
+  "SQLite conversation database polling interval.": "기저 SQLite 대화 데이터베이스의 폴링 간격.",
+  "Stable (Default)": "Stable (기본값)",
+  "Standalone Desktop (Default)": "독립 데스크톱 (기본값)",
+  "Style Hot Reload": "스타일 핫 리로드",
+  "Styles recompiled and re-applied": "스타일이 다시 컴파일되고 적용되었습니다",
+  "Subagent activity will appear here once subagents are invoked.": "Subagent가 호출되면 실행 활동이 여기에 표시됩니다.",
+  "Subagent Execution": "Subagent 실행 분석",
+  "Subtle micro-relief bottom border on composer input panel.": "입력창 패널 하단에 은은한 마이크로 릴리프 테두리를 표시합니다.",
+  "Subtle outer glow border on home, glowing vintage dark red on focus.": "홈 화면에서는 은은한 외부 발광 테두리, 포커스 시 우아한 딥레드 발광을 표시합니다.",
+  "Switch Account": "계정 전환",
+  "Switch display language for Antigravity host interface.": "Antigravity 호스트 인터페이스 및 대시보드의 표시 언어를 전환합니다.",
+  "Switch failed": "계정 전환 실패",
+  "Switch or manage Antigravity accounts": "Antigravity 계정 전환 및 관리",
+  "Switch presentation architecture between standalone app and IDE-embedded frame.": "독립 데스크톱 앱과 IDE 임베디드 프레임 간의 표시 아키텍처를 전환합니다.",
+  "Switched to": "전환 완료:",
+  "Switching...": "전환 중...",
+  "System CJK Default": "시스템 CJK 기본값",
+  "System Default": "시스템 기본값",
+  "Telemetry & Analytics": "텔레메트리 및 분석",
+  "Telemetry Sampling Rate": "텔레메트리 샘플링 간격",
+  "Thinking:": "생각 프로세스:",
+  "This Month": "이번 달",
+  "This Week": "이번 주",
+  "Throughput & Latency": "처리량 및 지연 시간",
+  "Timeline": "타임라인",
+  "to": "~",
+  "Today": "오늘",
+  "tok/s": "tok/s",
+  "Token consumption and session volume across workspaces and conversations.": "워크스페이스 및 대화 간 토큰 소비량과 세션 수.",
+  "Token consumption, prompt caching, and request volume distributed by AI model.": "AI 모델별 토큰 소비량, Prompt 캐싱 및 요청 호출 수.",
+  "Token consumption, run volume, and prompt caching delegated to autonomous subagents.": "자율 Subagent에 위임된 토큰 소비량, 실행 횟수 및 Prompt 캐싱.",
+  "Token consumption, session volume, and timeline distribution tracked across logged-in accounts.": "로그인된 계정 간 토큰 소비량, 세션 수 및 타임라인 분포.",
+  "Token Usage Analytics": "토큰 사용량 분석",
+  "Tokens / Sec (TPS)": "생성 속도 (Tokens/초)",
+  "Tool Ecosystem Usage": "도구 생태계 사용 분포",
+  "Tool invocation breakdown will appear here once tools are executed.": "도구가 실행되면 호출 상세 분석이 여기에 표시됩니다.",
+  "Total Tokens": "총 토큰",
+  "Total Tokens Processed": "처리된 총 토큰 수",
+  "TTFT Latency": "첫 글자 응답 지연 (TTFT)",
+  "Typography System": "타이포그래피 시스템",
+  "UI Language": "UI 언어",
+  "UI Localization": "UI 로컬라이제이션",
+  "Unlock native Labs experimental features panel and internal developer settings.": "공식 Labs 실험 기능 패널 및 내부 개발자 디버깅 설정을 잠금 해제합니다.",
+  "Update Current Account Snapshot": "현재 계정 스냅샷 업데이트",
+  "Used for codeblocks, terminal output, and monospace alignment.": "코드 블록, 터미널 출력 및 고정폭 정렬에 사용됩니다.",
+  "Used for Latin characters, numbers, and primary UI elements.": "라틴 문자, 숫자 및 기본 UI 요소에 사용됩니다.",
+  "User Conversation Turns:": "사용자 대화 턴 수:",
+  "Vintage Deep": "빈티지 딥 (Vintage Deep)",
+  "Vintage Wax Seal Composer": "빈티지 왁스 씰 입력창",
+  "Wax Seal Border": "마이크로 릴리프 테두리",
+  "Window reload failed": "창 새로고침 실패",
+  "window(s)": "개 창",
+  "Workspace & Project Distribution": "워크스페이스 및 프로젝트 분포",
+  "Yesterday": "어제",
 };
 
 /**
- * 向后兼容别名，默认指向中文词条
+ * 兼容旧版引用
  */
-export const PANEL_TRANSLATIONS = PANEL_TRANSLATIONS_ZH;
+export const PANEL_TRANSLATIONS: PanelTranslations = PANEL_TRANSLATIONS_ZH;
 
 /**
  * 根据语言代码获取对应的 Panel 字典
  */
-export function getPanelDictionary(lang: AuraConfig['language']): Record<string, string> | null {
+export function getPanelDictionary(lang: AuraConfig['language']): PanelTranslations | null {
   if (lang === 'zh-CN') return PANEL_TRANSLATIONS_ZH;
   if (lang === 'ja-JP') return PANEL_TRANSLATIONS_JA;
   if (lang === 'ko-KR') return PANEL_TRANSLATIONS_KO;
@@ -784,7 +883,7 @@ export function t(key: string, lang?: AuraConfig['language']): string {
   if (!dict) return key;
 
   const trimmed = key.trim();
-  const found = dict[trimmed];
+  const found = (dict as Record<string, string>)[trimmed];
   if (!found) return key;
   return key.replace(trimmed, found);
 }
@@ -794,6 +893,24 @@ export function t(key: string, lang?: AuraConfig['language']): string {
  */
 export function getPanelLanguage(): AuraConfig['language'] {
   return currentLang;
+}
+
+let reverseLookupMap: Map<string, string> | null = null;
+
+function getReverseLookupMap(): Map<string, string> {
+  if (reverseLookupMap) return reverseLookupMap;
+  reverseLookupMap = new Map();
+  for (const dict of [PANEL_TRANSLATIONS_ZH, PANEL_TRANSLATIONS_JA, PANEL_TRANSLATIONS_KO]) {
+    for (const [enKey, translation] of Object.entries(dict)) {
+      if (translation && typeof translation === 'string') {
+        const transTrim = translation.trim();
+        if (transTrim && !reverseLookupMap.has(transTrim)) {
+          reverseLookupMap.set(transTrim, enKey);
+        }
+      }
+    }
+  }
+  return reverseLookupMap;
 }
 
 /**
@@ -840,6 +957,8 @@ export function applyPanelTranslations(language?: AuraConfig['language']): void 
     }
   );
 
+  const reverseMap = getReverseLookupMap();
+
   while (walker.nextNode()) {
     const node = walker.currentNode;
     if (node.nodeType === Node.TEXT_NODE) {
@@ -850,13 +969,14 @@ export function applyPanelTranslations(language?: AuraConfig['language']): void 
 
       let orig = origTextMap.get(textNode);
       if (orig === undefined) {
-        orig = curVal;
+        const rev = reverseMap.get(trimmed);
+        orig = rev ? curVal.replace(trimmed, rev) : curVal;
         origTextMap.set(textNode, orig);
       }
 
       if (dict) {
         const origTrimmed = orig.trim();
-        const translation = dict[origTrimmed];
+        const translation = (dict as Record<string, string>)[origTrimmed];
         if (translation) {
           const nextVal = orig.replace(origTrimmed, translation);
           if (textNode.nodeValue !== nextVal) {
@@ -880,12 +1000,14 @@ export function applyPanelTranslations(language?: AuraConfig['language']): void 
           origAttrMap.set(el, origAttrs);
         }
         if (origAttrs[attr] === undefined) {
-          origAttrs[attr] = val;
+          const trimmedVal = val.trim();
+          const rev = reverseMap.get(trimmedVal);
+          origAttrs[attr] = rev ? val.replace(trimmedVal, rev) : val;
         }
 
         const origVal = origAttrs[attr];
         if (dict) {
-          const translation = dict[origVal.trim()];
+          const translation = (dict as Record<string, string>)[origVal.trim()];
           if (translation) {
             el.setAttribute(attr, translation);
           }

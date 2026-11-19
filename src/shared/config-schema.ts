@@ -66,7 +66,7 @@ export const DEFAULT_EXPERIMENTAL_FLAGS: Record<string, boolean> = {
 export const DEFAULT_SELECTORS: SelectorsConfig = {
   inputBoxId: 'antigravity.agentSidePanelInputBox',
   branchPillInBox:
-    '#antigravity\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"], #antigravity\\.agentSidePanelInputBox [aria-label^="Select project"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="Select project"], #antigravity\\.agentSidePanelInputBox [aria-label^="选择项目"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="选择项目"]',
+    '#antigravity\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"], #antigravity\\.agentSidePanelInputBox [aria-label*="Select project" i], [id="antigravity.agentSidePanelInputBox"] [aria-label*="Select project" i]',
   homeGreeting: '[data-testid="home-greeting"]',
   excludeI18n:
     'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip'
@@ -232,7 +232,7 @@ export function normalizeAuraConfig(rawInput: unknown): AuraConfig {
 
   const langRaw = raw.language;
   const language: AuraConfig['language'] =
-    langRaw === 'zh-CN' || langRaw === 'default'
+    langRaw === 'zh-CN' || langRaw === 'ja-JP' || langRaw === 'ko-KR' || langRaw === 'default'
       ? langRaw
       : rawModules.i18n === true
         ? 'zh-CN'
@@ -355,8 +355,13 @@ export function applyConfigPatch(current: AuraConfig, rawPatch: unknown): AuraCo
 
   let language = current.language;
   if ('language' in root && root.language !== undefined) {
-    if (root.language !== 'default' && root.language !== 'zh-CN') {
-      throw new Error('Invalid config.language: expected default | zh-CN');
+    if (
+      root.language !== 'default' &&
+      root.language !== 'zh-CN' &&
+      root.language !== 'ja-JP' &&
+      root.language !== 'ko-KR'
+    ) {
+      throw new Error('Invalid config.language: expected default | zh-CN | ja-JP | ko-KR');
     }
     language = root.language;
   }
@@ -504,7 +509,7 @@ export function applyConfigPatch(current: AuraConfig, rawPatch: unknown): AuraCo
 
 export function resolveRuntimeModules(cfg: AuraConfig, hasSqlite = true): ResolvedRuntimeModules {
   return {
-    i18n: cfg.language === 'zh-CN',
+    i18n: cfg.language !== 'default',
     metrics: cfg.telemetry.enabled && hasSqlite,
     composerWaxSeal: cfg.composer.waxSeal,
     composerCollinear: cfg.composer.collinear,

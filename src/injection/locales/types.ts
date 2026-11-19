@@ -2,6 +2,8 @@
  * Aura Dashboard · Universal Localization Contract Types
  */
 
+import type { HostTranslations } from './base';
+
 export type SupportedLocale = 'zh-CN' | 'ja-JP' | 'ko-KR';
 export type LocaleCode = 'default' | SupportedLocale | string;
 
@@ -31,7 +33,7 @@ export interface ComponentMessages {
 export interface LocalePackage {
   readonly code: SupportedLocale;
   readonly label: string;
-  readonly translations: Record<string, string>;
+  readonly translations: HostTranslations;
   readonly patterns: readonly DynamicPatternRule[];
   readonly attributePatterns?: readonly DynamicPatternRule[];
   readonly messages: ComponentMessages;

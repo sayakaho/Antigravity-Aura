@@ -21,12 +21,17 @@ export function showToast(msg: string): void {
   }, 2000);
 }
 
+let activeSaveSeq = 0;
+
 export async function saveConfig(patch: DeepPartial<AuraConfig>): Promise<void> {
+  const currentSeq = ++activeSaveSeq;
   try {
     const res = await window.sidecar.fetch('/api/config', {
       method: 'POST',
       body: JSON.stringify(patch)
     });
+    // 根源防竞态：丢弃过期乱序响应，确保只有最新一次有效保存才更新当前视图与状态
+    if (currentSeq !== activeSaveSeq) return;
     if (res.ok) {
       const data = (await res.json()) as { config?: PanelConfigDTO };
       if (data.config) currentConfig = data.config;
@@ -35,6 +40,7 @@ export async function saveConfig(patch: DeepPartial<AuraConfig>): Promise<void> 
       showToast('Save failed');
     }
   } catch (err) {
+    if (currentSeq !== activeSaveSeq) return;
     console.error('saveConfig failed:', err);
     showToast('Network error');
   }
@@ -269,12 +275,20 @@ function bindFontSelectAndCustomInput(opts: {
 
 export function bindSettingsControls(): void {
   const langSelect = document.getElementById('select-language') as HTMLSelectElement | null;
+  let langDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   langSelect?.addEventListener('change', () => {
     const val = langSelect.value;
     const language: AuraConfig['language'] =
       val === 'zh-CN' || val === 'ja-JP' || val === 'ko-KR' ? val : 'default';
+    // 面板内部 DOM 树立即可逆翻译，提供零延迟直觉响应
     applyPanelTranslations(language);
-    void saveConfig({ language });
+
+    // 优雅防抖：抑制连续快速滚动/点击引发的密集 CDP 注入与后端文件冲突
+    if (langDebounceTimer) clearTimeout(langDebounceTimer);
+    langDebounceTimer = setTimeout(() => {
+      langDebounceTimer = null;
+      void saveConfig({ language });
+    }, 150);
   });
 
   document

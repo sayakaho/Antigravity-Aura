@@ -7,7 +7,8 @@ import {
   createDefaultConfig,
   DEFAULT_EXPERIMENTAL_FLAGS,
   normalizeAuraConfig,
-  resolveContextLimitTokens
+  resolveContextLimitTokens,
+  resolveRuntimeModules
 } from '../src/shared/config-schema';
 
 describe('AuraConfig schema normalization & patch validation', () => {
@@ -68,7 +69,7 @@ describe('AuraConfig schema normalization & patch validation', () => {
     const raw = JSON.parse(fs.readFileSync(livePath, 'utf8'));
     const normalized = normalizeAuraConfig(raw);
     expect(['auto', 'light', 'dark']).toContain(normalized.channel);
-    expect(['default', 'zh-CN']).toContain(normalized.language);
+    expect(['default', 'zh-CN', 'ja-JP', 'ko-KR']).toContain(normalized.language);
     expect(normalized.typography.fontSize).toBeGreaterThanOrEqual(10);
     expect(normalized.typography.fontSize).toBeLessThanOrEqual(28);
     expect(normalized.telemetry.interval).toBeGreaterThanOrEqual(500);
@@ -89,6 +90,19 @@ describe('AuraConfig schema normalization & patch validation', () => {
     expect(updated.composer.waxSeal).toBe(false);
     expect(updated.composer.collinear).toBe(true);
     expect(updated.typography.fontSize).toBe(17);
+
+    // 验证 ja-JP 与 ko-KR 补丁合法性
+    const jaPatched = applyConfigPatch(base, { language: 'ja-JP' });
+    expect(jaPatched.language).toBe('ja-JP');
+    expect(resolveRuntimeModules(jaPatched).i18n).toBe(true);
+
+    const koPatched = applyConfigPatch(base, { language: 'ko-KR' });
+    expect(koPatched.language).toBe('ko-KR');
+    expect(resolveRuntimeModules(koPatched).i18n).toBe(true);
+
+    const defPatched = applyConfigPatch(base, { language: 'default' });
+    expect(defPatched.language).toBe('default');
+    expect(resolveRuntimeModules(defPatched).i18n).toBe(false);
 
     expect(() => applyConfigPatch(base, null)).toThrow();
     expect(() => applyConfigPatch(base, { channel: 'invalid' })).toThrow();
