@@ -8,6 +8,7 @@ import { resolveAnalyticsSessionId } from '../shared/session';
 import type { SidecarStatusResponse } from '../types';
 import { GlobalAnalyticsEngine } from './analytics-engine';
 import { AccountTracker } from './account-tracker';
+import { AccountVault } from './account-vault';
 import { CdpManager } from './cdp-client';
 import { autoHealHostAsar } from './host-healer';
 import {
@@ -74,9 +75,13 @@ rebuildBundleIfNeeded(true);
 const accountTracker = new AccountTracker({
   storageDir: USER_DIR
 });
+const accountVault = new AccountVault({
+  storageDir: USER_DIR
+});
 const analyticsEngine = new GlobalAnalyticsEngine(ANTIGRAVITY_DATA_DIR, accountTracker);
 analyticsEngine.startWatching();
 const cdpManager = new CdpManager({
+  accountVault,
   onSessionDbChange: (cascadeId, sig) => {
     analyticsEngine.notifySessionSignature(cascadeId, sig);
   }
@@ -187,7 +192,16 @@ app.api(
   'GET'
 );
 
+let configUpdateLock: Promise<unknown> = Promise.resolve();
+
 app.api('/api/config', async (data: unknown) => {
+  const prevLock = configUpdateLock;
+  let releaseLock!: () => void;
+  configUpdateLock = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+
+  await prevLock;
   try {
     const { nextConfig, bundleChanged, languageChanged } = saveConfigPatch(data);
     await cdpManager.applyHotConfig(nextConfig, bundleChanged || languageChanged);
@@ -198,6 +212,8 @@ app.api('/api/config', async (data: unknown) => {
       contentType: 'application/json',
       status: 400
     });
+  } finally {
+    releaseLock();
   }
 });
 
@@ -254,6 +270,79 @@ app.api('/api/reload-window', async () => {
     targetCount: cdpManager.getTargetCount()
   };
 });
+
+app.api(
+  '/api/accounts/vault',
+  () => {
+    try {
+      const result = accountVault.listAccounts();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+  'GET'
+);
+
+app.api(
+  '/api/accounts/save-current',
+  () => {
+    try {
+      const result = accountVault.saveCurrentAccount();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+  'POST'
+);
+
+app.api(
+  '/api/accounts/switch',
+  (data: any) => {
+    try {
+      const email = typeof data === 'string' ? data : data?.email;
+      if (!email || typeof email !== 'string') {
+        return { ok: false, error: 'Target email is required.' };
+      }
+      const result = accountVault.switchAccount(email);
+      accountTracker.recordAccountSwitch(result.email);
+
+      const shouldReload = data?.reloadWindow !== false;
+      if (shouldReload) {
+        setTimeout(async () => {
+          try {
+            await cdpManager.reloadHostWindow();
+          } catch (reloadErr) {
+            console.warn('[Sidecar Account] Failed to trigger host window reload:', reloadErr);
+          }
+        }, 200);
+      }
+
+      return { ok: true, data: { ...result, reloaded: shouldReload } };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+  'POST'
+);
+
+app.api(
+  '/api/accounts/delete',
+  (data: any) => {
+    try {
+      const email = typeof data === 'string' ? data : data?.email;
+      if (!email || typeof email !== 'string') {
+        return { ok: false, error: 'Target email is required.' };
+      }
+      const result = accountVault.deleteAccount(email);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+  'POST'
+);
 
 async function openDirectoryInFileManager(rawPath: string): Promise<string> {
   const resolved = path.resolve(rawPath);

@@ -1,3 +1,4 @@
+import { initHostAccountBridge } from './account-bar';
 import { initActivitySummary, uninstallActivitySummary } from './activity-summary';
 import { setupExperiments } from './experiments';
 import { installHealers } from './healer';
@@ -167,7 +168,10 @@ function bootstrap(): void {
   // 7. 界面汉化与本地化引擎
   const dict = initI18n(modules.i18n === true, currentLocale, boot.i18nDict || {}, selectors.excludeI18n, patchVersion);
 
-  // 8. 开放用户自定义前端脚本钩子 (user/custom.js)
+  // 8. 侧边栏 Google 账号切换与管理
+  initHostAccountBridge();
+
+  // 9. 开放用户自定义前端脚本钩子 (user/custom.js)
   agGlobal.__AG_PATCH_CTX__ = {
     version: patchVersion,
     preset: presetsCfg.light,

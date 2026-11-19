@@ -3,6 +3,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AuraConfig, LiveMetricsPayload } from '../types';
+import type { AccountVault } from './account-vault';
 import {
   getBundleSnapshot,
   rebuildBundleIfNeeded,
@@ -97,11 +98,13 @@ function fetchTargets(port: number): Promise<CdpTargetDescriptor[]> {
 }
 
 export interface CdpManagerOptions {
+  accountVault?: AccountVault;
   onSessionDbChange?: (cascadeId: string, sig: string) => void;
 }
 
 export class CdpManager {
   private readonly attachedTargets = new Map<string, AttachedTargetEntry>();
+  private readonly accountVault?: AccountVault;
   private readonly onSessionDbChange?: (cascadeId: string, sig: string) => void;
   private lastDetectedPort: number | null = null;
   private lastGlobalActiveCascadeId = '';
@@ -109,6 +112,7 @@ export class CdpManager {
   private isSyncing = false;
 
   constructor(options?: CdpManagerOptions) {
+    this.accountVault = options?.accountVault;
     this.onSessionDbChange = options?.onSessionDbChange;
   }
 
@@ -282,6 +286,26 @@ export class CdpManager {
     return reloadedAny;
   }
 
+  public async syncAccounts(targetId?: string): Promise<void> {
+    if (!this.accountVault) return;
+    try {
+      const data = this.accountVault.listAccounts();
+      const code = `(function(){
+        if (typeof window.__ag_render_accounts === 'function') {
+          window.__ag_render_accounts(${JSON.stringify(data)});
+        }
+      })()`;
+      for (const [id, entry] of this.attachedTargets.entries()) {
+        if (targetId && id !== targetId) continue;
+        try {
+          await entry.send('Runtime.evaluate', { expression: code, returnByValue: true });
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('[CdpManager] Failed to sync accounts:', err);
+    }
+  }
+
   public closeAll(): void {
     for (const [, entry] of this.attachedTargets.entries()) {
       try {
@@ -415,9 +439,11 @@ export class CdpManager {
           await send('Runtime.enable');
           await send('Runtime.addBinding', { name: '__agRequestMetrics' });
           await send('Runtime.addBinding', { name: '__ag_on_session_change' });
+          await send('Runtime.addBinding', { name: '__ag_account_action' });
           await send('Page.addScriptToEvaluateOnNewDocument', { source: snap.injectScript });
           const ok = await inject();
           await syncMetricsForSession(true);
+          await this.syncAccounts(target.id);
 
           this.attachedTargets.set(target.id, {
             id: target.id,
@@ -433,7 +459,7 @@ export class CdpManager {
           finishAttach(ok);
         });
 
-        ws.addEventListener('message', (event) => {
+        ws.addEventListener('message', async (event) => {
           try {
             const msg = JSON.parse(String(event.data));
             if (msg.id && pendingCallbacks.has(msg.id)) {
@@ -456,6 +482,39 @@ export class CdpManager {
                   lastPushedHash = '';
                   void syncMetricsForSession(true);
                 }
+              }
+            } else if (
+              msg.method === 'Runtime.bindingCalled' &&
+              msg.params?.name === '__ag_account_action'
+            ) {
+              try {
+                const actionPayload = JSON.parse(String(msg.params.payload || '{}'));
+                if (actionPayload.action === 'switch' && actionPayload.email) {
+                  if (this.accountVault) {
+                    this.accountVault.switchAccount(actionPayload.email);
+                    setTimeout(async () => {
+                      try {
+                        await this.reloadHostWindow();
+                      } catch {}
+                    }, 200);
+                  }
+                } else if (actionPayload.action === 'sync_profile' && actionPayload.profile) {
+                  if (this.accountVault) {
+                    const changed = this.accountVault.syncProfile(actionPayload.profile);
+                    if (changed) {
+                      await this.syncAccounts();
+                    }
+                  }
+                } else if (actionPayload.action === 'delete' && actionPayload.email) {
+                  if (this.accountVault) {
+                    this.accountVault.deleteAccount(actionPayload.email);
+                    await this.syncAccounts();
+                  }
+                } else if (actionPayload.action === 'list') {
+                  await this.syncAccounts(target.id);
+                }
+              } catch (actErr) {
+                console.warn('[CdpManager] Failed to handle __ag_account_action:', actErr);
               }
             }
           } catch {}
