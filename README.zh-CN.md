@@ -20,7 +20,7 @@
 
 ## 简介
 
-**Antigravity Aura** 运行于 Google Antigravity 的原生 Plugin + Sidecar 生命周期内，无需常驻系统守护进程或手动启动参数。Sidecar 随宿主启动后会自动检测 CDP 就绪状态（必要时自动备份 `app.asar.bak` 并幂等注入 `--remote-debugging-port=0` 实现零配置接入），通过 CDP 协议向活跃窗口热注入样式与脚本，并自适应使用原生 SQLite 驱动或内置 WASM 引擎解析本地对话库，在侧边栏提供实时性能统计与偏好设置面板。
+**Antigravity Aura** 运行于 Google Antigravity 的原生 Plugin + Sidecar 生命周期内，无需常驻系统守护进程或手动启动参数。Sidecar 随宿主启动后会自动检测 CDP 就绪状态（必要时自动备份 `app.asar.bak` 并幂等注入 `--remote-debugging-port=0` 实现零配置接入），通过 CDP 协议向活跃窗口热注入样式、扩展脚本与原生 Google 账号快捷切换栏，并自适应使用原生 SQLite 驱动或内置 WASM 引擎解析本地对话库，在侧边栏提供实时性能统计与偏好设置面板。
 
 ## 界面预览
 
@@ -48,10 +48,10 @@
 ## 功能特性
 
 - **实时遥测与本地性能看板**：基于本地对话记录提供从即时状态到历史复盘的全链路监控。
-  - **输入框指标胶囊**：在输入框底部常驻展示最近一次响应的生成速率（`tok/s`）、TTFT、上下文占用与输出量；悬停可查看思考链与正文拆解、缓存命中率及距上下文压缩的剩余空间，点击即可切换侧边栏。
+  - **输入框指标胶囊**：在输入框底栏实时展示最近一次响应的生成速率（`tok/s`）、TTFT、动态上下文占用与输出量。根据 Language Server 官方检查点元数据自动自适应当前模型的压缩水位线（如 512k / 256k / 128k），并在界面切换模型时秒级重算刷新；悬停可查看思考链与正文拆解、缓存命中率及距压缩剩余空间，点击即可快速展开侧边栏。
   - **多维度性能看板**：支持按当前会话或指定时间范围（今日、近 7/30 天、自定义日期等）聚合统计，覆盖 Token 构成与缓存效率、Gemini 模型 API 等价成本、各模型实测速率与延迟分布，以及工具调用和工作区占比。
   - **账号配额与一年期活跃度热力图**：直观展示多账号消耗占比与当前 Plan 订阅状态，配合一年期容量活跃度热力矩阵与 5h / 7d 配额预算反推，随时掌握账号额度演变。
-  - **Google 原生账号切换与凭证保险库**：在侧边栏与控制面板内一键切换已认证的 Google 账号，显示真实头像、邮箱与订阅 Plan 标签，并自动同步 Keychain 与本地安全保险库凭据。
+  - **Google 账号快速切换与凭证保险库**：在宿主左侧栏底部与控制面板内一键快速切换已认证的 Google 账号，免去重复登录，常驻显示真实头像、邮箱与订阅 Plan（如 Google AI Pro）标签，并自动同步 Keychain 与本地安全保险库凭据。
 - **Claude 风格主题与字体混排**：统一明暗视觉观感，解决原版界面中英混排的割裂问题。
   - **双模式独立预设**：为亮色（`Claude Light`、`Pure Light`、`Native Default`）与暗色（`Claude Dark`、`Vintage Deep`、`Native Default`）分别指定独立方案，随系统外观自动切换。
   - **三轨字体独立配置**：自动识别本机已安装字体，支持西文主字体、CJK 中文回退、等宽代码字体与对话阅读字号分别设置。
@@ -86,7 +86,7 @@
    ```text
    ~/.gemini/config/plugins/aura-dashboard
    ```
-3. 重启 Antigravity，点击输入框左侧指标胶囊或通过右上角 **⋮ → Extensions → Aura Dashboard** 打开面板。
+3. 重启 Antigravity，点击输入框底栏指标胶囊或在右侧辅助面板（Auxiliary Pane）标签栏中选择 **Aura Dashboard** 打开面板。
 
 ### 源码构建
 
@@ -121,6 +121,7 @@ agy plugin disable aura-dashboard
 | `custom.css` | 启用 `modules.customCss` 后追加加载的自定义样式表 |
 | `custom.js` | 启用 `modules.customJs` 后在顶层窗口执行的扩展脚本 |
 | `i18n.override.json` | 覆盖当前激活语言词典的自定义词条 |
+| `accounts_vault.json` | Google 多账号快速切换与凭据保险库本地安全存储文件 |
 | `account_timeline.json` / `quota_calibration.json` | 运行时自动维护的账号时间线与配额差分校准持久化文件 |
 
 ## 架构

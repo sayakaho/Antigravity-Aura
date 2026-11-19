@@ -20,7 +20,7 @@ English | [简体中文](README.zh-CN.md)
 
 ## Overview
 
-**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without external OS daemons. On startup, the sidecar automatically checks host CDP readiness (safely backing up and idempotently patching `app.asar` to enable `--remote-debugging-port=0` if needed), attaches to active windows over CDP for live style and script injection, and adaptively reads the local SQLite conversation store via native drivers or built-in WASM fallback to serve an analytics and preferences panel in the Auxiliary Pane.
+**Antigravity Aura** runs inside Google Antigravity's native Plugin + Sidecar lifecycle without external OS daemons. On startup, the sidecar automatically checks host CDP readiness (safely backing up and idempotently patching `app.asar` to enable `--remote-debugging-port=0` if needed), attaches to active windows over CDP for live style and script injection, provides seamless Google multi-account switching directly in the sidebar, and adaptively reads the local SQLite conversation store via native drivers or built-in WASM fallback to serve an analytics and preferences panel in the Auxiliary Pane.
 
 ## Screenshots
 
@@ -48,10 +48,10 @@ English | [简体中文](README.zh-CN.md)
 ## Features
 
 - **Real-Time Telemetry & Local Analytics**: Track live generation metrics and historical usage directly from your local Antigravity conversations.
-  - **Inline Telemetry Capsule**: Displays the latest response's speed (`tok/s`), TTFT, context usage, and output tokens on the composer bar. Hover for thinking vs. response breakdown, cache hit rate, and compaction headroom; click to toggle the side panel.
+  - **Inline Telemetry Capsule**: Displays the latest response's generation speed (`tok/s`), TTFT, dynamic context usage, and output tokens on the composer bar. Automatically adapts the context compression waterline to the active model's official checkpointer limits (e.g. 512k / 256k / 128k) via Language Server metadata, instantly recalculates upon switching models in the UI, and provides hover breakdowns for thinking vs. response tokens, cache hit rate, and compaction headroom; click to toggle the side panel.
   - **Analytics Dashboard**: Filter by the active session or time range (`Today`, `Last 7 Days`, `Last 30 Days`, `Custom`) to track token efficiency, Gemini API equivalent costs, per-model speed and latency trends, and tool or workspace breakdowns.
   - **Account Quota & Capacity Heatmap**: Inspect per-account token consumption and plan tiers alongside a 1-year capacity activity heatmap and rolling 5h / 7d quota bucket estimates.
-  - **Google Account Switcher & Vault**: Switch between authenticated Google accounts directly within the sidebar or panel, showing authentic user avatars, emails, and plan tiers backed by safe credential vault storage.
+  - **Quick Google Account Switcher & Credential Vault**: Seamlessly switch between authenticated Google accounts in seconds via an authentic account badge in the host sidebar or panel. Displays genuine user avatars, emails, and plan tiers (e.g. Google AI Pro) backed by an auto-synchronized credential vault.
 - **Claude-Inspired Themes & Typography**: Cohesive light and dark palettes paired with clean multilingual text rendering.
   - **Independent Light & Dark Presets**: Configure separate themes for light (`Claude Light`, `Pure Light`, `Native Default`) and dark (`Claude Dark`, `Vintage Deep`, `Native Default`) appearances that follow your OS theme automatically.
   - **Dedicated Font Stacks**: Enumerates locally installed fonts with separate controls for Latin UI sans, CJK fallback, monospace code blocks, and chat reading size.
@@ -86,7 +86,7 @@ Restart Antigravity after installation completes to load the plugin.
    ```text
    ~/.gemini/config/plugins/aura-dashboard
    ```
-3. Restart Antigravity. Click the telemetry capsule in the composer bar or open **⋮ → Extensions → Aura Dashboard**.
+3. Restart Antigravity. Click the telemetry capsule in the composer bar or switch to **Aura Dashboard** in the Auxiliary Pane.
 
 ### Build from Source
 
@@ -121,6 +121,7 @@ On first launch, Antigravity initializes a persistent data directory at `~/.gemi
 | `custom.css` | User stylesheet appended when `modules.customCss` is enabled |
 | `custom.js` | Top-level window script executed when `modules.customJs` is enabled |
 | `i18n.override.json` | Custom key-value overrides merged over the active locale dictionary |
+| `accounts_vault.json` | Local credential vault and profile metadata for Google multi-account quick switching |
 | `account_timeline.json` / `quota_calibration.json` | Auto-managed runtime state for account timelines and differential quota calibration |
 
 ## Architecture
