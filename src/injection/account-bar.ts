@@ -138,12 +138,6 @@ function probeAndSyncProfile(): void {
   const profile = extractUserStatus();
   if (!profile || !profile.email) return;
 
-  const currentEmail = latestVaultData.currentEmail;
-  if (currentEmail && profile.email.toLowerCase() !== currentEmail.toLowerCase()) {
-    // Current email mismatch, don't overwrite
-    return;
-  }
-
   const prev = cachedLiveProfile;
   if (
     !prev ||
@@ -195,36 +189,72 @@ function renderAvatarHtml(
   `;
 }
 
-function renderSidebarAccountBar(): void {
-  const btn = document.getElementById('ag-sidebar-account-btn') as HTMLButtonElement | null;
-  if (!btn) return;
-
+function resolveActiveDisplayAccount(): {
+  email: string;
+  displayName: string;
+  avatarUrl: string;
+  isPro: boolean;
+  planName: string;
+} {
   const live = cachedLiveProfile || extractUserStatus();
-  const currentEmail = latestVaultData.currentEmail || live?.email || '';
+  if (live && live.email) {
+    const acc = latestVaultData.accounts.find(
+      (a) => a.email.toLowerCase() === live.email.toLowerCase()
+    );
+    const displayName = live.name || acc?.displayName || deriveDisplayName(live.email);
+    const avatarUrl = live.avatarUrl || acc?.avatarUrl || '';
+    const isPro = live.isPro !== undefined ? live.isPro : Boolean(acc?.isPro);
+    const planName = live.planName || acc?.planName || (isPro ? 'Pro' : 'Free');
+    return {
+      email: live.email,
+      displayName,
+      avatarUrl,
+      isPro,
+      planName
+    };
+  }
+
+  const currentEmail = latestVaultData.currentEmail || '';
   const currentAcc =
     latestVaultData.accounts.find((a) => a.isCurrent) ||
     latestVaultData.accounts.find((a) => a.email.toLowerCase() === currentEmail.toLowerCase());
 
-  const displayName = live?.name || currentAcc?.displayName || (currentEmail ? deriveDisplayName(currentEmail) : 'Account');
-  const avatarUrl = live?.avatarUrl || currentAcc?.avatarUrl || '';
-  const isPro = live !== null ? live.isPro : Boolean(currentAcc?.isPro);
+  const displayName = currentAcc?.displayName || (currentEmail ? deriveDisplayName(currentEmail) : 'Account');
+  const avatarUrl = currentAcc?.avatarUrl || '';
+  const isPro = Boolean(currentAcc?.isPro);
+  const planName = currentAcc?.planName || (isPro ? 'Pro' : 'Free');
 
-  btn.setAttribute('aria-label', `Google Account: ${displayName} (${currentEmail})`);
-  btn.title = `Google Account: ${displayName} (${currentEmail})`;
+  return {
+    email: currentEmail,
+    displayName,
+    avatarUrl,
+    isPro,
+    planName
+  };
+}
+
+function renderSidebarAccountBar(): void {
+  const btn = document.getElementById('ag-sidebar-account-btn') as HTMLButtonElement | null;
+  if (!btn) return;
+
+  const active = resolveActiveDisplayAccount();
+
+  btn.setAttribute('aria-label', `Google Account: ${active.displayName} (${active.email || 'Not logged in'})`);
+  btn.title = `Google Account: ${active.displayName} (${active.email || 'Not logged in'})`;
 
   const avatarContainer = btn.querySelector('.ag-sidebar-avatar-slot');
   if (avatarContainer) {
-    avatarContainer.innerHTML = renderAvatarHtml(avatarUrl, currentEmail, isPro, 'sidebar');
+    avatarContainer.innerHTML = renderAvatarHtml(active.avatarUrl, active.email, active.isPro, 'sidebar');
   }
 
   const nameEl = btn.querySelector('.ag-sidebar-account-name');
   if (nameEl) {
-    nameEl.textContent = displayName;
+    nameEl.textContent = active.displayName;
   }
 
   const emailEl = btn.querySelector('.ag-sidebar-account-email');
   if (emailEl) {
-    emailEl.textContent = currentEmail || 'Not logged in';
+    emailEl.textContent = active.email || 'Not logged in';
   }
 }
 
@@ -232,16 +262,7 @@ function renderPopoverContent(): void {
   const popover = document.getElementById('ag-gaccount-popover');
   if (!popover) return;
 
-  const live = cachedLiveProfile || extractUserStatus();
-  const currentEmail = latestVaultData.currentEmail || live?.email || '';
-  const currentAcc =
-    latestVaultData.accounts.find((a) => a.isCurrent) ||
-    latestVaultData.accounts.find((a) => a.email.toLowerCase() === currentEmail.toLowerCase());
-
-  const displayName = live?.name || currentAcc?.displayName || (currentEmail ? deriveDisplayName(currentEmail) : 'Google Account');
-  const avatarUrl = live?.avatarUrl || currentAcc?.avatarUrl || '';
-  const isPro = live !== null ? live.isPro : Boolean(currentAcc?.isPro);
-  const planName = live?.planName || currentAcc?.planName || (isPro ? 'Pro' : 'Free');
+  const active = resolveActiveDisplayAccount();
 
   // 1. Render active account card
   const activeAvatarSlot = document.getElementById('ag-gaccount-active-avatar-slot');
@@ -250,13 +271,13 @@ function renderPopoverContent(): void {
   const activeBadgeEl = document.getElementById('ag-gaccount-active-plan-badge');
 
   if (activeAvatarSlot) {
-    activeAvatarSlot.innerHTML = renderAvatarHtml(avatarUrl, currentEmail, isPro, 'active');
+    activeAvatarSlot.innerHTML = renderAvatarHtml(active.avatarUrl, active.email, active.isPro, 'active');
   }
-  if (activeNameEl) activeNameEl.textContent = displayName;
-  if (activeEmailEl) activeEmailEl.textContent = currentEmail || 'No active account detected';
+  if (activeNameEl) activeNameEl.textContent = active.displayName;
+  if (activeEmailEl) activeEmailEl.textContent = active.email || 'No active account detected';
   if (activeBadgeEl) {
-    if (isPro) {
-      activeBadgeEl.textContent = planName;
+    if (active.isPro) {
+      activeBadgeEl.textContent = active.planName;
       activeBadgeEl.style.display = 'inline-block';
     } else {
       activeBadgeEl.style.display = 'none';
@@ -269,7 +290,7 @@ function renderPopoverContent(): void {
   if (!listEl) return;
 
   const otherAccounts = latestVaultData.accounts.filter(
-    (a) => !currentEmail || a.email.toLowerCase() !== currentEmail.toLowerCase()
+    (a) => !active.email || a.email.toLowerCase() !== active.email.toLowerCase()
   );
 
   if (groupEl) {
@@ -352,7 +373,7 @@ function triggerSwitchAccount(email: string): void {
     overlay.innerHTML = `
       <div class="ag-gaccount-spinner"></div>
       <div class="ag-gaccount-loading-text">Switching to ${escapeHtml(email)}...</div>
-      <div class="ag-gaccount-loading-sub">Reloading application...</div>
+      <div class="ag-gaccount-loading-sub">Restarting Language Server & reloading window...</div>
     `;
     overlay.style.display = 'flex';
   }

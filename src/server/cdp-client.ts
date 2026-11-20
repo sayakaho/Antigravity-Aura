@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ModelPricingRegistry } from '../shared/pricing';
 import type { AuraConfig, LiveMetricsPayload } from '../types';
 import type { AccountVault } from './account-vault';
+import { restartLanguageServer } from './language-server';
 import {
   getBundleSnapshot,
   rebuildBundleIfNeeded,
@@ -529,9 +530,12 @@ export class CdpManager {
                     this.accountVault.switchAccount(actionPayload.email);
                     setTimeout(async () => {
                       try {
+                        await restartLanguageServer();
                         await this.reloadHostWindow();
-                      } catch {}
-                    }, 200);
+                      } catch (switchErr) {
+                        console.warn('[CdpManager] Failed to restart LS or reload host window:', switchErr);
+                      }
+                    }, 50);
                   }
                 } else if (actionPayload.action === 'sync_profile' && actionPayload.profile) {
                   if (this.accountVault) {

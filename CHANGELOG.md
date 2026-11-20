@@ -2,6 +2,15 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.3.4] - 2026-11-20
+
+### Added
+- **Language Server Restart on Account Switch**: Implemented `restartLanguageServer` (`src/server/language-server.ts`) triggering a graceful `LanguageServerService/Exit` RPC with PID `SIGTERM` fallback. Electron's `monitorLsCrashInternal` supervisor automatically re-spawns a fresh Language Server process after a 2-second cooldown, forcing it to reload newly switched Keychain credentials.
+
+### Fixed
+- **Host Sidebar Account Consistency & Stale Cache Elimination**: Resolved cross-account field stitching and stale cache bugs in `src/injection/account-bar.ts`, guaranteeing that avatar, display name, email, and subscription plan badge strictly derive from a single coherent account profile.
+- **Synchronized Skill Documentation**: Fully aligned `skills/aura-theme/SKILL.md` with multi-account vault, Language Server restart lifecycle, multilingual localization contracts, and the complete Sidecar HTTP API table.
+
 ## [0.3.3] - 2026-11-19
 
 ### Changed

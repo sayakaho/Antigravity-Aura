@@ -9,6 +9,7 @@ import type { SidecarStatusResponse } from '../types';
 import { GlobalAnalyticsEngine } from './analytics-engine';
 import { AccountTracker } from './account-tracker';
 import { AccountVault } from './account-vault';
+import { restartLanguageServer } from './language-server';
 import { CdpManager } from './cdp-client';
 import { autoHealHostAsar } from './host-healer';
 import {
@@ -299,7 +300,7 @@ app.api(
 
 app.api(
   '/api/accounts/switch',
-  (data: any) => {
+  async (data: any) => {
     try {
       const email = typeof data === 'string' ? data : data?.email;
       if (!email || typeof email !== 'string') {
@@ -310,13 +311,18 @@ app.api(
 
       const shouldReload = data?.reloadWindow !== false;
       if (shouldReload) {
+        try {
+          await restartLanguageServer();
+        } catch (lsErr) {
+          console.warn('[Sidecar Account] Failed to restart Language Server:', lsErr);
+        }
         setTimeout(async () => {
           try {
             await cdpManager.reloadHostWindow();
           } catch (reloadErr) {
             console.warn('[Sidecar Account] Failed to trigger host window reload:', reloadErr);
           }
-        }, 200);
+        }, 300);
       }
 
       return { ok: true, data: { ...result, reloaded: shouldReload } };
