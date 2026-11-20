@@ -925,7 +925,13 @@ export function applyPanelTranslations(language?: AuraConfig['language']): void 
     } catch {}
   }
 
-  if (typeof document === 'undefined') return;
+  if (
+    typeof document === 'undefined' ||
+    typeof document.querySelector !== 'function' ||
+    typeof document.createTreeWalker !== 'function'
+  ) {
+    return;
+  }
 
   const dict = getPanelDictionary(currentLang);
   const root = document.querySelector('.settings-container');
@@ -1019,6 +1025,8 @@ export function applyPanelTranslations(language?: AuraConfig['language']): void 
   }
 
   // 标题与语言下拉框自适应
-  document.documentElement.lang =
-    currentLang === 'zh-CN' ? 'zh-CN' : currentLang === 'ja-JP' ? 'ja' : currentLang === 'ko-KR' ? 'ko' : 'en';
+  if (document.documentElement) {
+    document.documentElement.lang =
+      currentLang === 'zh-CN' ? 'zh-CN' : currentLang === 'ja-JP' ? 'ja' : currentLang === 'ko-KR' ? 'ko' : 'en';
+  }
 }

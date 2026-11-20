@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import {
   computeAccountDistributionItems,
   renderAccountDistribution
@@ -77,6 +77,15 @@ function makeBaseOverview(): GlobalAnalyticsOverview {
 }
 
 describe('Account Token Consumption UI & Distribution', () => {
+  const origDocument = (globalThis as any).document;
+
+  afterEach(() => {
+    if (origDocument === undefined) {
+      delete (globalThis as any).document;
+    } else {
+      (globalThis as any).document = origDocument;
+    }
+  });
   test('computeAccountDistributionItems handles all-time scope and session mode', () => {
     const overview = makeBaseOverview();
 

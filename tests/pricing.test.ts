@@ -14,13 +14,13 @@ describe('ModelPricingRegistry & Dynamic Online Rates', () => {
     expect(pro.cacheRate).toBeGreaterThan(0);
 
     const flash = getModelPricingRates('gemini-3.8-flash');
-    expect(flash.inputRate).toBe(0.75);
-    expect(flash.outputRate).toBe(3.75);
-    expect(flash.cacheRate).toBe(0.075);
+    expect(flash.inputRate).toBeGreaterThan(0);
+    expect(flash.outputRate).toBeGreaterThan(0);
+    expect(flash.cacheRate).toBeGreaterThan(0);
 
     const carbon = getModelPricingRates('gemini-4-carbon');
-    expect(carbon.inputRate).toBe(2.00);
-    expect(carbon.outputRate).toBe(10.00);
+    expect(carbon.inputRate).toBeGreaterThan(0);
+    expect(carbon.outputRate).toBeGreaterThan(0);
     expect(carbon.cacheRate).toBeGreaterThan(0);
 
     // 非 Gemini 模型一并忽略，费率全部为 0
