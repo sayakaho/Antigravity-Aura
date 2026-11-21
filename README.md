@@ -6,7 +6,7 @@
 
 **Theme presets, custom font stacks, and local SQLite performance analytics for Google Antigravity, built on the native Plugin + Sidecar API.**
 
-[![Version](https://img.shields.io/badge/version-0.3.4-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
+[![Version](https://img.shields.io/badge/version-0.3.5-7A1F1A.svg)](https://github.com/sayakaho/Antigravity-Aura/releases)
 [![Release CI](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml/badge.svg)](https://github.com/sayakaho/Antigravity-Aura/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://github.com/sayakaho/Antigravity-Aura)

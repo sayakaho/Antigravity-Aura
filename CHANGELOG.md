@@ -2,6 +2,17 @@
 
 All notable changes to **Antigravity Aura** will be documented in this file.
 
+## [0.3.5] - 2026-11-21
+
+### Fixed
+- **Multi-Account Drift & Keychain SSOT Protection**: Enforced `AccountVault` as the single source of truth (SSOT) in `src/injection/account-bar.ts`, evicting mismatched live React Fiber user profiles and locking visual badges to active vault accounts.
+- **Storage Tamper & Drift Arbitration**: Updated `src/server/account-tracker.ts` with authoritative Keychain verification to reject stale `app_storage.json` overrides caused by external processes.
+- **CLI Credential Isolation**: Documented and hardened credential isolation proxy mechanisms (`antigrav_cli`) to prevent background CLI daemon token refresh from leaking into Antigravity IDE sessions.
+
+### Changed
+- **Host Healer & CDP Diagnostics**: Enhanced `src/server/host-healer.ts` diagnostic robustness with structured lifecycle handling and resilient reconnection fallback.
+- **Model Pricing Cache**: Optimized pricing registry and token analytics aggregation in `src/shared/pricing.ts`.
+
 ## [0.3.4] - 2026-11-20
 
 ### Added
