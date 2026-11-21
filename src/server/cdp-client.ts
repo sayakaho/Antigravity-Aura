@@ -35,7 +35,7 @@ interface AttachedTargetEntry {
   syncMetricsForSession: (force?: boolean) => Promise<void>;
 }
 
-function resolvePortFilePath(): string {
+export function resolvePortFilePath(): string {
   if (
     process.env.AGY_BROWSER_ACTIVE_PORT_FILE &&
     fs.existsSync(process.env.AGY_BROWSER_ACTIVE_PORT_FILE)
@@ -101,12 +101,14 @@ function fetchTargets(port: number): Promise<CdpTargetDescriptor[]> {
 
 export interface CdpManagerOptions {
   accountVault?: AccountVault;
+  onAccountSwitchRequest?: (email: string) => Promise<void> | void;
   onSessionDbChange?: (cascadeId: string, sig: string) => void;
 }
 
 export class CdpManager {
   private readonly attachedTargets = new Map<string, AttachedTargetEntry>();
   private readonly accountVault?: AccountVault;
+  private readonly onAccountSwitchRequest?: (email: string) => Promise<void> | void;
   private readonly onSessionDbChange?: (cascadeId: string, sig: string) => void;
   private lastDetectedPort: number | null = null;
   private lastGlobalActiveCascadeId = '';
@@ -115,6 +117,7 @@ export class CdpManager {
 
   constructor(options?: CdpManagerOptions) {
     this.accountVault = options?.accountVault;
+    this.onAccountSwitchRequest = options?.onAccountSwitchRequest;
     this.onSessionDbChange = options?.onSessionDbChange;
   }
 
@@ -464,6 +467,7 @@ export class CdpManager {
             if (!isUpToDate) {
               await inject();
               await syncMetricsForSession(true);
+              await this.syncAccounts(target.id);
             }
           } catch {}
         };
@@ -526,7 +530,11 @@ export class CdpManager {
               try {
                 const actionPayload = JSON.parse(String(msg.params.payload || '{}'));
                 if (actionPayload.action === 'switch' && actionPayload.email) {
-                  if (this.accountVault) {
+                  if (this.onAccountSwitchRequest) {
+                    void Promise.resolve(this.onAccountSwitchRequest(actionPayload.email)).catch((switchErr) => {
+                      console.warn('[CdpManager] Failed to handle account switch request:', switchErr);
+                    });
+                  } else if (this.accountVault) {
                     this.accountVault.switchAccount(actionPayload.email);
                     setTimeout(async () => {
                       try {

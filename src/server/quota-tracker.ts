@@ -188,6 +188,12 @@ export class QuotaTracker {
     return this.latestUserStatus;
   }
 
+  public resetLiveCache(): void {
+    this.latestUserStatus = null;
+    this.latestQuotaSummary = null;
+    this.lastFetchTime = 0;
+  }
+
   public getLatestPlanDetails(): AccountPlanDetails | undefined {
     const status = this.latestUserStatus?.userStatus;
     const planInfo = status?.planStatus?.planInfo;

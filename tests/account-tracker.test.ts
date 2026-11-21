@@ -124,4 +124,41 @@ describe('AccountTracker and Temporal Alignment', () => {
 
     tracker.close();
   });
+
+  test('ignores stale app_storage.json overwrites when authoritative Keychain account disagrees', () => {
+    fs.writeFileSync(
+      fakeAppStoragePath,
+      JSON.stringify({ 'agy.onboarding.lastLoginUsername': 'floricidiva@gmail.com' })
+    );
+
+    let authAccount = 'floricidiva@gmail.com';
+    const switches: string[] = [];
+    const tracker = new AccountTracker({
+      storageDir: tempDir,
+      appStoragePath: fakeAppStoragePath,
+      resolveAuthoritativeAccount: () => authAccount,
+      onAccountSwitch: (acc) => switches.push(acc)
+    });
+
+    expect(tracker.getCurrentAccount()).toBe('floricidiva@gmail.com');
+
+    // Electron host overwrites app_storage.json back to an old official-login account
+    fs.writeFileSync(
+      fakeAppStoragePath,
+      JSON.stringify({ 'agy.onboarding.lastLoginUsername': 'reisawaaoi@gmail.com' })
+    );
+    tracker.checkStorageChange();
+
+    expect(tracker.getCurrentAccount()).toBe('floricidiva@gmail.com');
+    expect(switches).toEqual([]);
+    expect(tracker.getTimeline().length).toBe(1);
+
+    // Real authoritative account change (e.g. CLI/external login) IS recorded
+    authAccount = 'kosuzu@gmail.com';
+    expect(tracker.reconcileActiveAccount()).toBe(true);
+    expect(tracker.getCurrentAccount()).toBe('kosuzu@gmail.com');
+    expect(switches).toEqual(['kosuzu@gmail.com']);
+
+    tracker.close();
+  });
 });

@@ -65,10 +65,21 @@ function deriveDisplayName(email: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-let latestVaultData: AccountsVaultPayload = {
-  currentEmail: null,
-  accounts: []
-};
+function getLatestVault(): AccountsVaultPayload {
+  const win = window as any;
+  if (!win.__ag_latest_vault) {
+    win.__ag_latest_vault = {
+      currentEmail: null,
+      accounts: []
+    };
+  }
+  return win.__ag_latest_vault;
+}
+
+function setLatestVault(data: AccountsVaultPayload): void {
+  const win = window as any;
+  win.__ag_latest_vault = data;
+}
 
 let cachedLiveProfile: ExtractedUserProfile | null = null;
 let isPopoverOpen = false;
@@ -134,9 +145,20 @@ export function extractUserStatus(): ExtractedUserProfile | null {
   return null;
 }
 
-function probeAndSyncProfile(): void {
+export function probeAndSyncProfile(): void {
   const profile = extractUserStatus();
   if (!profile || !profile.email) return;
+
+  const vault = getLatestVault();
+  if (vault.currentEmail && profile.email.toLowerCase() !== vault.currentEmail.toLowerCase()) {
+    // Host React Fiber is still holding a stale/mismatched official login while Keychain is on another account.
+    if (cachedLiveProfile !== null) {
+      cachedLiveProfile = null;
+      renderSidebarAccountBar();
+      if (isPopoverOpen) renderPopoverContent();
+    }
+    return;
+  }
 
   const prev = cachedLiveProfile;
   if (
@@ -189,16 +211,25 @@ function renderAvatarHtml(
   `;
 }
 
-function resolveActiveDisplayAccount(): {
+export function resolveActiveDisplayAccount(): {
   email: string;
   displayName: string;
   avatarUrl: string;
   isPro: boolean;
   planName: string;
 } {
-  const live = cachedLiveProfile || extractUserStatus();
+  const vault = getLatestVault();
+  const currentEmail = vault.currentEmail || '';
+  const candidateLive = cachedLiveProfile || extractUserStatus();
+  const live =
+    candidateLive &&
+    candidateLive.email &&
+    (!currentEmail || candidateLive.email.toLowerCase() === currentEmail.toLowerCase())
+      ? candidateLive
+      : null;
+
   if (live && live.email) {
-    const acc = latestVaultData.accounts.find(
+    const acc = vault.accounts.find(
       (a) => a.email.toLowerCase() === live.email.toLowerCase()
     );
     const displayName = live.name || acc?.displayName || deriveDisplayName(live.email);
@@ -214,10 +245,9 @@ function resolveActiveDisplayAccount(): {
     };
   }
 
-  const currentEmail = latestVaultData.currentEmail || '';
   const currentAcc =
-    latestVaultData.accounts.find((a) => a.isCurrent) ||
-    latestVaultData.accounts.find((a) => a.email.toLowerCase() === currentEmail.toLowerCase());
+    vault.accounts.find((a) => a.isCurrent) ||
+    vault.accounts.find((a) => a.email.toLowerCase() === currentEmail.toLowerCase());
 
   const displayName = currentAcc?.displayName || (currentEmail ? deriveDisplayName(currentEmail) : 'Account');
   const avatarUrl = currentAcc?.avatarUrl || '';
@@ -289,7 +319,8 @@ function renderPopoverContent(): void {
   const groupEl = document.getElementById('ag-gaccount-group');
   if (!listEl) return;
 
-  const otherAccounts = latestVaultData.accounts.filter(
+  const vault = getLatestVault();
+  const otherAccounts = vault.accounts.filter(
     (a) => !active.email || a.email.toLowerCase() !== active.email.toLowerCase()
   );
 
@@ -302,12 +333,21 @@ function renderPopoverContent(): void {
   }
 
   if (otherAccounts.length === 0) {
-    listEl.innerHTML = `
-      <div class="ag-gaccount-empty">
-        <span>No other accounts saved.</span><br/>
-        <span class="ag-gaccount-empty-sub">Accounts logged in via CLI or App will appear here automatically.</span>
-      </div>
-    `;
+    if (vault.accounts.length === 0) {
+      listEl.innerHTML = `
+        <div class="ag-gaccount-empty">
+          <span>Loading accounts...</span><br/>
+          <span class="ag-gaccount-empty-sub">Connecting to local credential vault...</span>
+        </div>
+      `;
+    } else {
+      listEl.innerHTML = `
+        <div class="ag-gaccount-empty">
+          <span>No other accounts saved.</span><br/>
+          <span class="ag-gaccount-empty-sub">Accounts logged in via CLI or App will appear here automatically.</span>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -362,6 +402,7 @@ function renderPopoverContent(): void {
 
 function triggerSwitchAccount(email: string): void {
   isSwitching = true;
+  cachedLiveProfile = null;
   const popover = document.getElementById('ag-gaccount-popover');
   if (popover) {
     let overlay = popover.querySelector('.ag-gaccount-loading-overlay') as HTMLElement | null;
@@ -567,12 +608,17 @@ export function initHostAccountBridge(): void {
   const win = window as any;
   win.__ag_render_accounts = (data: AccountsVaultPayload) => {
     if (data && Array.isArray(data.accounts)) {
-      latestVaultData = data;
+      if (
+        cachedLiveProfile &&
+        data.currentEmail &&
+        cachedLiveProfile.email.toLowerCase() !== data.currentEmail.toLowerCase()
+      ) {
+        cachedLiveProfile = null;
+      }
+      setLatestVault(data);
       probeAndSyncProfile();
       renderSidebarAccountBar();
-      if (isPopoverOpen) {
-        renderPopoverContent();
-      }
+      renderPopoverContent();
     }
   };
 

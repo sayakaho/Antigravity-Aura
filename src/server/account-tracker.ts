@@ -46,6 +46,7 @@ export function readAccountFromStorageFile(storagePath: string): string | null {
 export interface AccountTrackerOptions {
   storageDir?: string;
   appStoragePath?: string;
+  resolveAuthoritativeAccount?: () => string | null;
   onAccountSwitch?: (account: string, prevAccount: string | null) => void;
 }
 
@@ -53,6 +54,7 @@ export class AccountTracker {
   private readonly storageDir: string;
   private readonly timelinePath: string;
   private readonly appStoragePath: string;
+  private readonly resolveAuthoritativeAccount?: () => string | null;
   private readonly onAccountSwitch?: (account: string, prevAccount: string | null) => void;
 
   private timeline: AccountTimelineEntry[] = [];
@@ -64,14 +66,25 @@ export class AccountTracker {
     this.storageDir = options?.storageDir || path.join(os.homedir(), '.gemini', 'antigravity');
     this.timelinePath = path.join(this.storageDir, 'account_timeline.json');
     this.appStoragePath = options?.appStoragePath || resolveAntigravityAppStoragePath();
+    this.resolveAuthoritativeAccount = options?.resolveAuthoritativeAccount;
     this.onAccountSwitch = options?.onAccountSwitch;
 
     this.init();
   }
 
+  private resolveDetectedAccount(): string | null {
+    if (this.resolveAuthoritativeAccount) {
+      try {
+        const auth = this.resolveAuthoritativeAccount()?.trim();
+        if (auth) return auth;
+      } catch {}
+    }
+    return readAccountFromStorageFile(this.appStoragePath);
+  }
+
   private init(): void {
     this.loadTimeline();
-    const active = readAccountFromStorageFile(this.appStoragePath);
+    const active = this.resolveDetectedAccount();
     if (active) {
       this.currentAccount = active;
       this.ensureCurrentAccountInTimeline(active);
@@ -238,10 +251,34 @@ export class AccountTracker {
     }, 400);
   }
 
+  public reconcileActiveAccount(authoritativeEmail?: string | null): boolean {
+    const resolved =
+      authoritativeEmail !== undefined
+        ? authoritativeEmail?.trim() || null
+        : this.resolveDetectedAccount();
+    if (!resolved || resolved === this.currentAccount) {
+      return false;
+    }
+    this.recordAccountSwitch(resolved);
+    return true;
+  }
+
   public checkStorageChange(): void {
-    const updated = readAccountFromStorageFile(this.appStoragePath);
-    if (updated && updated !== this.currentAccount) {
-      this.recordAccountSwitch(updated);
+    const storageAccount = readAccountFromStorageFile(this.appStoragePath);
+    if (this.resolveAuthoritativeAccount) {
+      let authAccount: string | null = null;
+      try {
+        authAccount = this.resolveAuthoritativeAccount()?.trim() || null;
+      } catch {}
+      if (authAccount) {
+        if (authAccount !== this.currentAccount) {
+          this.recordAccountSwitch(authAccount);
+        }
+        return;
+      }
+    }
+    if (storageAccount && storageAccount !== this.currentAccount) {
+      this.recordAccountSwitch(storageAccount);
     }
   }
 

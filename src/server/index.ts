@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { toPanelConfigDTO } from '../shared/config-schema';
+import { ModelPricingRegistry } from '../shared/pricing';
 import { resolveAnalyticsSessionId } from '../shared/session';
 import type { SidecarStatusResponse } from '../types';
 import { GlobalAnalyticsEngine } from './analytics-engine';
@@ -11,7 +12,7 @@ import { AccountTracker } from './account-tracker';
 import { AccountVault } from './account-vault';
 import { restartLanguageServer } from './language-server';
 import { CdpManager } from './cdp-client';
-import { autoHealHostAsar } from './host-healer';
+import { ensureHostCdpReady, type HostHealResult } from './host-healer';
 import {
   getActiveConfig,
   getBundleSnapshot,
@@ -29,6 +30,8 @@ import {
   readTextSafe,
   USER_DIR
 } from './paths';
+
+const isRealSidecarRuntime = Boolean(process.env.ANTIGRAVITY_SIDECAR_WEB_PORT);
 
 // Defensive fallback for local debugging outside Antigravity host
 if (!process.env.ANTIGRAVITY_SIDECAR_WEB_PORT) {
@@ -68,21 +71,68 @@ try {
 
 const { SidecarApp, Response } = sdk;
 
-const hostHealResult = autoHealHostAsar();
+let hostHealResult: HostHealResult = {
+  mode: 'relaunch',
+  status: 'skipped',
+  success: true,
+  healed: false,
+  alreadyPatched: false,
+  needsRestart: false,
+  reason: 'pending-cdp-check'
+};
 
 initDataDirectory();
 rebuildBundleIfNeeded(true);
 
-const accountTracker = new AccountTracker({
-  storageDir: USER_DIR
-});
 const accountVault = new AccountVault({
   storageDir: USER_DIR
 });
+let cdpManager!: CdpManager;
+const accountTracker = new AccountTracker({
+  storageDir: USER_DIR,
+  resolveAuthoritativeAccount: () => accountVault.getCurrentKeychainAccount()?.email ?? null,
+  onAccountSwitch: () => {
+    void cdpManager?.syncAccounts();
+  }
+});
 const analyticsEngine = new GlobalAnalyticsEngine(ANTIGRAVITY_DATA_DIR, accountTracker);
 analyticsEngine.startWatching();
-const cdpManager = new CdpManager({
+
+async function executeAccountSwitch(
+  email: string,
+  opts?: { reloadWindow?: boolean; reloadDelayMs?: number }
+): Promise<{ success: boolean; email: string; reloaded: boolean }> {
+  const result = accountVault.switchAccount(email);
+  accountTracker.recordAccountSwitch(result.email);
+  analyticsEngine.getQuotaTracker().resetLiveCache();
+  void cdpManager?.syncAccounts();
+
+  const shouldReload = opts?.reloadWindow !== false;
+  if (shouldReload) {
+    try {
+      await restartLanguageServer();
+    } catch (lsErr) {
+      console.warn('[Sidecar Account] Failed to restart Language Server:', lsErr);
+    }
+    setTimeout(async () => {
+      try {
+        await cdpManager?.reloadHostWindow();
+      } catch (reloadErr) {
+        console.warn('[Sidecar Account] Failed to trigger host window reload:', reloadErr);
+      }
+      void analyticsEngine.getQuotaTracker().fetchUserStatus(true);
+      void analyticsEngine.getQuotaTracker().fetchQuotaSummary(true);
+    }, opts?.reloadDelayMs ?? 300);
+  }
+
+  return { ...result, reloaded: shouldReload };
+}
+
+cdpManager = new CdpManager({
   accountVault,
+  onAccountSwitchRequest: async (email) => {
+    await executeAccountSwitch(email, { reloadWindow: true, reloadDelayMs: 50 });
+  },
   onSessionDbChange: (cascadeId, sig) => {
     analyticsEngine.notifySessionSignature(cascadeId, sig);
   }
@@ -185,6 +235,29 @@ app.api(
 );
 
 app.api(
+  '/api/pricing',
+  async (data?: Record<string, unknown>) => {
+    try {
+      const force = isForceRefreshQuery(data);
+      const registry = ModelPricingRegistry.getInstance();
+      await Promise.allSettled([
+        registry.fetchAvailableModels(),
+        registry.fetchOnlinePricing(force)
+      ]);
+      const overview = analyticsEngine.getGlobalOverview(false);
+      const extraKeys = (overview.modelDistribution || []).flatMap((m) => [
+        m.modelId,
+        m.modelName
+      ]);
+      return { ok: true, data: registry.exportSnapshot(extraKeys) };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+  'GET'
+);
+
+app.api(
   '/api/config',
   () => ({
     ok: true,
@@ -243,9 +316,13 @@ app.api(
       activeCascadeId: cdpManager.getLastActiveCascadeId(),
       analyticsRevision: analyticsEngine.getRevision(),
       hostHealState: {
+        mode: hostHealResult.mode,
+        status: hostHealResult.status,
         healed: hostHealResult.healed,
         alreadyPatched: hostHealResult.alreadyPatched,
-        needsRestart: hostHealResult.needsRestart
+        needsRestart: hostHealResult.needsRestart,
+        reason: hostHealResult.reason,
+        error: hostHealResult.error
       }
     };
   },
@@ -306,26 +383,11 @@ app.api(
       if (!email || typeof email !== 'string') {
         return { ok: false, error: 'Target email is required.' };
       }
-      const result = accountVault.switchAccount(email);
-      accountTracker.recordAccountSwitch(result.email);
-
-      const shouldReload = data?.reloadWindow !== false;
-      if (shouldReload) {
-        try {
-          await restartLanguageServer();
-        } catch (lsErr) {
-          console.warn('[Sidecar Account] Failed to restart Language Server:', lsErr);
-        }
-        setTimeout(async () => {
-          try {
-            await cdpManager.reloadHostWindow();
-          } catch (reloadErr) {
-            console.warn('[Sidecar Account] Failed to trigger host window reload:', reloadErr);
-          }
-        }, 300);
-      }
-
-      return { ok: true, data: { ...result, reloaded: shouldReload } };
+      const dataResult = await executeAccountSwitch(email, {
+        reloadWindow: data?.reloadWindow !== false,
+        reloadDelayMs: 300
+      });
+      return { ok: true, data: dataResult };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -429,11 +491,17 @@ app.api('/api/open-directory', async (data: unknown) => {
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
+let lastAccountReconcileMs = 0;
 
 function scheduleNextSync(): void {
   if (stopped) return;
   const intervalMs = getActiveConfig().telemetry.interval;
   syncTimer = setTimeout(async () => {
+    const now = Date.now();
+    if (now - lastAccountReconcileMs >= 10_000) {
+      lastAccountReconcileMs = now;
+      accountTracker.reconcileActiveAccount();
+    }
     await cdpManager.sync(false);
     scheduleNextSync();
   }, intervalMs);
@@ -453,4 +521,18 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
 await app.run();
 console.log('[Sidecar Engine] Web UI running, initiating CDP sync...');
 await cdpManager.sync(true);
+if (cdpManager.getTargetCount() === 0 && isRealSidecarRuntime && !stopped) {
+  // Brief grace period in case the host is still finalizing its initial window/port file
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  if (!stopped) {
+    await cdpManager.sync(false);
+  }
+}
+if (!stopped) {
+  hostHealResult = ensureHostCdpReady({
+    isSidecarRuntime: isRealSidecarRuntime,
+    storageDir: USER_DIR,
+    cdpTargetCount: cdpManager.getTargetCount()
+  });
+}
 scheduleNextSync();
