@@ -48,7 +48,7 @@ import {
 
 export type { CacheEntry, TokenBreakdown, ModelBucket };
 
-const CACHE_FILE_NAME = 'aura_analytics_cache_v16.json';
+const CACHE_FILE_NAME = 'aura_analytics_cache_v17.json';
 
 function isLegacyCacheFile(fileName: string): boolean {
   return (
@@ -770,7 +770,7 @@ export class GlobalAnalyticsEngine {
           };
         }
         const accItem = sessionAccountMap[stepAccount];
-        const stepModelRates = getModelPricingRates(modelKey || parsed.modelName);
+        const stepModelRates = getModelPricingRates(modelKey, parsed.modelName);
         const stepCost =
           (parsed.inTok * stepModelRates.inputRate +
             parsed.outTok * stepModelRates.outputRate +

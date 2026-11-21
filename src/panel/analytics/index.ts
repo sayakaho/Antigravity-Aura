@@ -1,3 +1,4 @@
+import { ModelPricingRegistry, type ModelPricingSnapshot } from '../../shared/pricing';
 import { buildSessionAnalyticsEndpoint } from '../../shared/session';
 import type { GlobalAnalyticsOverview, SessionAnalyticsData } from '../../types';
 import { applyPanelTranslations } from '../i18n';
@@ -57,9 +58,30 @@ let refreshSeq = 0;
 let activeRefreshPromise: Promise<void> | null = null;
 let pendingRefreshOptions: Required<RefreshAnalyticsOptions> | null = null;
 let overviewDirty = false;
+let pricingHydratedOnline = false;
+let pricingLastFetchMs = 0;
 
 export function getActiveSessionId(): string | null {
   return activeSessionData?.cascadeId ?? null;
+}
+
+export async function fetchPricingSnapshot(force = false): Promise<ModelPricingSnapshot | null> {
+  try {
+    const endpoint = force ? '/api/pricing?force=1' : '/api/pricing';
+    const res = await window.sidecar.fetch(endpoint, { method: 'GET' });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { ok?: boolean; data?: ModelPricingSnapshot };
+    if (json.ok && json.data) {
+      ModelPricingRegistry.getInstance().ingestSnapshot(json.data);
+      pricingHydratedOnline = json.data.source === 'online';
+      pricingLastFetchMs = Date.now();
+      return json.data;
+    }
+    return null;
+  } catch (err) {
+    console.error('[Aura Analytics] Failed to fetch pricing snapshot:', err);
+    return null;
+  }
 }
 
 export async function fetchOverview(force = false): Promise<GlobalAnalyticsOverview | null> {
@@ -300,9 +322,13 @@ async function runRefreshPass(initialOptions: Required<RefreshAnalyticsOptions>)
         overviewDirty = true;
       }
 
+      const shouldFetchPricing =
+        opts.force || !pricingHydratedOnline || Date.now() - pricingLastFetchMs > 300_000;
+
       const [overview, sessionRes] = await Promise.all([
         canDeferOverview ? Promise.resolve(null) : fetchOverview(opts.force),
-        fetchActiveSessionState(opts.force)
+        fetchActiveSessionState(opts.force),
+        shouldFetchPricing ? fetchPricingSnapshot(opts.force) : Promise.resolve(null)
       ]);
 
       if (!canDeferOverview && overview) {

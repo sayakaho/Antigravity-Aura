@@ -204,6 +204,27 @@ describe('Unified TPS & Analytics Metrics', () => {
     expect(cost.actualCost).toBeCloseTo(expectedCost, 5);
     // Not hardcoded Flash rates: $0.75/1M input + $3.75/1M output = $4.50
     expect(cost.actualCost).not.toBeCloseTo(4.5, 2);
+    expect(cost.modelBreakdown.length).toBe(1);
+    expect(cost.modelBreakdown[0].modelName).toBe('Claude Opus 4.6 Thinking');
+
+    const fakeCards = { innerHTML: '' };
+    const origDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      getElementById: (id: string) => (id === 'analytics-cards-grid' ? fakeCards : null)
+    };
+    try {
+      renderMetricCards(metrics, 'session', overview, session);
+      expect(fakeCards.innerHTML).toContain('<div class="kpi-label-row">Est. Commercial Cost</div>');
+      expect(fakeCards.innerHTML).not.toContain('kpi-label-with-info');
+      expect(fakeCards.innerHTML).toContain('Claude Opus 4.6 Thinking');
+      expect(fakeCards.innerHTML).toContain(`$${expectedCost.toFixed(2)}`);
+    } finally {
+      if (origDocument === undefined) {
+        delete (globalThis as { document?: unknown }).document;
+      } else {
+        (globalThis as { document?: unknown }).document = origDocument;
+      }
+    }
   });
 
   test('computeProcessedColumns aggregates ranges >90 days into weekly buckets and handles empty custom dates', () => {
@@ -738,7 +759,7 @@ describe('Unified TPS & Analytics Metrics', () => {
     expect(fromCtx.columns.length).toBe(fromLegacy.columns.length);
 
     const costCtx = computeApiCostAndSavings(fromCtx, timeCtx, overview, null);
-    const costLegacy = computeApiCostAndSavings(fromLegacy, 'last-7-days', overview, null, '', '');
+    const costLegacy = computeApiCostAndSavings(fromLegacy, 'last-7-days', overview, null, '', '', fixedNow);
     expect(costCtx).toEqual(costLegacy);
 
     const fakeContainer = { innerHTML: '' };

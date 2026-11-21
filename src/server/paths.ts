@@ -28,8 +28,17 @@ function resolveDir(prodSub: string, devSub: string): string {
 
 export const CORE_DIR = resolveDir('core', '../injection');
 export const TEMPLATE_USER_DIR = resolveDir('user', '../presets');
+export const STANDARD_PLUGIN_DATA_DIR = path.join(
+  os.homedir(),
+  '.gemini',
+  'antigravity',
+  'plugin_data',
+  'aura-dashboard'
+);
 export const USER_DIR =
-  process.env.PLUGIN_DATA || process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR || TEMPLATE_USER_DIR;
+  process.env.PLUGIN_DATA ||
+  process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR ||
+  (fs.existsSync(STANDARD_PLUGIN_DATA_DIR) ? STANDARD_PLUGIN_DATA_DIR : TEMPLATE_USER_DIR);
 export const ASSETS_DIR = resolveDir('assets', '../../assets');
 export const ANTIGRAVITY_DATA_DIR = path.join(os.homedir(), '.gemini', 'antigravity');
 export const CONVERSATIONS_DIR = path.join(ANTIGRAVITY_DATA_DIR, 'conversations');

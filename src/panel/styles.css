@@ -883,7 +883,8 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active,
 }
 
 .kpi-card-compact {
-  padding: 16px 18px;
+  position: relative;
+  padding: 16px 15px;
   min-height: 92px;
   display: flex;
   flex-direction: column;
@@ -892,6 +893,7 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active,
 }
 .kpi-card-compact .kpi-label-row {
   margin-bottom: 2px;
+  letter-spacing: 0.04em;
 }
 
 .kpi-label,
@@ -907,27 +909,27 @@ html[data-theme="dark"] .timerange-segmented .segment-btn.active,
   margin-bottom: 8px;
 }
 
-.kpi-label-with-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
 .cost-pricing-info-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--aura-fg-muted);
   cursor: help;
-  opacity: 0.75;
-  transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
-  vertical-align: middle;
+  opacity: 0.72;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
 
 .cost-pricing-info-icon:hover {
   opacity: 1;
   color: var(--aura-accent, #388bfd);
-  transform: scale(1.1);
+  background: color-mix(in srgb, var(--aura-fg) 8%, transparent);
+  transform: scale(1.06);
 }
 
 .kpi-value-lg {
@@ -2060,6 +2062,12 @@ html[data-theme="dark"] .chart-shared-hover-band {
   align-items: center;
   gap: 5px;
   white-space: nowrap;
+}
+
+.pricing-tooltip-table th.th-cost,
+.pricing-tooltip-table td.td-cost {
+  color: var(--aura-accent, #10b981);
+  font-weight: 600;
 }
 
 .tooltip-footer-row {

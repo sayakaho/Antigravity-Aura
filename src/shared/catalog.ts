@@ -107,6 +107,8 @@ export function getModelColor(modelKey: string, index = 0, usedColors?: Set<stri
 
 export {
   type ModelPricingRates,
+  type ModelPricingSnapshot,
+  type PricingTooltipModelEntry,
   getModelPricingRates,
   getPricingTooltipHtml,
   getPricingTooltipText

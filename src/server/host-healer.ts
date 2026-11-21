@@ -1,260 +1,363 @@
 /**
- * Aura Dashboard · Universal Host Healer (Pure Node.js)
+ * Aura Dashboard · Non-Invasive Host CDP Healer (macOS)
  *
- * Automatically inspects and patches the Antigravity host `app.asar` at Sidecar boot time.
- * Enables `--remote-debugging-port=0` dynamically without requiring user terminal commands,
- * package managers (Bun / npm / yarn), or manual intervention.
+ * Ensures the Antigravity Electron host was launched with `--remote-debugging-port`.
+ * Instead of mutating signed `app.asar` bundles (which breaks `ElectronAsarIntegrity`
+ * and code signatures), it detects missing CDP flags at Sidecar startup and triggers
+ * a cooldown-guarded detached graceful relaunch with `--remote-debugging-port=0`.
  */
 
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { resolvePortFilePath } from './cdp-client';
+
+export type HostHealStatus = 'ready' | 'relaunched' | 'cooldown' | 'skipped' | 'error';
 
 export interface HostHealResult {
+  mode: 'relaunch';
+  status: HostHealStatus;
   success: boolean;
   healed: boolean;
   alreadyPatched: boolean;
   needsRestart: boolean;
-  asarPath?: string;
-  backupPath?: string;
+  hostPid?: number;
+  appBundlePath?: string;
+  reason?: string;
   error?: string;
 }
 
+export interface HostProcessInfo {
+  pid: number;
+  appBundlePath: string;
+  command: string;
+  hasRemoteDebuggingPort: boolean;
+}
+
+export interface RelaunchLockRecord {
+  timestamp: number;
+  pid: number;
+  appBundlePath?: string;
+}
+
+export interface EnsureHostCdpOptions {
+  isSidecarRuntime: boolean;
+  storageDir: string;
+  cdpTargetCount: number;
+  platform?: NodeJS.Platform;
+  now?: number;
+  cooldownMs?: number;
+  portFilePath?: string;
+  env?: NodeJS.ProcessEnv;
+  inspectHost?: () => HostProcessInfo | null;
+  triggerRelaunch?: (host: HostProcessInfo) => void;
+}
+
+const DEFAULT_COOLDOWN_MS = 10_000;
+const LOCK_FILENAME = 'cdp_relaunch_lock.json';
+const RELAUNCH_LOG_FILENAME = 'cdp_relaunch.log';
+const MAC_HOST_EXEC_RE = /^(.*?\/Antigravity\.app)\/Contents\/MacOS\/Antigravity(?:\s|$)/;
+const STRIPPED_ENV_PREFIXES = ['ELECTRON_', 'NODE_', 'ANTIGRAVITY_', 'JETSKI_'];
+
 /**
- * Resolves the absolute path of Antigravity host's `app.asar`.
+ * Strips Electron/Sidecar runtime variables so relaunched GUI host processes
+ * do not inherit `ELECTRON_RUN_AS_NODE=1` or stale sidecar tokens.
  */
-export function resolveHostAsarPath(): string | null {
-  const candidates: string[] = [];
-
-  // 1. Traverse upward from current process.execPath (Antigravity Helper / Node binary)
-  try {
-    let cur = path.dirname(process.execPath);
-    for (let i = 0; i < 6; i++) {
-      const directAsar = path.join(cur, 'Resources', 'app.asar');
-      const directAsarLower = path.join(cur, 'resources', 'app.asar');
-      if (fs.existsSync(directAsar)) candidates.push(directAsar);
-      if (fs.existsSync(directAsarLower)) candidates.push(directAsarLower);
-      const parent = path.dirname(cur);
-      if (parent === cur) break;
-      cur = parent;
-    }
-  } catch {}
-
-  // 2. Platform default installation paths
-  const platform = process.platform;
-  const home = os.homedir();
-
-  if (platform === 'darwin') {
-    candidates.push(
-      '/Applications/Antigravity.app/Contents/Resources/app.asar',
-      path.join(home, 'Applications', 'Antigravity.app', 'Contents', 'Resources', 'app.asar')
-    );
-  } else if (platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-    const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-    candidates.push(
-      path.join(localAppData, 'Programs', 'Antigravity', 'resources', 'app.asar'),
-      path.join(programFiles, 'Antigravity', 'resources', 'app.asar')
-    );
-  } else {
-    candidates.push(
-      '/opt/Antigravity/resources/app.asar',
-      '/usr/share/antigravity/resources/app.asar',
-      '/usr/lib/antigravity/resources/app.asar'
-    );
+export function buildCleanRelaunchEnv(sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(sourceEnv)) {
+    if (value === undefined) continue;
+    if (STRIPPED_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+    clean[key] = value;
   }
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-        return candidate;
-      }
-    } catch {}
-  }
-
-  return null;
+  return clean;
 }
 
 /**
- * Pure Node.js in-memory asar patcher.
- * Inserts `--remote-debugging-port=0` into `dist/main.js` if missing.
+ * Parses a single `ps -axo pid=,args=` line into a host process descriptor
+ * if and only if it represents the main Antigravity macOS executable.
  */
-export function autoHealHostAsar(customAsarPath?: string): HostHealResult {
-  const asarPath = customAsarPath !== undefined ? customAsarPath : resolveHostAsarPath();
-  if (!asarPath || !fs.existsSync(asarPath)) {
+export function parseMacHostProcessLine(line: string): HostProcessInfo | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d+)\s+(.+)$/);
+  if (!match) return null;
+
+  const pid = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(pid) || pid <= 0) return null;
+
+  const command = match[2];
+  // Exclude Electron helper/renderer/utility subprocesses
+  if (command.includes('--type=') || command.includes('Antigravity Helper')) {
+    return null;
+  }
+
+  const execMatch = command.match(MAC_HOST_EXEC_RE);
+  if (!execMatch) return null;
+
+  return {
+    pid,
+    appBundlePath: execMatch[1],
+    command,
+    hasRemoteDebuggingPort: /(?:^|\s)--remote-debugging-port(?:=|\s|$)/.test(command)
+  };
+}
+
+/**
+ * Inspects running processes on macOS to locate the main Antigravity host process.
+ */
+export function inspectMacHostProcess(): HostProcessInfo | null {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const out = execFileSync('ps', ['-axo', 'pid=,args='], {
+      encoding: 'utf8',
+      timeout: 3000
+    });
+    for (const line of out.split(/\r?\n/)) {
+      const info = parseMacHostProcessLine(line);
+      if (info) return info;
+    }
+  } catch (err) {
+    console.warn('[Aura Host Healer] Failed to inspect host process list:', err);
+  }
+  return null;
+}
+
+function readRelaunchLock(lockPath: string): RelaunchLockRecord | null {
+  try {
+    if (!fs.existsSync(lockPath)) return null;
+    const raw = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as Partial<RelaunchLockRecord>;
+    if (typeof raw.timestamp !== 'number' || typeof raw.pid !== 'number') return null;
     return {
+      timestamp: raw.timestamp,
+      pid: raw.pid,
+      appBundlePath: typeof raw.appBundlePath === 'string' ? raw.appBundlePath : undefined
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeRelaunchLock(lockPath: string, record: RelaunchLockRecord): void {
+  const dir = path.dirname(lockPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const tmpPath = `${lockPath}.tmp.${process.pid}`;
+  fs.writeFileSync(tmpPath, JSON.stringify(record, null, 2), 'utf8');
+  fs.renameSync(tmpPath, lockPath);
+}
+
+/**
+ * Spawns a detached POSIX shell script that gracefully terminates the current
+ * Antigravity host PID, waits for its single-instance lock to exit cleanly,
+ * and relaunches the `.app` with `--remote-debugging-port=0` using a clean env.
+ */
+export function spawnDetachedMacRelaunch(host: HostProcessInfo, logPath?: string): void {
+  const unsetList = [
+    'ELECTRON_RUN_AS_NODE',
+    'NODE_PATH',
+    'NODE_OPTIONS',
+    'ANTIGRAVITY_SIDECAR_WEB_PORT',
+    'ANTIGRAVITY_SIDECAR_UI_TOKEN',
+    'ANTIGRAVITY_LS_ADDRESS',
+    'ANTIGRAVITY_CSRF_TOKEN',
+    'ANTIGRAVITY_AGENTAPI_EXE',
+    'ANTIGRAVITY_EXECUTABLE_DATA_DIR',
+    'ANTIGRAVITY_PROJECT_ID',
+    'ANTIGRAVITY_SOURCE_METADATA',
+    'ANTIGRAVITY_LS_VERSION',
+    'ANTIGRAVITY_APP_DATA_DIR',
+    'ANTIGRAVITY_NODE_PATH',
+    'JETSKI_APP_DATA_DIR'
+  ].join(' ');
+
+  const script = [
+    'log_file="$3"',
+    'log() { [ -n "$log_file" ] && printf "%s %s\\n" "$(date "+%Y-%m-%dT%H:%M:%S")" "$1" >> "$log_file" 2>/dev/null || true; }',
+    `unset ${unsetList} 2>/dev/null || true`,
+    'log "Starting relaunch for PID=$1 app=$2"',
+    'sleep 0.2',
+    'kill -TERM "$1" 2>/dev/null || true',
+    'i=0',
+    'while kill -0 "$1" 2>/dev/null && [ "$i" -lt 125 ]; do',
+    '  sleep 0.2',
+    '  i=$((i + 1))',
+    'done',
+    'if kill -0 "$1" 2>/dev/null; then',
+    '  log "Timed out waiting for PID=$1 to exit; aborting relaunch"',
+    '  exit 0',
+    'fi',
+    'sleep 0.3',
+    'if [ -n "$log_file" ]; then',
+    '  open -a "$2" --args --remote-debugging-port=0 >> "$log_file" 2>&1',
+    '  rc=$?',
+    'else',
+    '  open -a "$2" --args --remote-debugging-port=0',
+    '  rc=$?',
+    'fi',
+    'log "open -a exited with status=$rc"'
+  ].join('\n');
+
+  const child = spawn(
+    '/bin/sh',
+    ['-c', script, 'aura-cdp-relaunch', String(host.pid), host.appBundlePath, logPath ?? ''],
+    {
+      detached: true,
+      stdio: 'ignore',
+      env: buildCleanRelaunchEnv(process.env)
+    }
+  );
+  child.unref();
+}
+
+/**
+ * Verifies CDP readiness and performs a cooldown-guarded automatic relaunch
+ * on macOS when the host was launched without `--remote-debugging-port`.
+ */
+export function ensureHostCdpReady(options: EnsureHostCdpOptions): HostHealResult {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const now = options.now ?? Date.now();
+  const cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+
+  if (!options.isSidecarRuntime) {
+    return {
+      mode: 'relaunch',
+      status: 'skipped',
+      success: true,
+      healed: false,
+      alreadyPatched: false,
+      needsRestart: false,
+      reason: 'non-sidecar-runtime'
+    };
+  }
+
+  if (options.cdpTargetCount > 0) {
+    return {
+      mode: 'relaunch',
+      status: 'ready',
+      success: true,
+      healed: false,
+      alreadyPatched: true,
+      needsRestart: false,
+      reason: 'cdp-connected'
+    };
+  }
+
+  const portFilePath = options.portFilePath ?? resolvePortFilePath();
+  if (Boolean(env.AGY_BROWSER_WS_URL) || fs.existsSync(portFilePath)) {
+    return {
+      mode: 'relaunch',
+      status: 'ready',
+      success: true,
+      healed: false,
+      alreadyPatched: true,
+      needsRestart: false,
+      reason: 'cdp-port-present'
+    };
+  }
+
+  if (platform !== 'darwin') {
+    const reason = `unsupported-platform:${platform}`;
+    console.warn(`[Aura Host Healer] Auto-relaunch skipped (${reason}). Launch host with --remote-debugging-port=0.`);
+    return {
+      mode: 'relaunch',
+      status: 'skipped',
       success: false,
       healed: false,
       alreadyPatched: false,
       needsRestart: false,
-      error: 'Host app.asar could not be located on this machine.'
+      reason
+    };
+  }
+
+  const inspect = options.inspectHost ?? inspectMacHostProcess;
+  const host = inspect();
+  if (!host) {
+    const error = 'Unable to locate running Antigravity macOS host process.';
+    console.warn(`[Aura Host Healer] ${error}`);
+    return {
+      mode: 'relaunch',
+      status: 'error',
+      success: false,
+      healed: false,
+      alreadyPatched: false,
+      needsRestart: false,
+      reason: 'host-process-not-found',
+      error
+    };
+  }
+
+  if (host.hasRemoteDebuggingPort) {
+    return {
+      mode: 'relaunch',
+      status: 'ready',
+      success: true,
+      healed: false,
+      alreadyPatched: true,
+      needsRestart: false,
+      hostPid: host.pid,
+      appBundlePath: host.appBundlePath,
+      reason: 'host-flag-present'
+    };
+  }
+
+  const lockPath = path.join(options.storageDir, LOCK_FILENAME);
+  const prevLock = readRelaunchLock(lockPath);
+  if (prevLock && (prevLock.pid === host.pid || now - prevLock.timestamp < cooldownMs)) {
+    const reason = prevLock.pid === host.pid ? 'already-attempted-for-pid' : 'relaunch-cooldown-active';
+    console.warn(`[Aura Host Healer] Skipping relaunch for PID ${host.pid} (${reason}).`);
+    return {
+      mode: 'relaunch',
+      status: 'cooldown',
+      success: false,
+      healed: false,
+      alreadyPatched: false,
+      needsRestart: false,
+      hostPid: host.pid,
+      appBundlePath: host.appBundlePath,
+      reason
     };
   }
 
   try {
-    const fileBuf = fs.readFileSync(asarPath);
-    if (fileBuf.length < 16) {
-      return {
-        success: false,
-        healed: false,
-        alreadyPatched: false,
-        needsRestart: false,
-        asarPath,
-        error: 'Corrupted or unreadable app.asar file.'
-      };
-    }
-
-    const headerPickleSize = fileBuf.readUInt32LE(4);
-    const headerSize = fileBuf.readUInt32LE(12);
-    const headerJsonStr = fileBuf.slice(16, 16 + headerSize).toString('utf8');
-    const header = JSON.parse(headerJsonStr);
-    const baseOffset = 8 + headerPickleSize;
-
-    // Collect in-archive files into Map<relativePath, Buffer>
-    const fileMap = new Map<string, Buffer>();
-
-    const walk = (node: any, currentPath: string) => {
-      if (node.files) {
-        for (const [name, child] of Object.entries(node.files)) {
-          walk(child, currentPath ? `${currentPath}/${name}` : name);
-        }
-      } else if (node.offset !== undefined && node.size !== undefined && !node.unpacked) {
-        const offset = parseInt(node.offset, 10);
-        const size = node.size;
-        const content = fileBuf.slice(baseOffset + offset, baseOffset + offset + size);
-        fileMap.set(currentPath, content);
-      }
-    };
-
-    walk(header, '');
-
-    const targetFile = 'dist/main.js';
-    const mainJsBuf = fileMap.get(targetFile);
-    if (!mainJsBuf) {
-      return {
-        success: false,
-        healed: false,
-        alreadyPatched: false,
-        needsRestart: false,
-        asarPath,
-        error: 'dist/main.js entrypoint not found in app.asar.'
-      };
-    }
-
-    let mainJsText = mainJsBuf.toString('utf8');
-
-    // 1. Fast idempotency check
-    if (mainJsText.includes("appendSwitch('remote-debugging-port'")) {
-      return {
-        success: true,
-        healed: false,
-        alreadyPatched: true,
-        needsRestart: false,
-        asarPath
-      };
-    }
-
-    // 2. Identify reliable anchor point in main.js
-    const anchor = "electron_1.app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');";
-    if (!mainJsText.includes(anchor)) {
-      return {
-        success: false,
-        healed: false,
-        alreadyPatched: false,
-        needsRestart: false,
-        asarPath,
-        error: 'Expected Electron startup anchor not found in dist/main.js.'
-      };
-    }
-
-    const patchCode = `if (!electron_1.app.commandLine.hasSwitch('remote-debugging-port')) {\n    electron_1.app.commandLine.appendSwitch('remote-debugging-port', '0');\n}\n`;
-    mainJsText = mainJsText.replace(anchor, `${patchCode}${anchor}`);
-    fileMap.set(targetFile, Buffer.from(mainJsText, 'utf8'));
-
-    // 3. Rebuild asar header with newly computed file offsets
-    let currentOffset = 0;
-    const rebuildHeader = (node: any, currentPath: string): any => {
-      if (node.files) {
-        const newFiles: Record<string, any> = {};
-        for (const [name, child] of Object.entries(node.files)) {
-          newFiles[name] = rebuildHeader(child, currentPath ? `${currentPath}/${name}` : name);
-        }
-        return { ...node, files: newFiles };
-      } else if (node.unpacked) {
-        return { ...node };
-      } else {
-        const buf = fileMap.get(currentPath);
-        if (!buf) return { ...node };
-        const size = buf.length;
-        const entry = {
-          ...node,
-          size,
-          offset: currentOffset.toString()
-        };
-        currentOffset += size;
-        return entry;
-      }
-    };
-
-    const newHeader = rebuildHeader(header, '');
-    const newHeaderJson = JSON.stringify(newHeader);
-    const headerBuf = Buffer.from(newHeaderJson, 'utf8');
-
-    // Asar alignment: padded to 4 bytes
-    const padding = (4 - (headerBuf.length % 4)) % 4;
-    const paddedHeaderSize = headerBuf.length + padding;
-
-    const totalSize = 16 + paddedHeaderSize + currentOffset;
-    const outBuf = Buffer.alloc(totalSize);
-
-    // Asar 16-byte magic header
-    outBuf.writeUInt32LE(4, 0);
-    outBuf.writeUInt32LE(paddedHeaderSize + 8, 4);
-    outBuf.writeUInt32LE(paddedHeaderSize + 4, 8);
-    outBuf.writeUInt32LE(headerBuf.length, 12);
-
-    headerBuf.copy(outBuf, 16);
-    outBuf.fill(0, 16 + headerBuf.length, 16 + paddedHeaderSize);
-
-    let writePos = 16 + paddedHeaderSize;
-    for (const [, buf] of fileMap.entries()) {
-      buf.copy(outBuf, writePos);
-      writePos += buf.length;
-    }
-
-    // 4. Safe backup
-    const backupPath = `${asarPath}.bak`;
-    if (!fs.existsSync(backupPath)) {
-      try {
-        fs.copyFileSync(asarPath, backupPath);
-      } catch (backupErr) {
-        console.warn('[Aura Host Healer] Warning: Failed to create app.asar.bak:', backupErr);
-      }
-    }
-
-    // 5. Atomic write via temp file
-    const tmpPath = `${asarPath}.tmp.${Date.now()}`;
-    fs.writeFileSync(tmpPath, outBuf);
-    fs.renameSync(tmpPath, asarPath);
-
-    console.log('[Aura Host Healer] Host app.asar successfully auto-healed for CDP injection.');
+    writeRelaunchLock(lockPath, {
+      timestamp: now,
+      pid: host.pid,
+      appBundlePath: host.appBundlePath
+    });
+    const relaunchLogPath = path.join(options.storageDir, RELAUNCH_LOG_FILENAME);
+    const launch = options.triggerRelaunch ?? ((targetHost: HostProcessInfo) => spawnDetachedMacRelaunch(targetHost, relaunchLogPath));
+    launch(host);
+    console.log(
+      `[Aura Host Healer] Host PID ${host.pid} lacks --remote-debugging-port; scheduled graceful relaunch of ${host.appBundlePath} with --remote-debugging-port=0.`
+    );
     return {
+      mode: 'relaunch',
+      status: 'relaunched',
       success: true,
       healed: true,
       alreadyPatched: false,
       needsRestart: true,
-      asarPath,
-      backupPath
+      hostPid: host.pid,
+      appBundlePath: host.appBundlePath,
+      reason: 'relaunch-scheduled'
     };
-  } catch (err: any) {
-    console.error('[Aura Host Healer] Error while healing host app.asar:', err);
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error('[Aura Host Healer] Failed to schedule host relaunch:', err);
     return {
+      mode: 'relaunch',
+      status: 'error',
       success: false,
       healed: false,
       alreadyPatched: false,
       needsRestart: false,
-      asarPath,
-      error: String(err?.message || err)
+      hostPid: host.pid,
+      appBundlePath: host.appBundlePath,
+      reason: 'relaunch-spawn-failed',
+      error
     };
   }
 }

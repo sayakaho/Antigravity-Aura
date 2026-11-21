@@ -509,9 +509,13 @@ export interface SidecarStatusResponse {
   activeCascadeId?: string;
   analyticsRevision?: number;
   hostHealState?: {
+    mode?: 'relaunch';
+    status?: 'ready' | 'relaunched' | 'cooldown' | 'skipped' | 'error';
     healed: boolean;
     alreadyPatched: boolean;
     needsRestart: boolean;
+    reason?: string;
+    error?: string;
   };
 }
 

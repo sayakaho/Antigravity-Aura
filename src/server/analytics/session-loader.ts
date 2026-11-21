@@ -423,7 +423,7 @@ export function parseSessionCacheEntry(
 
       const stepTs = sec && sec > 1_000_000_000 ? sec : Math.floor(turnDate.getTime() / 1000);
       const account = accountTracker.matchAccountForTimestamp(stepTs);
-      const modelRates = getModelPricingRates(modelKey || parsed.modelName);
+      const modelRates = getModelPricingRates(modelKey, parsed.modelName);
       const stepCost =
         (parsed.inTok * modelRates.inputRate +
           parsed.outTok * modelRates.outputRate +

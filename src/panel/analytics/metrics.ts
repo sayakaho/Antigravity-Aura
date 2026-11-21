@@ -5,7 +5,8 @@ import {
   getModelPricingRates,
   getPricingTooltipHtml,
   getPricingTooltipText,
-  resolveCanonicalModelId
+  resolveCanonicalModelId,
+  type PricingTooltipModelEntry
 } from '../../shared/catalog';
 import {
   escapeHtml,
@@ -383,6 +384,7 @@ export interface CostAndSavings {
   actualCost: number;
   savedCost: number;
   savedRatio: number;
+  modelBreakdown: PricingTooltipModelEntry[];
 }
 
 export function computeApiCostAndSavings(
@@ -399,6 +401,30 @@ export function computeApiCostAndSavings(
   let actualCost = 0;
   let baselineCost = 0;
 
+  const modelUsage = new Map<
+    string,
+    { modelId: string; modelName: string; inTok: number; outTok: number; cacheRead: number }
+  >();
+
+  const accumulateUsage = (
+    modelId: string,
+    modelName: string,
+    inTok: number,
+    outTok: number,
+    cacheRead: number
+  ): void => {
+    const key = modelId || modelName;
+    if (!key) return;
+    let bucket = modelUsage.get(key);
+    if (!bucket) {
+      bucket = { modelId: modelId || key, modelName: modelName || canonicalModelName(key), inTok: 0, outTok: 0, cacheRead: 0 };
+      modelUsage.set(key, bucket);
+    }
+    bucket.inTok += inTok;
+    bucket.outTok += outTok;
+    bucket.cacheRead += cacheRead;
+  };
+
   if (range === 'session') {
     if (activeSessionData) {
       const sessionModels = (activeSessionData.models || []).filter(
@@ -406,66 +432,62 @@ export function computeApiCostAndSavings(
       );
       if (sessionModels.length > 0) {
         for (const m of sessionModels) {
-          const rates = getModelPricingRates(m.modelId || m.modelName);
-          actualCost +=
-            (m.inputTok * rates.inputRate +
-              m.outTok * rates.outputRate +
-              m.cacheRead * rates.cacheRate) /
-            1_000_000;
-          baselineCost +=
-            ((m.inputTok + m.cacheRead) * rates.inputRate + m.outTok * rates.outputRate) / 1_000_000;
+          const effName = m.modelName || canonicalModelName(m.modelId);
+          const effId = resolveCanonicalModelId(m.modelId, effName);
+          accumulateUsage(effId, effName, m.inputTok, m.outTok, m.cacheRead);
         }
-      } else {
-        const rates = getModelPricingRates('gemini-3.8-flash');
-        actualCost =
-          (metrics.totalTokens.input * rates.inputRate +
-            metrics.totalTokens.output * rates.outputRate +
-            metrics.totalTokens.cacheRead * rates.cacheRate) /
-          1_000_000;
-        baselineCost =
-          ((metrics.totalTokens.input + metrics.totalTokens.cacheRead) * rates.inputRate +
-            metrics.totalTokens.output * rates.outputRate) /
-          1_000_000;
       }
     }
   } else if (overview?.dailyModelStats) {
-    let matchedAny = false;
     for (const d of dates) {
       const dayModels = overview.dailyModelStats[d];
       if (!dayModels) continue;
       for (const [mKey, st] of Object.entries(dayModels)) {
         const mName = st.modelName || (mKey === st.modelId ? canonicalModelName(mKey) : mKey);
+        const mId = resolveCanonicalModelId(st.modelId || mKey, mName);
         if (
+          mId === 'unknown' ||
           !mKey ||
           mKey.toLowerCase().includes('unknown') ||
-          mName.toLowerCase().includes('unknown')
+          mName.toLowerCase().includes('unknown') ||
+          st.inTok + st.outTok + st.cacheRead === 0
         ) {
           continue;
         }
-        const rates = getModelPricingRates(st.modelId || mName);
-        actualCost +=
-          (st.inTok * rates.inputRate +
-            st.outTok * rates.outputRate +
-            st.cacheRead * rates.cacheRate) /
-          1_000_000;
-        baselineCost +=
-          ((st.inTok + st.cacheRead) * rates.inputRate + st.outTok * rates.outputRate) / 1_000_000;
-        matchedAny = true;
+        accumulateUsage(mId, mName, st.inTok, st.outTok, st.cacheRead);
       }
     }
-    if (!matchedAny) {
-      const rates = getModelPricingRates('gemini-3.8-flash');
-      actualCost =
-        (metrics.totalTokens.input * rates.inputRate +
-          metrics.totalTokens.output * rates.outputRate +
-          metrics.totalTokens.cacheRead * rates.cacheRate) /
+  }
+
+  const modelBreakdown: PricingTooltipModelEntry[] = [];
+  if (modelUsage.size > 0) {
+    const usedColors = new Set<string>();
+    const sortedBuckets = Array.from(modelUsage.values()).sort(
+      (a, b) => b.inTok + b.outTok + b.cacheRead - (a.inTok + a.outTok + a.cacheRead)
+    );
+    sortedBuckets.forEach((b, idx) => {
+      const rates = getModelPricingRates(b.modelId, b.modelName);
+      const cost =
+        (b.inTok * rates.inputRate + b.outTok * rates.outputRate + b.cacheRead * rates.cacheRate) /
         1_000_000;
-      baselineCost =
-        ((metrics.totalTokens.input + metrics.totalTokens.cacheRead) * rates.inputRate +
-          metrics.totalTokens.output * rates.outputRate) /
-        1_000_000;
-    }
-  } else {
+      const base =
+        ((b.inTok + b.cacheRead) * rates.inputRate + b.outTok * rates.outputRate) / 1_000_000;
+      actualCost += cost;
+      baselineCost += base;
+      modelBreakdown.push({
+        modelId: b.modelId,
+        modelName: b.modelName,
+        color: getModelColor(b.modelId || b.modelName, idx, usedColors),
+        rates,
+        cost,
+        tokens: b.inTok + b.outTok + b.cacheRead
+      });
+    });
+    modelBreakdown.sort((a, b) => (b.cost || 0) - (a.cost || 0) || (b.tokens || 0) - (a.tokens || 0));
+  } else if (
+    (range === 'session' && activeSessionData && metrics.totalTokens.total > 0) ||
+    (range !== 'session' && metrics.totalTokens.total > 0 && !overview?.dailyModelStats)
+  ) {
     const rates = getModelPricingRates('gemini-3.8-flash');
     actualCost =
       (metrics.totalTokens.input * rates.inputRate +
@@ -480,7 +502,7 @@ export function computeApiCostAndSavings(
 
   const savedCost = Math.max(0, baselineCost - actualCost);
   const savedRatio = baselineCost > 0 ? (savedCost / baselineCost) * 100 : 0;
-  return { actualCost, savedCost, savedRatio };
+  return { actualCost, savedCost, savedRatio, modelBreakdown };
 }
 
 export function renderMetricCards(
@@ -513,7 +535,7 @@ export function renderMetricCards(
   const outPercent = ((outTok / safeTotal) * 100).toFixed(1);
   const respPercent = ((respTok / safeTotal) * 100).toFixed(1);
 
-  const { actualCost } = computeApiCostAndSavings(
+  const { actualCost, modelBreakdown } = computeApiCostAndSavings(
     metrics,
     timeCtx,
     overview,
@@ -652,19 +674,15 @@ export function renderMetricCards(
         <div class="kpi-value-md">${metrics.avgTtft.toFixed(2)}<span class="kpi-unit">s</span></div>
       </div>
 
-      <div class="kpi-card kpi-card-compact">
-        <div class="kpi-label-row">
-          <span class="kpi-label-with-info">
-            Est. Commercial Cost
-            <span class="cost-pricing-info-icon" data-tooltip-html="${escapeHtml(getPricingTooltipHtml())}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-            </span>
-          </span>
-        </div>
+      <div class="kpi-card kpi-card-compact kpi-card-has-info">
+        <div class="kpi-label-row">Est. Commercial Cost</div>
+        <span class="cost-pricing-info-icon" data-tooltip-html="${escapeHtml(getPricingTooltipHtml(modelBreakdown))}" aria-label="Commercial Model Pricing">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </span>
         <div class="kpi-value-md">$${actualCost.toFixed(2)}</div>
       </div>
     </div>
